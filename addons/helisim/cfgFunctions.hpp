@@ -212,8 +212,6 @@ class CfgFunctions
         class simpleRotor {
             file = "\bmkhs_helisim\functions\simpleRotor";
             class simpleRotor {R;};
-            class simpleRotorMain {R;};
-            class simpleRotorTail {R;};
             class simpleRotorVariables {R;};
         };
         class state {
