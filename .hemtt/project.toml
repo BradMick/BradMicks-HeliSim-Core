@@ -17,6 +17,7 @@ include = [
     "LICENSE",
     "README.md",
     "mod.cpp",
+    "logo.paa",
 ]
 # DEV-ONLY: keeps precompiled SQF bytecode out of the packed PBO so -filePatching works.
 # Arma prefers a .sqfc over its matching .sqf at the same path, so a PBO carrying bytecode
