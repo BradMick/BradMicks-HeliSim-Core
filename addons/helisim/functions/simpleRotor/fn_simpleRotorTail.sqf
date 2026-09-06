@@ -146,7 +146,7 @@ private _totThrust       = _rtrThrust * _tailAuthority;
 
 private _thrustVector  = _axisX vectorMultiply (_totThrust * _deltaTime);
 private _moment        = _thrustVector vectorCrossProduct _deltaPos;
-_moment set [1, 0];
+_moment set [1, (_moment select 1) * 0.25];
 
 private _tailRtrDamage = [_heli, "tailRotor"] call bmkhs_fnc_damageGet;
 private _IGBDamage     = [_heli, "intermediateGearbox"] call bmkhs_fnc_damageGet;
