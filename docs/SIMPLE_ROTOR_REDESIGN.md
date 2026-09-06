@@ -200,7 +200,7 @@ class Rotors {
         // would give a dying rotor full authority.
         pitchAuthority    = 3.17674;      // was 100000 * 3.25
         rollAuthority     = 0.95302;      // was 100000 * 0.975
-        yawAuthority      = 1.0;          // trims the reaction torque, does not set it
+        torqueReaction    = 1.0;          // trim on the reaction torque; NOT yaw control
 
         rollCouple       = 0.0;           // fraction of thrust moment coupled into roll
         thrustTiltRoll   = -6.0;          // deg of thrust-vector tilt per unit roll input

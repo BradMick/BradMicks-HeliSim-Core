@@ -170,8 +170,10 @@
 //
 //  pitchAuthority      Pitch moment at full cyclic, as a multiple of baseThrust. MAIN only.
 //  rollAuthority       Roll moment at full cyclic, same units. MAIN only.
-//  yawAuthority        Scale on the reaction torque the rotor puts into the airframe.
-//                      1.0 = the physics as computed; this trims it, it does not set it.
+//  torqueReaction      Trim on the reaction torque this rotor puts into the airframe -
+//                      the twist the fuselage takes from driving the rotor. 1.0 is the
+//                      physics as computed. NOT yaw control: nothing here commands yaw,
+//                      the tail rotor answers this torque and the pedal answers the tail.
 //  rollCouple          Fraction of this rotor's thrust moment that couples into roll.
 //                      A tail rotor sits above the roll axis, so its thrust rolls the
 //                      airframe as well as yawing it. 0.0 = no coupling.

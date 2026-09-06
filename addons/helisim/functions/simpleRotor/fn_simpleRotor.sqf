@@ -222,11 +222,11 @@ private _moiOut    = [];
             private _pitchTq = linearConversion [0.0, 1.0, _inputRpmPct, 0.0, _baseThrust * (_r get "pitchAuthority") * _deltaTime, true];
             private _rollTq  = linearConversion [0.0, 1.0, _inputRpmPct, 0.0, _baseThrust * (_r get "rollAuthority")  * _deltaTime, true];
             //Reaction to driving the rotor. Zeroed in casual.
-            //Yaw is the REACTION to driving the rotor - it comes out of the
-            //torque actually being demanded, scaled only by gearing. Zeroed in
-            //casual: nothing to fight.
+            //The reaction to driving the rotor, out of the torque actually
+            //being demanded. Not yaw control - that is the tail's job. Zeroed
+            //in casual: nothing to fight.
             private _yawTq = if (_realistic) then {
-                _torqueReq * (_r get "gearRatio") * (_r get "dirSign") * (_r get "yawAuthority") * _deltaTime
+                _torqueReq * (_r get "gearRatio") * (_r get "dirSign") * (_r get "torqueReaction") * _deltaTime
             } else {0.0};
             _moment = [_pitchTq * _pitchInput, _rollTq * _rollInput, _yawTq];
         } else {
