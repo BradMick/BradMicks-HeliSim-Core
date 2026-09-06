@@ -162,9 +162,16 @@
 //                      before the field existed, it is not a valid configuration.
 //
 //CONTROL AUTHORITY
-//  cyclicPitchTorque   Nm of pitch moment at full cyclic. MAIN only.
-//  cyclicRollTorque    Nm of roll moment at full cyclic. MAIN only.
-//  pedalYawTorque      Nm of yaw moment at full pedal.
+//  AUTHORITY IS A MULTIPLE OF baseThrust, NOT A TORQUE IN Nm. Control power comes from
+//  the same rotor that makes the lift, so it scales with what that rotor can do and ramps
+//  with Nr - a rotor losing RPM loses control power with it. A fixed Nm figure would give
+//  a dying rotor the same authority as a healthy one, and would need retyping for every
+//  airframe rather than scaling with its thrust.
+//
+//  pitchAuthority      Pitch moment at full cyclic, as a multiple of baseThrust. MAIN only.
+//  rollAuthority       Roll moment at full cyclic, same units. MAIN only.
+//  yawAuthority        Scale on the reaction torque the rotor puts into the airframe.
+//                      1.0 = the physics as computed; this trims it, it does not set it.
 //  rollCouple          Fraction of this rotor's thrust moment that couples into roll.
 //                      A tail rotor sits above the roll axis, so its thrust rolls the
 //                      airframe as well as yawing it. 0.0 = no coupling.

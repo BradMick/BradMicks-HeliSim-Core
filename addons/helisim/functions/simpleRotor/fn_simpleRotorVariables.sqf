@@ -94,9 +94,9 @@ private _rotors = [];
         ["torqueScalar",      NUM_OR(_cfg, "torqueScalar",     0.0)],
 
         //---- control authority ----
-        ["cyclicPitchTorque", NUM_OR(_cfg, "cyclicPitchTorque", 0.0)],
-        ["cyclicRollTorque",  NUM_OR(_cfg, "cyclicRollTorque",  0.0)],
-        ["pedalYawTorque",    NUM_OR(_cfg, "pedalYawTorque",    0.0)],
+        ["pitchAuthority",    NUM_OR(_cfg, "pitchAuthority",    0.0)],
+        ["rollAuthority",     NUM_OR(_cfg, "rollAuthority",     0.0)],
+        ["yawAuthority",      NUM_OR(_cfg, "yawAuthority",      1.0)],
         ["rollCouple",        NUM_OR(_cfg, "rollCouple",        0.0)],
         ["thrustTiltRoll",    NUM_OR(_cfg, "thrustTiltRoll",    0.0)],
         ["flapbackLon",       NUM_OR(_cfg, "flapbackLon",       0.0)],

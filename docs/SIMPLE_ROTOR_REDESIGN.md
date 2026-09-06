@@ -193,14 +193,14 @@ class Rotors {
         autoroTorque     = 5.0;           // driving torque per m/s of descent
 
         // ---- control authority ----
-        // These three ALREADY EXIST in the AH-64 pack, declared in Nm with the
-        // comment "Control torques the simple rotor model applies" - and Core
-        // reads none of them. It uses hardcoded 2.50*1.3 and 0.75*1.3 against a
-        // 100000 base instead. Wiring these up is part of the redesign, not a
-        // new surface: the pack already declares what it wants.
-        cyclicPitchTorque = 4500.0;       // Nm
-        cyclicRollTorque  = 1500.0;       // Nm
-        pedalYawTorque    = 5000.0;       // Nm
+        // MULTIPLES OF baseThrust, not Nm. Control power comes from the same
+        // rotor that makes the lift, so it scales with thrust and ramps with
+        // Nr - a rotor losing RPM loses control power with it. This is why the
+        // Nm values the pack declared were never read: a fixed torque figure
+        // would give a dying rotor full authority.
+        pitchAuthority    = 3.17674;      // was 100000 * 3.25
+        rollAuthority     = 0.95302;      // was 100000 * 0.975
+        yawAuthority      = 1.0;          // trims the reaction torque, does not set it
 
         rollCouple       = 0.0;           // fraction of thrust moment coupled into roll
         thrustTiltRoll   = -6.0;          // deg of thrust-vector tilt per unit roll input

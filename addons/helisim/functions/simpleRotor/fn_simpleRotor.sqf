@@ -215,11 +215,18 @@ private _moiOut    = [];
         //Main gets cyclic; tail gets the yaw its thrust makes.
         private _moment = [0.0, 0.0, 0.0];
         if (_isMain) then {
-            private _pitchTq = linearConversion [0.0, 1.0, _inputRpmPct, 0.0, (_r get "cyclicPitchTorque") * _deltaTime, true];
-            private _rollTq  = linearConversion [0.0, 1.0, _inputRpmPct, 0.0, (_r get "cyclicRollTorque")  * _deltaTime, true];
+            //Control authority scales with what the rotor can actually DO, not
+            //with a fixed Nm figure: baseThrust is the reference, the authority
+            //fields are multiples of it, and both ramp with Nr. A dying rotor
+            //loses control power because it loses thrust.
+            private _pitchTq = linearConversion [0.0, 1.0, _inputRpmPct, 0.0, _baseThrust * (_r get "pitchAuthority") * _deltaTime, true];
+            private _rollTq  = linearConversion [0.0, 1.0, _inputRpmPct, 0.0, _baseThrust * (_r get "rollAuthority")  * _deltaTime, true];
             //Reaction to driving the rotor. Zeroed in casual.
+            //Yaw is the REACTION to driving the rotor - it comes out of the
+            //torque actually being demanded, scaled only by gearing. Zeroed in
+            //casual: nothing to fight.
             private _yawTq = if (_realistic) then {
-                _torqueReq * (_r get "gearRatio") * (_r get "dirSign") * (_r get "pedalYawTorque") * _deltaTime
+                _torqueReq * (_r get "gearRatio") * (_r get "dirSign") * (_r get "yawAuthority") * _deltaTime
             } else {0.0};
             _moment = [_pitchTq * _pitchInput, _rollTq * _rollInput, _yawTq];
         } else {
