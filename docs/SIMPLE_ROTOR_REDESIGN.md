@@ -230,7 +230,7 @@ class Rotors {
         gearRatio        = 14.90;
         rpmTrimVal       = 1.01;
         baseThrust       = 10230;         // N
-        torqueScalar     = 0.045;         // Nm of engine torque per N of tail thrust
+        torqueScalar     = 0.008;         // Nm of engine torque per N of tail thrust (~8% of total power)
         rollCouple       = 0.25;          // tail thrust acts above the roll axis
         // no ground effect, no cyclic, no climb term
     };

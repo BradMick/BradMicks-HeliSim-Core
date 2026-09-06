@@ -143,11 +143,16 @@
 //                      STRENGTH, which is the airframe's. 0.0 disables ground effect.
 //  climbGain           Excess torque -> climb thrust. MAIN only.
 //  autoroTorque        Driving torque per m/s of descent in autorotation. MAIN only.
-//  torqueScalar        TAIL only. Nm of engine torque per N of tail thrust. A tail rotor
-//                      costs power - typically 5-15% of total - and costs MORE when you
+//  torqueScalar        TAIL only. Nm of engine torque per N of tail thrust. A TAIL ROTOR
+//                      COSTS POWER - typically 5-15% of total - and costs MORE when you
 //                      stomp a pedal. Scaling off the tail's own thrust means that falls
-//                      out of thrustVsCollective[] for free. 0.0 makes the tail free,
-//                      which is what the model did before this field existed.
+//                      out of thrustVsCollective[] for free.
+//
+//                      DECLARE THIS. The default is 0.0 because Core defaults everything
+//                      to neutral, but a tail rotor that costs nothing to drive is wrong:
+//                      there is no pedal-induced Nr droop and the engine never sees the
+//                      yaw demand. Leaving it at 0.0 reproduces a bug the model had
+//                      before the field existed, it is not a valid configuration.
 //
 //CONTROL AUTHORITY
 //  cyclicPitchTorque   Nm of pitch moment at full cyclic. MAIN only.
