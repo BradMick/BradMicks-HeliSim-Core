@@ -29,6 +29,6 @@ buildTools/
 .hemttout/
 releases/
 
-# NaturalDocs
-docs/
+# NaturalDocs generated output (the hand-written docs/*.md are tracked)
+docs/html/
 naturaldocs/Working Data
