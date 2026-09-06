@@ -12,8 +12,7 @@ A force generator. It produces a thrust vector and a torque, and it should be
 authorable by someone with a flight manual and a spreadsheet — not by someone
 willing to reverse-engineer fifteen interacting lookup tables.
 
-The BET rotor (`fn_rotor*`) stays as it is: blade-element physics for people
-who want it. Simple rotor is the one you tune by eye.
+Simple rotor is the one you tune by eye.
 
 ---
 
@@ -31,7 +30,7 @@ The entire model has exactly two physical outputs, plus two published values:
 Sixty-odd hard-coded values currently compute those. That is the whole problem.
 
 **The interface does not change.** `bmkhs_rtrThrust[]` and `bmkhs_reqEngTorque[]`
-keep their shape and meaning, so `fn_engine2`, `fn_engineBET`,
+keep their shape and meaning, so `fn_engine2`,
 `fn_transmissionUpdate` and the debug overlay need no edits.
 
 ---
@@ -61,13 +60,11 @@ would delete both power tables, leave two physical coefficients in their place,
 and make torque respond correctly to blade count for free.
 
 **Rejected deliberately.** It recouples torque to thrust, destroying the knob
-this model exists to provide; momentum theory misses the high-speed power rise
-so a correction table comes back anyway; and it moves the simple rotor toward
-being a worse copy of the BET model, which already derives torque from blade
-elements for anyone who wants that.
+this model exists to provide, and momentum theory misses the high-speed power
+rise so a correction table comes back anyway. Derivation is not what this model
+is for.
 
-Simple means simple: a designer types numbers off a chart and flies. Derivation
-is what the other model is for.
+Simple means simple: a designer types numbers off a chart and flies.
 
 ---
 
@@ -175,12 +172,9 @@ class Rotors {
         position[]       = {0.0, 0.5, 1.8};
         direction        = "CCW";         // CCW | CW - sets torque reaction sign
 
-        // ---- geometry (unchanged, already config today - real AH-64 values) ----
-        numBlades        = 4;
-        bladeRadius      = 7.315;         // m
-        bladeChord       = 0.533;         // m
-        bladeMass        = 72.108;        // kg
-        bladeHingeOffset = 0.038;         // FRACTION of blade radius, not metres
+        // ---- geometry (real AH-64 values) ----
+        bladeRadius      = 7.315;         // m - disc area, tip speed, ground effect
+        rotorInertia     = 5152;          // kg.m^2 about the mast - see below
         bladePitchMin    = 1.0;           // deg
         bladePitchMax    = 19.0;          // deg
         designRpm        = 289.0;
@@ -270,6 +264,41 @@ anybody authoring that. One number, correct behaviour.
 
 ---
 
+## Rotor inertia: one number, not four
+
+The simple rotor currently declares `numBlades`, `bladeChord`, `bladeMass` and
+`bladeHingeOffset` for exactly one purpose — computing `_Jtot`, which becomes
+`bmkhs_rtrMoi`, whose only consumer is `fn_transmissionUpdate` for `deltaRpm`
+(spin-up, coastdown, Nr droop).
+
+Run the AH-64's real numbers through that formula and the breakdown is:
+
+| term | formula | value | share |
+|---|---|---|---|
+| `Icm` | ⅓·m·r² | 1286.1 | **99.86%** |
+| `Iy` | ¹⁄₁₂·m·c² | 1.707 | 0.13% |
+| `md2` | m·e² | 0.104 | 0.01% |
+| **`J`** | `(Iy + Icm + md2) × Nb` | **5151.8** | |
+
+Chord and hinge offset contribute 0.14% between them. They are noise.
+
+There is also a latent unit bug: the config comments `mainRtrBladeHingeOff =
+0.038` as "fraction of blade radius" while the code squares it as metres.
+Correcting it moves `J` by 0.4% — which is why nobody has noticed.
+
+**So the simple rotor declares `rotorInertia` directly.** Four fields become
+one, the unit-bug surface disappears, and the designer gets a knob that maps
+straight onto what they actually tune: how the rotor spools and droops.
+
+`bladeRadius` stays — disc area (`πr²`) drives induced velocity and the whole
+VRS band, plus tip speed, ground-effect falloff and the debug disc.
+
+**The spreadsheet computes it.** Enter blade mass, radius and blade count and
+it emits `rotorInertia`, so anyone working from blade data still gets there —
+the arithmetic just happens once, in a cell, instead of every frame in SQF.
+
+---
+
 ## What Core computes and config never sees
 
 These are physics or model behaviour. They stay in Core:
@@ -298,7 +327,7 @@ the config surface entirely.
 ## One function, N rotors
 
 `fn_simpleRotorMain.sqf` + `fn_simpleRotorTail.sqf` → **`fn_simpleRotor.sqf`**,
-looped over a rotor index the way the BET model already does.
+looped over a rotor index.
 
 A tail rotor is not a different model. It is the same force generator with:
 
@@ -330,15 +359,19 @@ no aircraft — including the one it was born from.
 
 `tools/simple_rotor_tables.xlsx`, shipped with the mod.
 
-Enter gross weight, rotor diameter, blade count, engine power, Vne and the
-hover/cruise power figures from the flight manual. It emits:
+Enter gross weight, rotor radius, blade count, blade mass, engine power, Vne and
+the hover/cruise power figures from the flight manual. It emits:
 
 - the four tables as paste-ready `.hpp` text
+- **`rotorInertia`**, computed as `⅓ · bladeMass · r² · numBlades` — so anyone
+  working from blade data still gets there without Core carrying the arithmetic
+- **`baseThrust`**, as max gross weight × g
 - each curve plotted, so the power bucket's shape is visible before flying it
 - sanity warnings (bucket minimum far from Vbe, non-monotonic thrust curve)
 
-Two sheets, matching the two chains: **Thrust** and **Power**. Google Sheets
-opens `.xlsx` natively, so one file serves both.
+Three sheets: **Inputs** (airframe data in, derived scalars out), **Thrust** and
+**Power** — the last two matching the two chains. Google Sheets opens `.xlsx`
+natively, so one file serves both.
 
 ---
 
@@ -349,14 +382,9 @@ extraction would make any regression unattributable.
 
 | bug | where |
 |---|---|
-| `bmkhs_betMainTorqueTable` written, never read; `_torqTbl` hard-coded `[]` | `fn_rotor.sqf:196` |
 | retreating-blade-stall computed, never used | `fn_simpleRotorMain.sqf:386-387` |
 | `bmkhs_rtrTqTable`, `bmkhs_mainThrustTable` published, no consumers | `fn_simpleRotorMain.sqf:127,143` |
-| ungated per-frame `systemChat` | `fn_rotor.sqf:165` |
-| ungated CG debug drawing | `fn_rotorUpdate.sqf:50-55` |
 | longitudinal flapback computed, discarded (pitch arg hardcoded `0.0`) | `fn_simpleRotorMain.sqf:437-443` |
-| BET arrays hard-sized to 6 rotors × 4 blades — a 5-blade rotor indexes out of range | `fn_rotorVariables.sqf:54-84` |
-| `_rootIncidence` uses `0.5`; its own comment derives `0.75` | `fn_rotor.sqf:96` |
 
 ---
 
@@ -390,8 +418,7 @@ induced-power curves doing one job).
 7. Delete `fn_simpleRotorMain.sqf` / `fn_simpleRotorTail.sqf`
 8. Spreadsheet
 9. `AIRCRAFT_GUIDE.md` rotor section; correct `CONFIG_PLAN.md`, which currently
-   claims the simple rotor already reads from config and the BET rotor does not
-   — both backwards
+   claims the simple rotor already reads from config - it does not
 
 Bugs above land as separate commits, before or after, never inside step 4.
 
