@@ -35,6 +35,20 @@ _heli setVariable ["bmkhs_mainRtrBaseThrust",   getNumber (_config >> "mainRtrBa
 _heli setVariable ["bmkhs_mainRotorGearRatio",  getNumber (_config >> "mainRtrGearRatio")];
 _heli setVariable ["bmkhs_mainRtrFlapbackLon",  getNumber (_config >> "mainRtrFlapbackLon")];
 _heli setVariable ["bmkhs_mainRtrFlapbackLat",  getNumber (_config >> "mainRtrFlapbackLat")];
+
+_heli setVariable ["bmkhs_mainRtrGndEffTable", getArray (_config >> "mainRtrGndEffTable")];
+_heli setVariable ["bmkhs_mainRtrThrustMinTable", getArray (_config >> "mainRtrThrustMinTable")];
+_heli setVariable ["bmkhs_mainRtrThrustMaxTable", getArray (_config >> "mainRtrThrustMaxTable")];
+_heli setVariable ["bmkhs_mainRtrTipLossTable", getArray (_config >> "mainRtrTipLossTable")];
+_heli setVariable ["bmkhs_mainRtrVelExponentTable", getArray (_config >> "mainRtrVelExponentTable")];
+_heli setVariable ["bmkhs_mainRtrTorqueScalarTable", getArray (_config >> "mainRtrTorqueScalarTable")];
+_heli setVariable ["bmkhs_mainRtrThrustVsAirspeed", getArray (_config >> "mainRtrThrustVsAirspeed")];
+_heli setVariable ["bmkhs_mainRtrInducedPwrVelTable", getArray (_config >> "mainRtrInducedPwrVelTable")];
+_heli setVariable ["bmkhs_mainRtrInducedPwrCollTable", getArray (_config >> "mainRtrInducedPwrCollTable")];
+_heli setVariable ["bmkhs_mainRtrCollTorqueCorrTable", getArray (_config >> "mainRtrCollTorqueCorrTable")];
+_heli setVariable ["bmkhs_mainRtrAutoroTorqueTable", getArray (_config >> "mainRtrAutoroTorqueTable")];
+_heli setVariable ["bmkhs_mainRtrCruiseTqTable", getArray (_config >> "mainRtrCruiseTqTable")];
+_heli setVariable ["bmkhs_mainRtrTqRoCTable", getArray (_config >> "mainRtrTqRoCTable")];
 _heli setVariable ["bmkhs_tailRtrPos",          getArray  (_config >> "tailRtrPos")];
 _heli setVariable ["bmkhs_tailRtrRotation",     getArray  (_config >> "tailRtrRotation"), true];
 _heli setVariable ["bmkhs_tailRtrDesignRpm",    getNumber (_config >> "tailRtrDesignRpm")];
