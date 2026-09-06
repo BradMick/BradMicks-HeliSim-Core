@@ -9,7 +9,8 @@ if (bmkhs_rotorModel == 1) then {
     [_heli] call bmkhs_fnc_rotorUpdate;
 } else {
     // Simple rotor model
-    [_heli] call bmkhs_fnc_simpleRotor;
+    [_heli] call bmkhs_fnc_simpleRotorMain;
+    [_heli] call bmkhs_fnc_simpleRotorTail;
 };
 
 //Fuselage

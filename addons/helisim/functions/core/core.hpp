@@ -44,28 +44,11 @@
 #define STANDARD_TEMP           15
 #define IN_MG_TO_HPA            33.8639
 
-//AIRFRAME-SPECIFIC, and therefore ON THEIR WAY OUT. The simple rotor reads its
-//own vne/vbe/etl from config; these remain only for the code that has not moved
-//yet. A compile-time constant cannot vary per aircraft, which is the whole
-//problem with them.
 #define VEL_ETL                 12.347
 #define VEL_VBE                 38.583  //75 kts
 #define VEL_VNE                 128.611 //250 kts
 #define VEL_VRS                 24.384
 #define ISA_STD_DAY_AIR_DENSITY 1.225
-
-//VRS is DERIVED, not declared. Induced velocity comes from thrust, air density
-//and disc area every frame, so the band tracks the airframe on its own. These
-//three place the band relative to that velocity and are VRS theory rather than
-//airframe data - a bigger rotor gets a wider band automatically.
-#define VRS_VEL_MIN_FRAC        0.23    //onset, as a fraction of induced velocity
-#define VRS_VEL_MAX_FRAC        1.25    //fully developed
-#define VRS_SEVERITY_EXP        0.3     //how sharply lift collapses inside the band
-
-//Rotor damage cut-outs. Model policy, not airframe: past this the rotor stops
-//producing anything at all.
-#define MAIN_RTR_DMG_THRESH     0.99
-#define TAIL_RTR_DMG_THRESH     0.85
 
 #define RAD_ALT_MAX_ALT         435.254 //1428ft
 #define ALT_HOLD_SPEED_SWITCH   20.577  //40kts GS

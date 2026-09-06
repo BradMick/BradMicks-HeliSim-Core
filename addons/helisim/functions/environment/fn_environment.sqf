@@ -65,9 +65,10 @@ _heli setVariable ["bmkhs_rho", _dryAirDensity];
 private _windSpeed   = vectorMagnitude wind;
 private _windDirFrom = (windDir + 180) mod 360;
 
-if (false) then {
-    _windSpeed   = (0.0) * KNOTS_TO_MPS;
-    _windDirFrom = (0.0);
+//CBA-gated still air, so a test is not confounded by the mission weather.
+if !(bmkhs_windEnabled) then {
+    _windSpeed   = 0.0;
+    _windDirFrom = 0.0;
 };
 
 _heli setVariable ["bmkhs_windSpeedKts", round (_windSpeed * MPS_TO_KNOTS)];
