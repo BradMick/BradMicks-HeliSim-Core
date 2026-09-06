@@ -60,9 +60,10 @@ private _pitchInput = [([_heli getVariable "bmkhs_cyclicFwdAft",   _heli getVari
 private _rollInput  = [([_heli getVariable "bmkhs_cyclicLeftRight", _heli getVariable "bmkhs_forceTrimPosRoll"]  call bmkhs_fnc_inputGetInterp) + _fmcRollOut,  -1.0, 1.0] call BIS_fnc_clamp;
 private _pedalInput = [([_heli getVariable "bmkhs_pedalLeftRight",  _heli getVariable "bmkhs_forceTrimPosYaw"]   call bmkhs_fnc_inputGetInterp),               -1.0, 1.0] call BIS_fnc_clamp;
 
-//Airframe velocity, model space. Wind is added at the hub for a tail rotor.
-private _vel     = _heli getVariable "bmkhs_velModelSpace";
-private _velWind = _heli getVariable "bmkhs_velWindModelSpace";
+//AIRSPEED in the airframe's axes - fn_stateVelocities has already rotated the
+//world velocity into model space and subtracted the wind, so this is velocity
+//relative to the airstream. Nothing here needs to touch wind again.
+private _vel = _heli getVariable "bmkhs_velModelSpace";
 
 //Drivetrain state - one number, shared by every rotor on the same gearbox.
 private _xmsnOutputRpm = _heli getVariable "bmkhs_xmsnOutputRpm";
@@ -99,19 +100,31 @@ private _moiOut    = [];
     private _rtrOmega = (2.0 * pi) * ((_r get "designRpm") * _inputRPM) / 60.0;
 
     /////////////////////////////////////////////////////////////////////////////////////////
-    // AIRSPEED - the axis a rotor sees is the one it is NOT pointed along
+    // AIRSPEED AT THE HUB
     /////////////////////////////////////////////////////////////////////////////////////////
-    //A main rotor pushes up, so it sees flow across the disc: the horizontal
-    //speed. A tail rotor pushes sideways, so it sees forward and vertical flow.
+    //bmkhs_velModelSpace IS AIRSPEED ALREADY: fn_stateVelocities rotates the
+    //world velocity into the airframe's axes and subtracts the wind. Do not add
+    //wind back here - it has been taken out once and adding it returns it twice.
+    //
+    //A rotor away from the CG also moves through the air when the airframe
+    //ROTATES, even with the CG still. That is (r x omega), and it is why a yaw
+    //rate loads the tail rotor. A main rotor sits close enough to the CG that
+    //the term is small, but it costs nothing to be right about both.
+    private _leverArm = _pos vectorDiff _heliCom;
+    private _velHub   = _vel vectorAdd (_leverArm vectorCrossProduct (_heli getVariable ["bmkhs_angVelModelSpace", [0,0,0]]));
+
+    //The flow that matters is the one ACROSS the disc; the flow THROUGH it is
+    //what drives induced-flow effects. Which axis is which depends on where the
+    //rotor points: a main rotor pushes up and sees horizontal flow across it, a
+    //tail rotor pushes sideways and sees forward and vertical flow.
     private _velThroughDisc = 0.0;
     private _velAcrossDisc  = 0.0;
     if (_isMain) then {
-        _velAcrossDisc  = vectorMagnitude [_vel select 0, _vel select 1];
-        _velThroughDisc = _vel select 2;
+        _velAcrossDisc  = vectorMagnitude [_velHub select 0, _velHub select 1];
+        _velThroughDisc = _velHub select 2;
     } else {
-        private _windY = (_velWind select 1) max 0.0;
-        _velAcrossDisc  = vectorMagnitude [(_vel select 1) + _windY, _vel select 2];
-        _velThroughDisc = (_vel select 0) + (_velWind select 0);
+        _velAcrossDisc  = vectorMagnitude [_velHub select 1, _velHub select 2];
+        _velThroughDisc = _velHub select 0;
     };
     _velAcrossDisc = _velAcrossDisc min _vne;
     if ([_velAcrossDisc] call bmkhs_fnc_mathIsNAN || [_velAcrossDisc] call bmkhs_fnc_mathIsINF) then { _velAcrossDisc = 0.0; };
