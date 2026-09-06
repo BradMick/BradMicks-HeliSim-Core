@@ -36,6 +36,7 @@ _heli setVariable ["bmkhs_mainRotorGearRatio",  getNumber (_config >> "mainRtrGe
 _heli setVariable ["bmkhs_mainRtrFlapbackLon",  getNumber (_config >> "mainRtrFlapbackLon")];
 _heli setVariable ["bmkhs_mainRtrFlapbackLat",  getNumber (_config >> "mainRtrFlapbackLat")];
 _heli setVariable ["bmkhs_tailRtrPos",          getArray  (_config >> "tailRtrPos")];
+_heli setVariable ["bmkhs_tailRtrRotation",     getArray  (_config >> "tailRtrRotation"), true];
 _heli setVariable ["bmkhs_tailRtrDesignRpm",    getNumber (_config >> "tailRtrDesignRpm")];
 _heli setVariable ["bmkhs_tailRtrRpmTrimVal",   getNumber (_config >> "tailRtrRpmTrimVal")];
 _heli setVariable ["bmkhs_tailRtrGearRatio",    getNumber (_config >> "tailRtrGearRatio")];

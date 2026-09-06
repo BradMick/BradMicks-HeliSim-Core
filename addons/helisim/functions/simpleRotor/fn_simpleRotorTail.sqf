@@ -75,24 +75,33 @@ private _rtrRPMInducedThrustScalar = _inputRPM / _rtrRPMTrimVal;
 //Thrust scalar as a result of altitude
 private _airDensityThrustScalar    = _dryAirDensity / ISA_STD_DAY_AIR_DENSITY;
 //Additional thrust gained from increasing forward airspeed
+//THE ROTOR'S FRAME, from tailRtrRotation. Built every frame so it can be
+//retuned live. discRight/discFwd span the disc, axis is up the mast.
+(_heli getVariable "bmkhs_tailRtrRotation") params [["_rotP",0],["_rotR",0],["_rotY",0]];
+private _axis      = vectorNormalized ([[0.0, 0.0, 1.0], _rotP, _rotR, _rotY] call bmkhs_fnc_mathVectorRotate);
+private _discRight = vectorNormalized ([[1.0, 0.0, 0.0], _rotP, _rotR, _rotY] call bmkhs_fnc_mathVectorRotate);
+private _discFwd   = vectorNormalized ([[0.0, 1.0, 0.0], _rotP, _rotR, _rotY] call bmkhs_fnc_mathVectorRotate);
+
 private _deltaPos                  = _rtrPos vectorDiff _heliCom;
 private _angVel                    = _heli getVariable ["bmkhs_angVelModelSpace", [0,0,0]];
 private _velRot                    = _deltaPos vectorCrossProduct _angVel;
 private _velHub                    = (_heli getVariable "bmkhs_velModelSpace") vectorAdd _velRot;
 
-private _velY                      = _velHub select 1;
-private _velZ                      = _velHub select 2;
+//Wind is added to the hub flow, as before, then resolved into the frame.
+private _velHubWind                = _velHub;
 private _velWindY                  = _heli getVariable "bmkhs_velWindModelSpace" select 1;
 private _velWindX                  = _heli getVariable "bmkhs_velWindModelSpace" select 0;
 if (_velWindY < 0.0) then {
     _velWindY = 0.0;
 };
-private _velYZ                     = vectorMagnitude [_velY + _velWindY, _velZ] min _velVne;
+_velHubWind = _velHubWind vectorAdd [_velWindX, _velWindY, 0.0];
+//ACROSS the disc: what is left once the through-disc component is removed.
+private _velThroughDisc            = _velHubWind vectorDotProduct _axis;
+private _velYZ                     = (vectorMagnitude (_velHubWind vectorDiff (_axis vectorMultiply _velThroughDisc))) min _velVne;
 private _airspeedVelocityScalar    = [_thrustVsAirspeedTable, _velYZ] call bmkhs_fnc_mathLinearInterp select 1;
 //Induced flow handler - lateral flow through the disk, at the HUB.
-private _velX                      = _velHub select 0;
-_velX = _velX;// * sin (_heli getVariable "bmkhs_aero_beta_deg");
-_velX = _velX + _velWindX;
+//THROUGH the disc, along the mast.
+private _velX                      = _velThroughDisc;
 
 private _inducedVelocityScalar     = 1.0;
 if (_velX < -_velVrs && _velYZ < _velEtl) then {
@@ -104,17 +113,19 @@ if (_velX < -_velVrs && _velYZ < _velEtl) then {
 private _rtrThrustScalar   = _bladePitchInducedThrustScalar * _rtrRPMInducedThrustScalar * _airDensityThrustScalar * _airspeedVelocityScalar * _inducedVelocityScalar;
 private _rtrThrust         = _baseThrust * _rtrThrustScalar;
 
-private _axisX = [1.0, 0.0, 0.0];
-private _axisY = [0.0, 1.0, 0.0];
-private _axisZ = [0.0, 0.0, 1.0];
 
 //Airspeed authority is folded into thrustVsAirspeed above - one curve, not two.
 private _totThrust       = _rtrThrust;
 //systemChat format ["_totThrust %1", _totThrust toFixed 0];
 
-private _thrustVector  = _axisX vectorMultiply (_totThrust * _deltaTime);
+private _thrustVector  = _axis vectorMultiply (_totThrust * _deltaTime);
 private _moment        = _thrustVector vectorCrossProduct _deltaPos;
-_moment set [1, (_moment select 1) * (_heli getVariable "bmkhs_tailRtrRollCouple")];
+//rollCouple trims how much of the moment reaches the airframe's ROLL axis.
+//Decomposed about that axis rather than an array index, so it holds however
+//the rotor is mounted.
+private _rollAx  = [0.0, 1.0, 0.0];
+private _rollAmt = _moment vectorDotProduct _rollAx;
+_moment = _moment vectorAdd (_rollAx vectorMultiply (_rollAmt * ((_heli getVariable "bmkhs_tailRtrRollCouple") - 1.0)));
 
 private _tailRtrDamage = [_heli, "tailRotor"] call bmkhs_fnc_damageGet;
 private _IGBDamage     = [_heli, "intermediateGearbox"] call bmkhs_fnc_damageGet;
@@ -142,9 +153,9 @@ if (_tailRtrDamage < (_heli getVariable "bmkhs_tailRtrDamageThresh") && _IGBDama
 };
 
 if (BMKHS_FM_DEBUG) then {
-[_heli, _rtrPos, _rtrPos vectorAdd _axisX, "red"]   call bmkhs_fnc_debugDrawLine;
-[_heli, _rtrPos, _rtrPos vectorAdd _axisY, "green"] call bmkhs_fnc_debugDrawLine;
-[_heli, _rtrPos, _rtrPos vectorAdd _axisZ, "blue"]  call bmkhs_fnc_debugDrawLine;
+[_heli, _rtrPos, _rtrPos vectorAdd _discRight, "red"]   call bmkhs_fnc_debugDrawLine;
+[_heli, _rtrPos, _rtrPos vectorAdd _discFwd,   "green"] call bmkhs_fnc_debugDrawLine;
+[_heli, _rtrPos, _rtrPos vectorAdd _axis,      "blue"]  call bmkhs_fnc_debugDrawLine;
 [_heli, 24, _rtrPos, _bladeRadius, 0, "white", 0]   call bmkhs_fnc_debugDrawCircle;
 };
 
