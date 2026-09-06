@@ -47,15 +47,13 @@ private _bladeRadius            = _heli getVariable "bmkhs_tailRtrBladeRadius";
 private _bladeChord             = _heli getVariable "bmkhs_tailRtrBladeChord";
 
 private _velVne                 = _heli getVariable "bmkhs_tailRtrVne";
-private _velVbe                 = _heli getVariable "bmkhs_tailRtrVbe";
 private _velVrs                 = _heli getVariable "bmkhs_tailRtrVrs";
 private _velEtl                 = _heli getVariable "bmkhs_tailRtrEtl";
 
 private _bladePitchInducedThrustTable = _heli getVariable "bmkhs_tailRtrPitchThrustTable";
 
-private _rtrThrustScalarTable = _heli getVariable "bmkhs_tailRtrAuthorityTable";
+private _thrustVsAirspeedTable = _heli getVariable "bmkhs_tailRtrThrustVsAirspeed";
 
-private _rtrAirspeedVelocityMod = _heli getVariable "bmkhs_tailRtrAirspeedMod";
 private _baseThrust             = _heli getVariable "bmkhs_tailRtrBaseThrust";
 
 //Thrust produced
@@ -90,7 +88,7 @@ if (_velWindY < 0.0) then {
     _velWindY = 0.0;
 };
 private _velYZ                     = vectorMagnitude [_velY + _velWindY, _velZ] min _velVne;
-private _airspeedVelocityScalar    = (1 + (_velYZ / _velVbe)) ^ (_rtrAirspeedVelocityMod);
+private _airspeedVelocityScalar    = [_thrustVsAirspeedTable, _velYZ] call bmkhs_fnc_mathLinearInterp select 1;
 //Induced flow handler - lateral flow through the disk, at the HUB.
 private _velX                      = _velHub select 0;
 _velX = _velX;// * sin (_heli getVariable "bmkhs_aero_beta_deg");
@@ -110,10 +108,8 @@ private _axisX = [1.0, 0.0, 0.0];
 private _axisY = [0.0, 1.0, 0.0];
 private _axisZ = [0.0, 0.0, 1.0];
 
-//Tail rotor authority: airspeed-indexed thrust multiplier (yaw balance knob). The thrust
-//vector, the moment and the force-log readout all use the scaled value.
-private _tailAuthority   = [_rtrThrustScalarTable, _velYZ] call bmkhs_fnc_mathLinearInterp select 1;
-private _totThrust       = _rtrThrust * _tailAuthority;
+//Airspeed authority is folded into thrustVsAirspeed above - one curve, not two.
+private _totThrust       = _rtrThrust;
 //systemChat format ["_totThrust %1", _totThrust toFixed 0];
 
 private _thrustVector  = _axisX vectorMultiply (_totThrust * _deltaTime);

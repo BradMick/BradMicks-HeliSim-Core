@@ -44,12 +44,10 @@ _heli setVariable ["bmkhs_tailRtrBladeRadius",  getNumber (_config >> "tailRtrBl
 _heli setVariable ["bmkhs_tailRtrBladeChord",   getNumber (_config >> "tailRtrBladeChord")];
 _heli setVariable ["bmkhs_tailRtrBaseThrust",   getNumber (_config >> "tailRtrBaseThrust")];
 _heli setVariable ["bmkhs_tailRtrPitchThrustTable", getArray (_config >> "tailRtrPitchThrustTable")];
-_heli setVariable ["bmkhs_tailRtrAuthorityTable",   getArray (_config >> "tailRtrAuthorityTable")];
-_heli setVariable ["bmkhs_tailRtrAirspeedMod",    getNumber (_config >> "tailRtrAirspeedMod")];
+_heli setVariable ["bmkhs_tailRtrThrustVsAirspeed", getArray (_config >> "tailRtrThrustVsAirspeed")];
 _heli setVariable ["bmkhs_tailRtrRollCouple",     getNumber (_config >> "tailRtrRollCouple")];
 _heli setVariable ["bmkhs_tailRtrDamageThresh",   getNumber (_config >> "tailRtrDamageThresh")];
 _heli setVariable ["bmkhs_tailRtrVne",            getNumber (_config >> "tailRtrVne")];
-_heli setVariable ["bmkhs_tailRtrVbe",            getNumber (_config >> "tailRtrVbe")];
 _heli setVariable ["bmkhs_tailRtrVrs",            getNumber (_config >> "tailRtrVrs")];
 _heli setVariable ["bmkhs_tailRtrEtl",            getNumber (_config >> "tailRtrEtl")];
 
