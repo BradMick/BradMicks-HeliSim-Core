@@ -1,0 +1,32 @@
+name = "BMKHS HeliSim Core"
+prefix = "bmkhs"
+mainprefix = "x"
+
+[properties]
+author = "BradMick"
+
+[version]
+major = 1
+minor = 0
+patch = 0
+build = 0
+git_hash = 0
+
+[files]
+include = [
+    "LICENSE",
+    "README.md",
+]
+# DEV-ONLY: keeps precompiled SQF bytecode out of the packed PBO so -filePatching works.
+# Arma prefers a .sqfc over its matching .sqf at the same path, so a PBO carrying bytecode
+# SILENTLY ignores loose source edits - patching looks on and nothing happens, with no error.
+#
+# [files] exclude is GLOBAL, so this also strips bytecode from build/release and costs
+# shipped PBOs their performance. Comment it out to ship.
+#exclude = [
+#    "**/*.sqfc",
+#]
+
+[hemtt.release]
+sign = true
+archive = true

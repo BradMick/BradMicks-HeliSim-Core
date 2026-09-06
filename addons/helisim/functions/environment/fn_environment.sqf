@@ -1,0 +1,83 @@
+#include "\bmkhs_helisim\functions\core\core.hpp"
+
+params ["_heli"];
+
+private _baroAlt = getPosASL _heli # 2 * METERS_TO_FEET;
+private _baseAlt = 0.0;
+private _baseFAT = 0.0;
+switch (bmkhs_helisimEnvironment) do {
+    case ISA_STD: {
+        _baseAlt = 0;
+        _baseFAT = 15.0;
+    };
+    case EUROPE_SUMMER: {
+        _baseAlt = 800;
+        _baseFAT = 20.0;
+    };
+    case EUROPE_WINTER: {
+        _baseAlt = 800;
+        _baseFAT = 0.0;
+    };
+    case MIDDLE_EAST: {
+        _baseAlt = 1800;
+        _baseFAT = 30.0;
+    };
+    case CENTRAL_ASIA_SUMMER: {
+        _baseAlt = 5000;
+        _baseFAT = 30.0;
+    };
+    case CENTRAL_ASIA_WINTER: {
+        _baseAlt = 5000;
+        _baseFAT = -5.0;
+    };
+    case ASIA: {
+        _baseAlt = 3100;
+        _baseFAT = 25.0;
+    };
+};
+
+//Environment
+private _altitude          = round ((_baseAlt + _baroAlt) / 10) * 10;; //PA  feet
+private _altimeter         = 29.92; //in mg
+private _temperature       = _baseFAT - round((_baroAlt / 1000) * 2); //FAT deg C
+
+//pressure and air density calculations below so rho stays consistent.
+if (false) then {
+    _altitude = _altitude;
+};
+if (false) then {
+    _temperature = _temperature;
+};
+
+private _referencePressure = _altimeter * IN_MG_TO_HPA;
+private _referenceAltitude = 0;
+private _exp               = -GRAVITY * MOLAR_MASS_OF_AIR * (_altitude - _referenceAltitude) / (UNIVERSAL_GAS_CONSTANT * (_temperature + DEG_C_TO_KELVIN));
+private _pressure          = ((_referencePressure / 0.01) * (exp _exp)) * 0.01;
+
+private _densityAltitude   = (_altitude + ((SEA_LEVEL_PRESSURE - _altimeter) * 1000)) + (120 * (_temperature - (STANDARD_TEMP - ((_altitude / 1000) * 2))));
+private _dryAirDensity     = (_pressure / 0.01) / (287.05 * (_temperature + DEG_C_TO_KELVIN));
+
+_heli setVariable ["bmkhs_PA",  _altitude];
+_heli setVariable ["bmkhs_FAT", _temperature];
+_heli setVariable ["bmkhs_rho", _dryAirDensity];
+
+//Wind world-space velocity vector — direction/speed display is handled in getVelocities
+private _windSpeed   = vectorMagnitude wind;
+private _windDirFrom = (windDir + 180) mod 360;
+
+if (false) then {
+    _windSpeed   = (0.0) * KNOTS_TO_MPS;
+    _windDirFrom = (0.0);
+};
+
+_heli setVariable ["bmkhs_windSpeedKts", round (_windSpeed * MPS_TO_KNOTS)];
+_heli setVariable ["bmkhs_windDirFrom",  round _windDirFrom];
+
+private _velWindWorldSpace = [0,0,0];
+
+if (bmkhs_rotorModel == 0) then {
+    private _windDirToward = (_windDirFrom + 180) mod 360;
+    _velWindWorldSpace = [_windSpeed * sin _windDirToward, _windSpeed * cos _windDirToward, 0.0];
+};
+
+_heli setVariable ["bmkhs_velWindWorldSpace", _velWindWorldSpace];

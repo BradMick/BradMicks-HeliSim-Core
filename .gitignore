@@ -1,0 +1,34 @@
+# OS files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+._*
+
+# IDE
+.vscode/
+
+# Python
+*.pyc
+venv/
+
+# Build artifacts
+*.pbo
+*.bisign
+*.bikey
+*.biprivatekey
+*.hemttprivatekey
+addons/*/version.hpp
+
+# SCons
+.sconsign.dblite
+buildTools/
+
+# HEMTT
+.hemttout/
+releases/
+
+# NaturalDocs
+docs/
+naturaldocs/Working Data
