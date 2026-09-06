@@ -61,12 +61,9 @@ private _bladeRadius            = _heli getVariable "bmkhs_mainRtrBladeRadius";
 private _bladeChord             = _heli getVariable "bmkhs_mainRtrBladeChord";
 private _bladeMass              = _heli getVariable "bmkhs_mainRtrBladeMass";
 private _bladeHingeOffset       = _heli getVariable "bmkhs_mainRtrBladeHingeOff";
-private _bladePitch_min         = _heli getVariable "bmkhs_mainRtrBladePitchMin";
-private _bladePitch_max         = _heli getVariable "bmkhs_mainRtrBladePitchMax";
 
 private _rtrGndEffTable = _heli getVariable "bmkhs_mainRtrGndEffTable";
-private _rtrThrustScalarTable_min = _heli getVariable "bmkhs_mainRtrThrustMinTable";
-private _rtrThrustScalarTable_max = _heli getVariable "bmkhs_mainRtrThrustMaxTable";
+private _thrustVsCollectiveTable = _heli getVariable "bmkhs_mainRtrThrustVsCollective";
 private _rtrTipLossTable = _heli getVariable "bmkhs_mainRtrTipLossTable";
 private _velocityThrustExponentTable = _heli getVariable "bmkhs_mainRtrVelExponentTable";
 
@@ -97,17 +94,17 @@ private _Jtot = (_Iy + _Itot) * _rtrNumBlades;
 [_heli, "bmkhs_rtrMoi", 0, _Jtot, true] call bmkhs_fnc_utilSetArrayVariable;
 
 //Thrust produced
-private _bladePitch_cur                = _bladePitch_min + (_bladePitch_max - _bladePitch_min) * _fmcCollOut;
-private _rtrThrustScalar_min           = [_rtrThrustScalarTable_min, _altitude] call bmkhs_fnc_mathLinearInterp select 1;
-private _bladePitchInducedThrustScalar = _rtrThrustScalar_min + ((1 - _rtrThrustScalar_min) / _bladePitch_max)  * _bladePitch_cur;
+//Collective to thrust, by pressure altitude. One surface where there were
+//three terms: the blade-pitch ramp, its altitude floor and the per-Nr table.
+private _bladePitchInducedThrustScalar = [_thrustVsCollectiveTable, _altitude, _fmcCollOut] call bmkhs_fnc_mathLinearInterp2D select 1;
 //(_heli getVariable "bmkhs_engPctNP")
 //    params ["_eng1PctNP", "_eng2PctNp"];
 private _inputRPM                      = (_heli getVariable "bmkhs_xmsnOutputRpm") / 20900;//_eng1PctNP max _eng2PctNp;
 private _inputRpmPct                   = [_inputRpm / _rtrRPMTrimVal, 0.0, 1.0] call BIS_fnc_clamp;
 
 //Rotor induced thrust as a function of RPM
-private _rtrThrustScalar_max       = [_rtrThrustScalarTable_max, _altitude] call bmkhs_fnc_mathLinearInterp select 1;
-private _rtrRPMInducedThrustScalar = _inputRpmPct * _rtrThrustScalar_max;
+//The per-Nr altitude table is folded into thrustVsCollective above.
+private _rtrRPMInducedThrustScalar = _inputRpmPct;
 
 //Thrust scalar as a result of altitude
 private _airDensityThrustScalar    = _dryAirDensity / ISA_STD_DAY_AIR_DENSITY;

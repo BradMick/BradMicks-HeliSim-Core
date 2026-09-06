@@ -29,16 +29,13 @@ _heli setVariable ["bmkhs_mainRtrBladeRadius",  getNumber (_config >> "mainRtrBl
 _heli setVariable ["bmkhs_mainRtrBladeChord",   getNumber (_config >> "mainRtrBladeChord")];
 _heli setVariable ["bmkhs_mainRtrBladeMass",    getNumber (_config >> "mainRtrBladeMass")];
 _heli setVariable ["bmkhs_mainRtrBladeHingeOff",getNumber (_config >> "mainRtrBladeHingeOff")];
-_heli setVariable ["bmkhs_mainRtrBladePitchMin",getNumber (_config >> "mainRtrBladePitchMin")];
-_heli setVariable ["bmkhs_mainRtrBladePitchMax",getNumber (_config >> "mainRtrBladePitchMax")];
 _heli setVariable ["bmkhs_mainRtrBaseThrust",   getNumber (_config >> "mainRtrBaseThrust")];
 _heli setVariable ["bmkhs_mainRotorGearRatio",  getNumber (_config >> "mainRtrGearRatio")];
 _heli setVariable ["bmkhs_mainRtrFlapbackLon",  getNumber (_config >> "mainRtrFlapbackLon")];
 _heli setVariable ["bmkhs_mainRtrFlapbackLat",  getNumber (_config >> "mainRtrFlapbackLat")];
 
 _heli setVariable ["bmkhs_mainRtrGndEffTable", getArray (_config >> "mainRtrGndEffTable")];
-_heli setVariable ["bmkhs_mainRtrThrustMinTable", getArray (_config >> "mainRtrThrustMinTable")];
-_heli setVariable ["bmkhs_mainRtrThrustMaxTable", getArray (_config >> "mainRtrThrustMaxTable")];
+_heli setVariable ["bmkhs_mainRtrThrustVsCollective", getArray (_config >> "mainRtrThrustVsCollective")];
 _heli setVariable ["bmkhs_mainRtrTipLossTable", getArray (_config >> "mainRtrTipLossTable")];
 _heli setVariable ["bmkhs_mainRtrVelExponentTable", getArray (_config >> "mainRtrVelExponentTable")];
 _heli setVariable ["bmkhs_mainRtrTorqueScalarTable", getArray (_config >> "mainRtrTorqueScalarTable")];
@@ -61,10 +58,6 @@ _heli setVariable ["bmkhs_tailRtrBaseThrust",   getNumber (_config >> "tailRtrBa
 _heli setVariable ["bmkhs_tailRtrPitchThrustTable", getArray (_config >> "tailRtrPitchThrustTable")];
 _heli setVariable ["bmkhs_tailRtrThrustVsAirspeed", getArray (_config >> "tailRtrThrustVsAirspeed")];
 _heli setVariable ["bmkhs_tailRtrRollCouple",     getNumber (_config >> "tailRtrRollCouple")];
-_heli setVariable ["bmkhs_tailRtrDamageThresh",   getNumber (_config >> "tailRtrDamageThresh")];
-_heli setVariable ["bmkhs_tailRtrVne",            getNumber (_config >> "tailRtrVne")];
-_heli setVariable ["bmkhs_tailRtrVrs",            getNumber (_config >> "tailRtrVrs")];
-_heli setVariable ["bmkhs_tailRtrEtl",            getNumber (_config >> "tailRtrEtl")];
 
 //RUNTIME STATE - what the model carries frame to frame.
 _heli setVariable ["bmkhs_reqEngTorque",   [0.0, 0.0]];

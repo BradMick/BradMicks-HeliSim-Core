@@ -46,9 +46,6 @@ private _rtrNumBlades           = _heli getVariable "bmkhs_tailRtrNumBlades";
 private _bladeRadius            = _heli getVariable "bmkhs_tailRtrBladeRadius";
 private _bladeChord             = _heli getVariable "bmkhs_tailRtrBladeChord";
 
-private _velVne                 = _heli getVariable "bmkhs_tailRtrVne";
-private _velVrs                 = _heli getVariable "bmkhs_tailRtrVrs";
-private _velEtl                 = _heli getVariable "bmkhs_tailRtrEtl";
 
 private _bladePitchInducedThrustTable = _heli getVariable "bmkhs_tailRtrPitchThrustTable";
 
@@ -97,17 +94,17 @@ if (_velWindY < 0.0) then {
 _velHubWind = _velHubWind vectorAdd [_velWindX, _velWindY, 0.0];
 //ACROSS the disc: what is left once the through-disc component is removed.
 private _velThroughDisc            = _velHubWind vectorDotProduct _axis;
-private _velYZ                     = (vectorMagnitude (_velHubWind vectorDiff (_axis vectorMultiply _velThroughDisc))) min _velVne;
+private _velYZ                     = (vectorMagnitude (_velHubWind vectorDiff (_axis vectorMultiply _velThroughDisc))) min VEL_VNE;
 private _airspeedVelocityScalar    = [_thrustVsAirspeedTable, _velYZ] call bmkhs_fnc_mathLinearInterp select 1;
 //Induced flow handler - lateral flow through the disk, at the HUB.
 //THROUGH the disc, along the mast.
 private _velX                      = _velThroughDisc;
 
 private _inducedVelocityScalar     = 1.0;
-if (_velX < -_velVrs && _velYZ < _velEtl) then {
+if (_velX < -VEL_VRS && _velYZ < VEL_ETL) then {
     _inducedVelocityScalar = 0.0;
 } else {
-    _inducedVelocityScalar = 1 - (_velX / _velVrs);
+    _inducedVelocityScalar = 1 - (_velX / VEL_VRS);
 };
 //Finally, multiply all the scalars above to arrive at the final thrust scalar
 private _rtrThrustScalar   = _bladePitchInducedThrustScalar * _rtrRPMInducedThrustScalar * _airDensityThrustScalar * _airspeedVelocityScalar * _inducedVelocityScalar;
@@ -136,7 +133,7 @@ private _outTq     = [0.0, 0.0, 0.0];
 
 if ([vectorMagnitude _thrustVector] call bmkhs_fnc_mathIsNAN || [vectorMagnitude _thrustVector] call bmkhs_fnc_mathIsINF) then { _thrustVector = [0.0, 0.0, 0.0]; };
 
-if (_tailRtrDamage < (_heli getVariable "bmkhs_tailRtrDamageThresh") && _IGBDamage < SYS_IGB_DMG_THRESH && _TGBDamage < SYS_TGB_DMG_THRESH) then {
+if (_tailRtrDamage < SYS_TAIL_RTR_DMG_THRESH && _IGBDamage < SYS_IGB_DMG_THRESH && _TGBDamage < SYS_TGB_DMG_THRESH) then {
     if (currentPilot _heli == player) then {
         if ( bmkhs_helisimRealismSetting == REALISTIC) then {
             //Tail rotor thrust

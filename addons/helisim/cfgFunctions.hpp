@@ -157,6 +157,7 @@ class CfgFunctions
             class mathIsINF {R;};
             class mathIsNAN {R;};
             class mathLinearInterp {R;};
+            class mathLinearInterp2D {R;};
             class mathLinearInterpFromCenter {R;};
             class mathRotateVector {R;};
             class mathVectorRotate {R;};

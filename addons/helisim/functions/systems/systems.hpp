@@ -18,6 +18,11 @@
 #define SYS_NGB_DMG_THRESH   0.85
 #define SYS_IGB_DMG_THRESH   0.85
 #define SYS_TGB_DMG_THRESH   0.85
+
+//Rotor cut-outs: past this the rotor stops producing anything. Model policy,
+//not airframe data - the aircraft declares no damage numbers.
+#define SYS_MAIN_RTR_DMG_THRESH 0.99
+#define SYS_TAIL_RTR_DMG_THRESH 0.85
 #define SYS_FCR_DMG_THRESH   0.85
 #define SYS_STAB_DMG_THRESH  0.85
 #define SYS_HYD_DMG_THRESH   0.85
