@@ -2,18 +2,8 @@
 Function: bmkhs_fnc_simpleRotor
 
 Description:
-    The simple rotor model. Runs every declared rotor and applies its thrust and
-    torque to the airframe.
-
-    A rotor is a FORCE GENERATOR. It produces a thrust vector and a torque, and
-    the two are computed on INDEPENDENT chains - thrust never enters the power
-    calculation and torque never scales thrust. That separation is deliberate;
-    it is what lets collective feel and engine loading be tuned without one
-    dragging the other around.
-
-    A tail rotor is not a different model. It is the same generator pointed
-    sideways: thrustAxis = "X", no ground effect, no cyclic, no climb term, and
-    pedal on the collective curve instead of collective.
+    Runs every declared rotor and applies its thrust and torque. Thrust and
+    power are independent chains - neither reads the other.
 
     Field reference: \bmkhs_helisim\simpleRotor.hpp
 
@@ -60,9 +50,7 @@ private _pitchInput = [([_heli getVariable "bmkhs_cyclicFwdAft",   _heli getVari
 private _rollInput  = [([_heli getVariable "bmkhs_cyclicLeftRight", _heli getVariable "bmkhs_forceTrimPosRoll"]  call bmkhs_fnc_inputGetInterp) + _fmcRollOut,  -1.0, 1.0] call BIS_fnc_clamp;
 private _pedalInput = [([_heli getVariable "bmkhs_pedalLeftRight",  _heli getVariable "bmkhs_forceTrimPosYaw"]   call bmkhs_fnc_inputGetInterp),               -1.0, 1.0] call BIS_fnc_clamp;
 
-//AIRSPEED in the airframe's axes - fn_stateVelocities has already rotated the
-//world velocity into model space and subtracted the wind, so this is velocity
-//relative to the airstream. Nothing here needs to touch wind again.
+//Already airspeed - fn_stateVelocities subtracts wind. Do not re-add it.
 private _vel = _heli getVariable "bmkhs_velModelSpace";
 
 //Drivetrain state - one number, shared by every rotor on the same gearbox.
@@ -99,33 +87,16 @@ private _moiOut    = [];
 
     private _rtrOmega = (2.0 * pi) * ((_r get "designRpm") * _inputRPM) / 60.0;
 
-    /////////////////////////////////////////////////////////////////////////////////////////
-    // AIRSPEED AT THE HUB
-    /////////////////////////////////////////////////////////////////////////////////////////
-    //bmkhs_velModelSpace IS AIRSPEED ALREADY: fn_stateVelocities rotates the
-    //world velocity into the airframe's axes and subtracts the wind. Do not add
-    //wind back here - it has been taken out once and adding it returns it twice.
-    //
-    //A rotor away from the CG also moves through the air when the airframe
-    //ROTATES, even with the CG still. That is (r x omega), and it is why a yaw
-    //rate loads the tail rotor. A main rotor sits close enough to the CG that
-    //the term is small, but it costs nothing to be right about both.
+    //Hub airspeed: CG airspeed plus (r x omega) - a yaw rate swings the tail
+    //through the air even with the CG still.
     private _leverArm = _pos vectorDiff _heliCom;
     private _velHub   = _vel vectorAdd (_leverArm vectorCrossProduct (_heli getVariable ["bmkhs_angVelModelSpace", [0,0,0]]));
 
-    //The flow that matters is the one ACROSS the disc; the flow THROUGH it is
-    //what drives induced-flow effects. Which axis is which depends on where the
-    //rotor points: a main rotor pushes up and sees horizontal flow across it, a
-    //tail rotor pushes sideways and sees forward and vertical flow.
-    private _velThroughDisc = 0.0;
-    private _velAcrossDisc  = 0.0;
-    if (_isMain) then {
-        _velAcrossDisc  = vectorMagnitude [_velHub select 0, _velHub select 1];
-        _velThroughDisc = _velHub select 2;
-    } else {
-        _velAcrossDisc  = vectorMagnitude [_velHub select 1, _velHub select 2];
-        _velThroughDisc = _velHub select 0;
-    };
+    //Flow comes from the AXIS, not from rotorType - through the disc along the
+    //thrust axis, across it perpendicular.
+    private _axis           = _r get "axis";
+    private _velThroughDisc = _velHub vectorDotProduct _axis;
+    private _velAcrossDisc  = vectorMagnitude (_velHub vectorDiff (_axis vectorMultiply _velThroughDisc));
     _velAcrossDisc = _velAcrossDisc min _vne;
     if ([_velAcrossDisc] call bmkhs_fnc_mathIsNAN || [_velAcrossDisc] call bmkhs_fnc_mathIsINF) then { _velAcrossDisc = 0.0; };
     if (_isOnGnd) then { _velAcrossDisc = 0.0; };
@@ -133,7 +104,7 @@ private _moiOut    = [];
     /////////////////////////////////////////////////////////////////////////////////////////
     // THRUST CHAIN - does not read torque
     /////////////////////////////////////////////////////////////////////////////////////////
-    //Control input on this rotor's own curve: collective for a main, pedal for a tail.
+    //Collective for a main, pedal for a tail.
     private _ctlInput  = if (_isMain) then {_fmcCollOut} else {_pedalInput};
     private _ctlScalar = [_r get "thrustVsCollective", _ctlInput] call bmkhs_fnc_mathLinearInterp select 1;
 
@@ -143,9 +114,8 @@ private _moiOut    = [];
     //Density falls off with altitude and heat; the rotor loses thrust with it.
     private _densityScalar = _dryAirDensity / ISA_STD_DAY_AIR_DENSITY;
 
-    //Induced flow. Descending into your own downwash costs lift - vortex ring
-    //state. The band comes from LAST frame's induced velocity, which is derived
-    //from thrust, so it tracks the airframe with no config.
+    //VRS. Band comes from last frame's induced velocity, so it tracks the
+    //airframe with no config.
     private _vrsMin = (_heli getVariable ["bmkhs_vrsVelocityMin", []]) param [_idx, 0.0];
     private _vrsMax = (_heli getVariable ["bmkhs_vrsVelocityMax", []]) param [_idx, 0.0];
     private _inducedScalar = 1.0;
@@ -156,8 +126,7 @@ private _moiOut    = [];
 
     private _thrust = _baseThrust * _ctlScalar * _inputRpmPct * _densityScalar * _airspeedScalar * _inducedScalar;
 
-    //Ground effect. The SHAPE is physics - the cushion fades over one rotor
-    //diameter - and the STRENGTH is the airframe's.
+    //Ground effect: (1 - h/D) shape in Core, strength from config.
     if (_isMain) then {
         private _gain = _r get "groundEffectGain";
         if (_gain > 0.0) then {
@@ -192,8 +161,7 @@ private _moiOut    = [];
         private _powerFrac = [_r get "powerVsAirspeed",   _velAcrossDisc] call bmkhs_fnc_mathLinearInterp select 1;
         private _collCorr  = [_r get "powerVsCollective", _fmcCollOut]    call bmkhs_fnc_mathLinearInterp select 1;
 
-        //Below ETL the collective correction fades in - in the hover the rotor is
-        //already working, so there is nothing to correct toward.
+        //Fades in above ETL.
         _collCorr = linearConversion [0.0, _etl, _velAcrossDisc, 1.0, _collCorr, true];
 
         private _powerVal = [_powerFrac * _collCorr, -1.0, 2.50] call BIS_fnc_clamp;
@@ -203,14 +171,13 @@ private _moiOut    = [];
         _torqueReq = (_powerReq * 1000.0) / ((2.0 * pi / 60.0) * _refRpm);
         _torqueReq = _torqueReq * _inputRpmPct;
 
-        //Autorotation - descending air drives the rotor instead of the engine.
+        //Autorotation: descending air drives the rotor.
         private _autoro = _r get "autoroTorque";
         if (_autoro > 0.0 && {_velThroughDisc < 0.0}) then {
             _torqueReq = _torqueReq + (_velThroughDisc * _autoro);
         };
     } else {
-        //A TAIL ROTOR COSTS POWER, and costs more when you stomp a pedal. Scaling
-        //off its own thrust means that falls out of thrustVsCollective for free.
+        //Costs power, and more on a pedal input - falls out of its own thrust.
         _torqueReq = (abs _thrust) * (_r get "torqueScalar");
     };
 
@@ -225,7 +192,7 @@ private _moiOut    = [];
 
     private _driven = _damage < _damageThr;
     if (!_isMain) then {
-        //A tail rotor also stops if its drive does.
+        //Tail also stops if its drive does.
         private _igb = [_heli, "intermediateGearbox"] call bmkhs_fnc_damageGet;
         private _tgb = [_heli, "tailRotorGearbox"]    call bmkhs_fnc_damageGet;
         _driven = _driven && {_igb < SYS_IGB_DMG_THRESH} && {_tgb < SYS_TGB_DMG_THRESH};
@@ -234,7 +201,7 @@ private _moiOut    = [];
     if (_driven && {currentPilot _heli == player}) then {
         private _realistic = bmkhs_helisimRealismSetting == REALISTIC;
 
-        //Thrust vector, tilted by roll input and flapback on a main rotor.
+        //Tilted by roll input and flapback on a main rotor.
         private _thrustVector = (_r get "axis") vectorMultiply (_thrust * _deltaTime);
         if (_isMain) then {
             private _tipVel  = _rtrOmega * _bladeRadius;
@@ -245,21 +212,19 @@ private _moiOut    = [];
         };
         if ([vectorMagnitude _thrustVector] call bmkhs_fnc_mathIsNAN || [vectorMagnitude _thrustVector] call bmkhs_fnc_mathIsINF) then { _thrustVector = [0.0, 0.0, 0.0]; };
 
-        //Moments. A main rotor gets cyclic; a tail gets the yaw its thrust makes.
+        //Main gets cyclic; tail gets the yaw its thrust makes.
         private _moment = [0.0, 0.0, 0.0];
         if (_isMain) then {
             private _pitchTq = linearConversion [0.0, 1.0, _inputRpmPct, 0.0, (_r get "cyclicPitchTorque") * _deltaTime, true];
             private _rollTq  = linearConversion [0.0, 1.0, _inputRpmPct, 0.0, (_r get "cyclicRollTorque")  * _deltaTime, true];
-            //Yaw is the reaction to driving the rotor - the airframe twists the
-            //other way. Zeroed in casual: no torque to fight.
+            //Reaction to driving the rotor. Zeroed in casual.
             private _yawTq = if (_realistic) then {
                 _torqueReq * (_r get "gearRatio") * (_r get "dirSign") * (_r get "pedalYawTorque") * _deltaTime
             } else {0.0};
             _moment = [_pitchTq * _pitchInput, _rollTq * _rollInput, _yawTq];
         } else {
             private _moment2 = _thrustVector vectorCrossProduct (_pos vectorDiff _heliCom);
-            //A tail rotor sits above the roll axis, so its thrust rolls the
-            //airframe as well as yawing it. How much is the airframe's.
+            //Tail thrust acts above the roll axis, so it rolls as well as yaws.
             _moment2 set [1, (_moment2 select 1) * (_r get "rollCouple")];
             _moment = _moment2;
         };

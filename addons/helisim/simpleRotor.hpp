@@ -26,6 +26,13 @@
 //    no cyclic           pedal drives thrust, not disc tilt
 //    no climb term       excess torque does not become tail thrust
 //
+//ROTORTYPE IS ABOUT CONTROL, NOT GEOMETRY. It decides which input drives the rotor and
+//what the rotor owes the airframe - collective and cyclic and a power draw for a MAIN,
+//pedal and a yaw moment for a TAIL. It decides NOTHING about how air moves through the
+//disc. That comes from thrustAxis: a rotor sees flow THROUGH the disc along the axis it
+//pushes and flow ACROSS the disc perpendicular to it, and that is true whatever the
+//rotor is called. Declare a Z-axis tail rotor and the airspeed maths still holds.
+//
 //So both are declared the same way, in one class each, and Core loops them. A NOTAR, a
 //coaxial or a tandem is a declaration, not a code change.
 //
