@@ -179,6 +179,7 @@ class CfgFunctions
         class debug {
             file = "\bmkhs_helisim\functions\debug";
             class debugDrawCircle {R;};
+            class debugDrawCross {R;};
             class debugDrawLine {R;};
         };
         class mathQuaternion {
@@ -211,8 +212,11 @@ class CfgFunctions
         };
         class simpleRotor {
             file = "\bmkhs_helisim\functions\simpleRotor";
+            class simpleRotor {R;};
+            class simpleRotorControl {R;};
             class simpleRotorMain {R;};
             class simpleRotorTail {R;};
+            class simpleRotorUpdate {R;};
             class simpleRotorVariables {R;};
         };
         class state {

@@ -28,17 +28,17 @@ _yawInput                       = [_yawInput, -1.0, 1.0] call BIS_fnc_clamp;
 private _collectiveOut          = _heli getVariable "bmkhs_collectiveOutput";
 private _altHoldCollOut         = _heli getVariable "bmkhs_fmcAltHoldCollOut";
 private _collInput              = _collectiveOut + _altHoldCollOut;
-private _collFeather            = 0.0;
+private _thrustCoef             = 0.0;
 
 switch (_type) do {
 	case MAIN: {
 		_pitchFeather  = [-1, 1, _pitchInput, _pitchMin, _pitchMid, _pitchMax] call bmkhs_fnc_mathLinearInterpFromCenter;
 		_rollFeather   = [-1, 1, _rollInput,  _rollMin,  _rollMid,  _rollMax]  call bmkhs_fnc_mathLinearInterpFromCenter;
-		_collFeather   = linearConversion[ 0, 1, _collInput,  _collMin, _collMax, true];
+		_thrustCoef   = linearConversion[ 0, 1, _collInput,  _collMin, _collMax, true];
 	};
 	case TAIL: {
-		_collFeather   = [-1, 1, -_yawInput, _collMin, _collMid, _collMax] call bmkhs_fnc_mathLinearInterpFromCenter;
+		_thrustCoef   = [-1, 1, _yawInput, _collMin, _collMid, _collMax] call bmkhs_fnc_mathLinearInterpFromCenter;
 	};
 };
 
-[_pitchFeather, _rollFeather, _collFeather];
+[_pitchFeather, _rollFeather, _thrustCoef];

@@ -47,9 +47,9 @@ private _dmgThreshold  = [ 0.99
 // Debug: draw CG position as a sphere with crosshair lines
 private _cgPos = getCenterOfMass _heli;
 private _cgR   = 5.0;
-[_heli, 16, _cgPos, _cgR, 0, "red"]   call bmkhs_fnc_debugDrawCircle;
-[_heli, 16, _cgPos, _cgR, 1, "red"]   call bmkhs_fnc_debugDrawCircle;
-[_heli, 16, _cgPos, _cgR, 2, "red"]   call bmkhs_fnc_debugDrawCircle;
+[_heli, 16, _cgPos, [0.0, 90.0, 0.0], _cgR, "red"]  call bmkhs_fnc_debugDrawCircle;
+[_heli, 16, _cgPos, [-90.0, 0.0, 0.0], _cgR, "red"] call bmkhs_fnc_debugDrawCircle;
+[_heli, 16, _cgPos, [0.0, 0.0, 0.0], _cgR, "red"]   call bmkhs_fnc_debugDrawCircle;
 [_heli, _cgPos vectorAdd [-_cgR, 0, 0], _cgPos vectorAdd [_cgR, 0, 0], "white"] call bmkhs_fnc_debugDrawLine;
 [_heli, _cgPos vectorAdd [0, -_cgR, 0], _cgPos vectorAdd [0, _cgR, 0], "white"] call bmkhs_fnc_debugDrawLine;
 [_heli, _cgPos vectorAdd [0, 0, -_cgR], _cgPos vectorAdd [0, 0, _cgR], "white"] call bmkhs_fnc_debugDrawLine;

@@ -453,18 +453,18 @@ if (currentPilot _heli == player) then {
         private _moment = [0.0, 0.0, 0.0];
         if (bmkhs_helisimRealismSetting == REALISTIC) then {
             //Main rotor thrust
-            _heli addForce  [_heli vectorModelToWorld _thrustVector, _rtrPos];
+            //_heli addForce  [_heli vectorModelToWorld _thrustVector, _rtrPos];
             //Main rotor torque. NO `private` here - it would shadow the outer _moment, so the
             _moment = [_momentX, _momentY, _momentZ];
             if ([vectorMagnitude _moment] call bmkhs_fnc_mathIsNAN || [vectorMagnitude _moment] call bmkhs_fnc_mathIsINF) then { _moment = [0.0, 0.0, 0.0]; };
-            _heli addTorque (_heli vectorModelToWorld _moment);
+            //_heli addTorque (_heli vectorModelToWorld _moment);
         } else {
             //Main rotor thrust
-            _heli addForce  [_heli vectorModelToWorld _thrustVector, _heliCom];
+            //_heli addForce  [_heli vectorModelToWorld _thrustVector, _heliCom];
             //Main rotor torque - yaw deliberately zeroed in casual (no torque reaction to fight).
             _moment = [_momentX, _momentY, 0.0];
             if ([vectorMagnitude _moment] call bmkhs_fnc_mathIsNAN || [vectorMagnitude _moment] call bmkhs_fnc_mathIsINF) then { _moment = [0.0, 0.0, 0.0]; };
-            _heli addTorque (_heli vectorModelToWorld _moment);
+            //_heli addTorque (_heli vectorModelToWorld _moment);
         };
     };
 };
@@ -597,10 +597,10 @@ if (cameraView == "INTERNAL") then {
 };
 
 if (BMKHS_FM_DEBUG) then {
-[_heli, _rtrPos, _rtrPos vectorAdd _axisX,        "red"]   call bmkhs_fnc_debugDrawLine;
-[_heli, _rtrPos, _rtrPos vectorAdd _axisY,        "green"] call bmkhs_fnc_debugDrawLine;
-[_heli, _rtrPos, _rtrPos vectorAdd _axisZ,        "blue"]  call bmkhs_fnc_debugDrawLine;
-[_heli, 24, _rtrPos, _bladeRadius, 2, "white", 0]   call bmkhs_fnc_debugDrawCircle;
+    //[_heli, _rtrPos, _rtrPos vectorAdd _axisX,        "red"]   call bmkhs_fnc_debugDrawLine;
+    //[_heli, _rtrPos, _rtrPos vectorAdd _axisY,        "green"] call bmkhs_fnc_debugDrawLine;
+    //[_heli, _rtrPos, _rtrPos vectorAdd _axisZ,        "blue"]  call bmkhs_fnc_debugDrawLine;
+    //[_heli, 24, _rtrPos, [0.0, 0.0, 0.0], _bladeRadius, "white"] call bmkhs_fnc_debugDrawCircle;
 };
 
 //[_outThrust, _outTq];

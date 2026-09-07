@@ -174,10 +174,10 @@ if (_tailRtrDamage < 0.85 && _IGBDamage < SYS_IGB_DMG_THRESH && _TGBDamage < SYS
 };
 
 if (BMKHS_FM_DEBUG) then {
-[_heli, _rtrPos, _rtrPos vectorAdd _axisX, "red"]   call bmkhs_fnc_debugDrawLine;
-[_heli, _rtrPos, _rtrPos vectorAdd _axisY, "green"] call bmkhs_fnc_debugDrawLine;
-[_heli, _rtrPos, _rtrPos vectorAdd _axisZ, "blue"]  call bmkhs_fnc_debugDrawLine;
-[_heli, 24, _rtrPos, _bladeRadius, 0, "white", 0]   call bmkhs_fnc_debugDrawCircle;
+    //[_heli, _rtrPos, _rtrPos vectorAdd _axisX, "red"]   call bmkhs_fnc_debugDrawLine;
+    //[_heli, _rtrPos, _rtrPos vectorAdd _axisY, "green"] call bmkhs_fnc_debugDrawLine;
+    //[_heli, _rtrPos, _rtrPos vectorAdd _axisZ, "blue"]  call bmkhs_fnc_debugDrawLine;
+    //[_heli, 24, _rtrPos, [0.0, 90.0, 0.0], _bladeRadius, "white"] call bmkhs_fnc_debugDrawCircle;
 };
 
 [_outThrust, _outTq];
