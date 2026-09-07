@@ -21,7 +21,7 @@ Author:
 #include "\bmkhs_helisim\functions\core\core.hpp"
 #include "\bmkhs_helisim\functions\rotor\rotor.hpp"
 
-params ["_heli", "_rotorIndex", "_pivot", "_rot", "_type", "_dir", "_numBlades", "_mastLength", "_gearRatio", "_bladeRadius", "_bladeChord", "_bladeMass", "_thrustCoefMin", "_thrustCoefMid", "_thrustCoefMax", "_pitchMin", "_pitchMid", "_pitchMax", "_rollMin", "_rollMid", "_rollMax", "_flapTimeConst", "_bladeCd0", "_inducedKappa", "_cyclicGain", "_hitPoint"];
+params ["_heli", "_rotorIndex", "_pivot", "_rot", "_type", "_dir", "_numBlades", "_mastLength", "_gearRatio", "_bladeRadius", "_bladeChord", "_bladeMass", "_thrustCoefMin", "_thrustCoefMid", "_thrustCoefMax", "_pitchMin", "_pitchMid", "_pitchMax", "_rollMin", "_rollMid", "_rollMax", "_flapTimeConst", "_bladeCd0", "_inducedKappa", "_cyclicGain", "_rollGain", "_hitPoint"];
 
 if (!local _heli) exitWith {};
 
@@ -135,6 +135,7 @@ if (_type == MAIN) then {
 } else {
 	_deltaPos = _pos vectorDiff _heliCom;
 	_moment   = _thrustVector vectorCrossProduct _deltaPos;
+	_moment set [1, (_moment select 1) * _rollGain];
 };
 
 _heli addForce  [_heli vectorModelToWorld _thrustVector, _pos];

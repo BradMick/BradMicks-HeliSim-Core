@@ -34,6 +34,7 @@ for "_rotorIndex" from 0 to (_numRotor - 1) do {
 	, (_heli getVariable "bmkhs_simpleRotorBladeCd0")      select _rotorIndex
 	, (_heli getVariable "bmkhs_simpleRotorInducedKappa")  select _rotorIndex
 	, (_heli getVariable "bmkhs_simpleRotorCyclicGain")    select _rotorIndex
+	, (_heli getVariable "bmkhs_simpleRotorRollGain")      select _rotorIndex
     , (_heli getVariable "bmkhs_simpleRotorHitPoint")      select _rotorIndex
     ] call bmkhs_fnc_simpleRotor;
 };

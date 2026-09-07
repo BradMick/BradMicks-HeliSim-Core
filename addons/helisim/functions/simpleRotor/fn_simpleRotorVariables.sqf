@@ -48,6 +48,8 @@ _heli setVariable ["bmkhs_simpleRotorHitPoint",      [0,     0]];//getArray  (_c
 _heli setVariable ["bmkhs_simpleRotorFlapTimeConst", [[0.15, 0.15], [0.15, 0.15]]];//getArray  (_config >> "rotorFlapTimeConst")];
 //Cyclic gain - scales the lift asymmetry the disc tilt produces across the rotor
 _heli setVariable ["bmkhs_simpleRotorCyclicGain",    [5.0,    0.0]];//getArray  (_config >> "rotorCyclicGain")];
+//Roll gain - scales the roll couple a rotor's thrust produces about the CG
+_heli setVariable ["bmkhs_simpleRotorRollGain",      [1.0,    1.0]];//getArray  (_config >> "rotorRollGain")];
 //Blade profile drag coefficient and induced power correction factor
 _heli setVariable ["bmkhs_simpleRotorBladeCd0",      [0.0095, 0.0110]];//getArray  (_config >> "rotorBladeCd0")];
 _heli setVariable ["bmkhs_simpleRotorInducedKappa",  [1.15,   1.20]];//getArray  (_config >> "rotorInducedKappa")];
