@@ -102,8 +102,6 @@ private _thrustVector = _uVec vectorMultiply (_thrust * _deltaTime);
 private _deltaPos = [0,0,0];
 private _moment   = [0,0,0];
 if (_type == MAIN) then {
-	//Cyclic force split. sin of the flap angle keeps the split bounded by the thrust
-	//itself; the authority scalar sets how much control power that split is worth.
 	private _rollFrac  = (sin _rollFeather)  * _cyclicGain;
 	private _pitchFrac = (sin _pitchFeather) * _cyclicGain;
 	//Local thrust
