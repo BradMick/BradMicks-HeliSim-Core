@@ -15,7 +15,7 @@
     "bmkhs_cyclicCenterTrimMode",
     "CHECKBOX",
     ["Cyclic Center Trim Mode", "When enabled, the cyclic is locked out until re-centered"],
-    [BMKHS_SETTINGS_CATEGORY, "Flight model"],
+    [BMKHS_SETTINGS_CATEGORY, "Controls"],
     [false],
     2
 ] call CBA_fnc_addSetting;
@@ -24,7 +24,7 @@
     "bmkhs_pedalCenterTrimMode",
     "CHECKBOX",
     ["Pedal Center Trim Mode", "When enabled, the pedals are locked out until re-centered"],
-    [BMKHS_SETTINGS_CATEGORY, "Flight model"],
+    [BMKHS_SETTINGS_CATEGORY, "Controls"],
     [false],
     2
 ] call CBA_fnc_addSetting;
@@ -33,7 +33,7 @@
     "bmkhs_springlessCyclic",
     "CHECKBOX",
     ["Springless Cyclic", "When enabled, cyclic force trim is disabled. This is for users with force feedback or springless HOTAS"],
-    [BMKHS_SETTINGS_CATEGORY, "Flight model"],
+    [BMKHS_SETTINGS_CATEGORY, "Controls"],
     [false],
     2
 ] call CBA_fnc_addSetting;
@@ -42,7 +42,7 @@
     "bmkhs_springlessPedals",
     "CHECKBOX",
     ["Springless Pedals", "When enabled, pedal force trim is disabled. This is for users with force feedback or springless pedals. This option also disables Heading Hold"],
-    [BMKHS_SETTINGS_CATEGORY, "Flight model"],
+    [BMKHS_SETTINGS_CATEGORY, "Controls"],
     [false],
     2
 ] call CBA_fnc_addSetting;
@@ -51,7 +51,7 @@
     "bmkhs_keyboardStickyPitch",
     "CHECKBOX",
     ["Keyboard Sticky Pitch", "DO NOT USE THIS IF USING HOTAS OR GAMEPAD! When enabled, keyboard input is continously updated while the input key is held down"],
-    [BMKHS_SETTINGS_CATEGORY, "Flight model"],
+    [BMKHS_SETTINGS_CATEGORY, "Keyboard"],
     [false],
     2
 ] call CBA_fnc_addSetting;
@@ -60,7 +60,7 @@
     "bmkhs_keyboardStickyRoll",
     "CHECKBOX",
     ["Keyboard Sticky Roll", "DO NOT USE THIS IF USING HOTAS OR GAMEPAD! When enabled, keyboard input is continously updated while the input key is held down"],
-    [BMKHS_SETTINGS_CATEGORY, "Flight model"],
+    [BMKHS_SETTINGS_CATEGORY, "Keyboard"],
     [false],
     2
 ] call CBA_fnc_addSetting;
@@ -69,7 +69,7 @@
     "bmkhs_keyboardStickyYaw",
     "CHECKBOX",
     ["Keyboard Sticky Yaw", "DO NOT USE THIS IF USING HOTAS OR GAMEPAD! When enabled, keyboard input is continously updated while the input key is held down"],
-    [BMKHS_SETTINGS_CATEGORY, "Flight model"],
+    [BMKHS_SETTINGS_CATEGORY, "Keyboard"],
     [false],
     2
 ] call CBA_fnc_addSetting;
@@ -78,7 +78,7 @@
     "bmkhs_autoPedal",
     "CHECKBOX",
     ["Keyboard Auto Pedal", "DOES NOT WORK WITH STICKY YAW! When enabled, the pedals are automatically managed by AI"],
-    [BMKHS_SETTINGS_CATEGORY, "Flight model"],
+    [BMKHS_SETTINGS_CATEGORY, "Keyboard"],
     [true],
     2
 ] call CBA_fnc_addSetting;
@@ -94,7 +94,7 @@
     "bmkhs_mouseAsJoystick",
     "CHECKBOX",
     ["Mouse as Joystick", "DO NOT USE THIS IF USING HOTAS OR GAMEPAD! Enables the mouse sensitivity option and stops input in freelook"],
-    [BMKHS_SETTINGS_CATEGORY, "Flight model"],
+    [BMKHS_SETTINGS_CATEGORY, "Controls"],
     [false],
     2
 ] call CBA_fnc_addSetting;
@@ -103,7 +103,7 @@
     "bmkhs_mouseSense",
     "SLIDER",
     ["Mouse Sensitivity", "Controls the sensitivity of the Mouse when used as a Joystick"],
-    [BMKHS_SETTINGS_CATEGORY, "Flight model"],
+    [BMKHS_SETTINGS_CATEGORY, "Controls"],
     [0.1, 1.0, 1.0, 1],
     2
 ] call CBA_fnc_addSetting;
@@ -121,8 +121,35 @@
     "bmkhs_vrsWarning",
     "CHECKBOX",
     ["Enable VRS Warning", "When enabled, will alert the pilot to the onset of VRS"],
-    [BMKHS_SETTINGS_CATEGORY, "Flight model"],
+    [BMKHS_SETTINGS_CATEGORY, "Display"],
     [false],
+    2
+] call CBA_fnc_addSetting;
+
+[
+    "bmkhs_testGwtEnabled",
+    "CHECKBOX",
+    ["Fixed Test Gross Weight", "When enabled, the aircraft is held at the test weight below regardless of fuel and stores. For testing, so a result is not confounded by burn-off."],
+    [BMKHS_SETTINGS_CATEGORY, "Testing"],
+    [false],
+    2
+] call CBA_fnc_addSetting;
+
+[
+    "bmkhs_testGwtLbs",
+    "EDITBOX",
+    ["Test Gross Weight (lbs)", "The gross weight held when Fixed Test Gross Weight is enabled, clamped to the aircraft's declared empty and max gross weights. CG is scaled to match."],
+    [BMKHS_SETTINGS_CATEGORY, "Testing"],
+    ["18000"],
+    2
+] call CBA_fnc_addSetting;
+
+[
+    "bmkhs_windEnabled",
+    "CHECKBOX",
+    ["Enable Wind", "When disabled, the flight model sees still air regardless of the mission weather. For testing, so a result is not confounded by whatever the wind is doing."],
+    [BMKHS_SETTINGS_CATEGORY, "Testing"],
+    [true],
     2
 ] call CBA_fnc_addSetting;
 
@@ -130,7 +157,7 @@
     "bmkhs_fmDebug",
     "CHECKBOX",
     ["Enable FM Debugging", "Displays debug output for troubleshooting FM issues"],
-    [BMKHS_SETTINGS_CATEGORY, "Flight model"],
+    [BMKHS_SETTINGS_CATEGORY, "Testing"],
     [false],
     2
 ] call CBA_fnc_addSetting;
@@ -139,7 +166,7 @@
     "bmkhs_sysDebug",
     "CHECKBOX",
     ["Enable Systems Debugging", "Shows every circuit, what feeds it, and whether each component is awake or asleep. Takes over the hint from FM debugging while on."],
-    [BMKHS_SETTINGS_CATEGORY, "Flight model"],
+    [BMKHS_SETTINGS_CATEGORY, "Testing"],
     [false],
     2
 ] call CBA_fnc_addSetting;
@@ -158,7 +185,7 @@
     "bmkhs_ctrlVisColor",
     "LIST",
     ["Control Input Visualiser: Colour Scheme", "Colour theme for the Control Input Visualiser indicators"],
-    [BMKHS_SETTINGS_CATEGORY, "Flight model"],
+    [BMKHS_SETTINGS_CATEGORY, "Display"],
     [[0, 1, 2, 3, 4, 5], [
         "Default (Green / Orange / Red)",
         "NVG (All Green)",

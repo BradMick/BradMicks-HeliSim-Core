@@ -24,6 +24,8 @@ _heli setVariable ["bmkhs_emptyMassFCR",       getNumber (_config >> "emptyMassF
 _heli setVariable ["bmkhs_emptyMomFCR",        getNumber (_config >> "emptyMomFCR")];
 _heli setVariable ["bmkhs_emptyMassNonFCR",    getNumber (_config >> "emptyMassNonFCR")];     //kg
 _heli setVariable ["bmkhs_emptyMomNonFCR",     getNumber (_config >> "emptyMomNonFCR")];
+//Maximum gross mass - bounds the fixed test weight
+_heli setVariable ["bmkhs_maxGrossMass",       getNumber (_config >> "maxGrossMass")];        //kg
 
 //Indexed mass items. Each table is flattened at load so the per-frame massUpdate never
 //touches config. Entries are HASHMAPS keyed by the config property name, not positional

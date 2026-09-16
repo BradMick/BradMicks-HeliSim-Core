@@ -153,10 +153,12 @@ class CfgFunctions
         };
         class math {
             file = "\bmkhs_helisim\functions\math";
+            class mathBuildInterpGrid {R;};
             class mathGetArea {R;};
             class mathIsINF {R;};
             class mathIsNAN {R;};
             class mathLinearInterp {R;};
+            class mathLinearInterp2D {R;};
             class mathLinearInterpFromCenter {R;};
             class mathRotateVector {R;};
             class mathVectorRotate {R;};
@@ -214,8 +216,8 @@ class CfgFunctions
             file = "\bmkhs_helisim\functions\simpleRotor";
             class simpleRotor {R;};
             class simpleRotorControl {R;};
-            class simpleRotorMain {R;};
             class simpleRotorTail {R;};
+            class simpleRotorTorque {R;};
             class simpleRotorUpdate {R;};
             class simpleRotorVariables {R;};
         };

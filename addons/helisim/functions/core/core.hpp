@@ -51,6 +51,8 @@
 #define ISA_STD_DAY_AIR_DENSITY 1.225
 
 #define VRS_SCALAR_EXPONENT     0.3
+//Advance ratio ceiling - the 4.65*mu^2 profile growth diverges past here
+#define MU_MAX                  0.35
 
 #define RAD_ALT_MAX_ALT         435.254 //1428ft
 #define ALT_HOLD_SPEED_SWITCH   20.577  //40kts GS

@@ -36,15 +36,16 @@ private _sasYawOut              = _heli getVariable "bmkhs_fmcSasYawOut";
 private _fmcYawOut              = _hdgHoldPedalYawOut + _sasYawOut;
 //_fmcYawOut                      = [_fmcYawOut, -0.15, 0.15] call BIS_fnc_clamp;
 
-private _rtrPos                 = _heli getVariable "bmkhs_tailRtrPos";
+//TESTING - hardcoded from the AH-64 config, the bmkhs_tailRtr* variables no longer exist.
+private _rtrPos                 = [-0.87, -6.98, -0.075];
 
-private _rtrDesignRPM           = _heli getVariable "bmkhs_tailRtrDesignRpm";
-private _rtrRPMTrimVal          = _heli getVariable "bmkhs_tailRtrRpmTrimVal";
-private _rtrGearRatio           = _heli getVariable "bmkhs_tailRtrGearRatio";
-private _rtrNumBlades           = _heli getVariable "bmkhs_tailRtrNumBlades";
+private _rtrDesignRPM           = 1403.0;
+private _rtrRPMTrimVal          = 1.01;
+private _rtrGearRatio           = 14.90;
+private _rtrNumBlades           = 4;
 
-private _bladeRadius            = _heli getVariable "bmkhs_tailRtrBladeRadius";
-private _bladeChord             = _heli getVariable "bmkhs_tailRtrBladeChord";
+private _bladeRadius            = 1.402;
+private _bladeChord             = 0.253;
 
 private _bladePitchInducedThrustTable = [
     [-1.00,  2.0000]
@@ -84,7 +85,7 @@ private _rtrThrustScalarTable =
 ];
 
 private _rtrAirspeedVelocityMod = 0.4;
-private _baseThrust             = _heli getVariable "bmkhs_tailRtrBaseThrust";
+private _baseThrust             = 10230.0;
 
 //Thrust produced
 private _pedalLeftRight     = _heli getVariable "bmkhs_pedalLeftRight";
@@ -148,6 +149,8 @@ private _thrustVector  = _axisX vectorMultiply (_totThrust * _deltaTime);
 private _moment        = _thrustVector vectorCrossProduct _deltaPos;
 _moment set [1, (_moment select 1) * 0.25];
 
+//systemChat format ["SRT _thrust = [%1, %2, %3] _moment = [%4, %5, %6]", (_thrustVector select 0) toFixed 0, (_thrustVector select 1) toFixed 0, (_thrustVector select 2) toFixed 0, (_moment select 0) toFixed 0, (_moment select 1) toFixed 0, (_moment select 2) toFixed 0];
+
 private _tailRtrDamage = [_heli, "tailRotor"] call bmkhs_fnc_damageGet;
 private _IGBDamage     = [_heli, "intermediateGearbox"] call bmkhs_fnc_damageGet;
 private _TGBDamage     = [_heli, "tailRotorGearbox"] call bmkhs_fnc_damageGet;
@@ -161,14 +164,14 @@ if (_tailRtrDamage < 0.85 && _IGBDamage < SYS_IGB_DMG_THRESH && _TGBDamage < SYS
     if (currentPilot _heli == player) then {
         if ( bmkhs_helisimRealismSetting == REALISTIC) then {
             //Tail rotor thrust
-            _heli addForce [_heli vectorModelToWorld _thrustVector, _rtrPos];
+            //_heli addForce [_heli vectorModelToWorld _thrustVector, _rtrPos];
             //Tail rotor torque
-            _heli addTorque (_heli vectorModelToWorld _moment);
+            //_heli addTorque (_heli vectorModelToWorld _moment);
         } else {
             //Tail rotor thrust
-            _heli addForce [_heli vectorModelToWorld _thrustVector, _heliCom];
+            //_heli addForce [_heli vectorModelToWorld _thrustVector, _heliCom];
             //Tail rotor torque
-            _heli addTorque (_heli vectorModelToWorld _moment);
+            //_heli addTorque (_heli vectorModelToWorld _moment);
         };
     };
 };

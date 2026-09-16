@@ -21,7 +21,7 @@ Author:
 #include "\bmkhs_helisim\functions\core\core.hpp"
 #include "\bmkhs_helisim\functions\rotor\rotor.hpp"
 
-params ["_heli", "_rotorIndex", "_pivot", "_rot", "_type", "_dir", "_numBlades", "_mastLength", "_gearRatio", "_bladeRadius", "_bladeChord", "_bladeMass", "_thrustCoefMin", "_thrustCoefMid", "_thrustCoefMax", "_pitchMin", "_pitchMid", "_pitchMax", "_rollMin", "_rollMid", "_rollMax", "_flapTimeConst", "_bladeCd0", "_inducedKappa", "_cyclicGain", "_rollGain", "_hitPoint"];
+params ["_heli", "_rotorIndex", "_pivot", "_rot", "_type", "_dir", "_numBlades", "_mastLength", "_gearRatio", "_bladeRadius", "_bladeChord", "_bladeMass", "_thrustCoefMin", "_thrustCoefMid", "_thrustCoefMax", "_pitchMin", "_pitchMid", "_pitchMax", "_rollMin", "_rollMid", "_rollMax", "_flapTimeConst", "_dragCoefMin", "_dragCoefMid", "_dragCoefMax", "_inducedKappa", "_cyclicPitchGain", "_cyclicRollGain","_rollGain", "_hitPoint"];
 
 if (!local _heli) exitWith {};
 
@@ -37,10 +37,13 @@ private _deltaTime          = _heli getVariable "bmkhs_deltaTime";
  , _rollMax
  , _thrustCoefMin
  , _thrustCoefMid
- , _thrustCoefMax ] call bmkhs_fnc_simpleRotorControl)
+ , _thrustCoefMax
+ , _dragCoefMin
+ , _dragCoefMid
+ , _dragCoefMax ] call bmkhs_fnc_simpleRotorControl)
 	params [ "_pitchFeather"
 		   , "_rollFeather"
-		   , "_thrustCoef"];
+		   , "_collOutput"];
 
 //Disc tilt
 private _flapTimeConstLon   = _flapTimeConst select 0;
@@ -73,10 +76,37 @@ private _dryAirDensity  = _heli getVariable "bmkhs_RHO";
 private _xmsnRpm        = _heli getVariable "bmkhs_xmsnOutputRpm";
 private _rpm            = _xmsnRpm / _gearRatio;
 private _omega          = if (_rpm == 0.0) then { 0.0 } else { (2.0 * pi) * (_rpm / 60.0) };
-private _area           = pi * (_bladeRadius * _bladeRadius);
+private _bladeArea      = _bladeRadius * _bladeChord;
+private _rotorArea      = pi * (_bladeRadius * _bladeRadius);
 private _tipVel         = _omega * _bladeRadius;
+private _bladeRad_75    = _bladeRadius * 0.75;
+private _bladeVel_75    = _omega * _bladeRad_75;
 
-private _thrust         = _thrustCoef * 0.5 * _dryAirDensity * _area * (_tipVel * _tipVel);
+//Lift coef - collective down the side, airspeed (m/s) across the top
+private _liftCoefTable =
+[
+//  Coll \ A/S    0.00    10.29    20.58    36.01    46.30    51.44    61.73    66.88    72.02
+     ["A/S",    0.00,   10.29,   20.58,   36.01,   46.30,   51.44,   61.73,   66.88,   72.02]
+    ,[ 0.00,  0.1000,  0.1000,  0.1000,  0.1000,  0.1000,  0.1000,  0.1000,  0.1000,  0.1000]
+    ,[ 0.20,  0.1666,  0.1695,  0.1826,  0.1904,  0.1841,  0.1786,  0.1666,  0.1541,  0.1252]
+    ,[ 0.40,  0.2331,  0.2389,  0.2653,  0.2809,  0.2681,  0.2571,  0.2331,  0.2081,  0.1503]
+    ,[ 0.64,  0.2997,  0.3084,  0.3479,  0.3713,  0.3522,  0.3357,  0.2997,  0.2622,  0.1755]
+    ,[ 0.80,  0.3330,  0.4100,  0.5340,  0.6100,  0.5790,  0.5713,  0.4860,  0.3928,  0.2915]
+    ,[ 1.00,  0.4120,  0.4120,  0.4120,  0.4120,  0.4120,  0.4120,  0.4120,  0.4120,  0.4120]
+];
+
+//Drag coef - collective down the side, airspeed (m/s) across the top
+private _dragCoefTable =
+[
+//  Coll \ A/S    0.00    10.29    20.58    36.01    46.30    51.44    61.73    66.88    72.02
+     ["A/S",    0.00,   10.29,   20.58,   36.01,   46.30,   51.44,   61.73,   66.88,   72.02]
+    ,[ 0.00,  0.0085,  0.0085,  0.0065,  0.0005,  0.0005,  0.0005,  0.0005,  0.0005,  0.0005]
+    ,[ 0.20,  0.0206,  0.0190,  0.0160,  0.0106,  0.0107,  0.0108,  0.0117,  0.0117,  0.0117]
+    ,[ 0.40,  0.0326,  0.0296,  0.0255,  0.0206,  0.0208,  0.0211,  0.0229,  0.0229,  0.0229]
+    ,[ 0.64,  0.0447,  0.0401,  0.0350,  0.0307,  0.0310,  0.0314,  0.0341,  0.0341,  0.0341]
+    ,[ 0.80,  0.0474,  0.0474,  0.0474,  0.0474,  0.0474,  0.0474,  0.0474,  0.0474,  0.0474]
+    ,[ 1.00,  0.1000,  0.1000,  0.1000,  0.1000,  0.1000,  0.1000,  0.1000,  0.1000,  0.1000]
+];
 
 //Velocity in hub axes
 private _velModel = _heli getVariable "bmkhs_velModelSpace";
@@ -87,6 +117,45 @@ private _velXY    = vectorMagnitude [_velX, _velY] min VEL_VNE;
 if ([_velXY] call bmkhs_fnc_mathIsNAN || [_velXY] call bmkhs_fnc_mathIsINF) then { _velXY = 0.0; };
 if ([_velZ]  call bmkhs_fnc_mathIsNAN || [_velZ]  call bmkhs_fnc_mathIsINF) then { _velZ  = 0.0; };
 
+//A TAIL reads pedal, not collective, and its curve is nonlinear and asymmetric -
+//left and right pedal do not have the same authority.
+if (_type == TAIL) then {
+    _liftCoefTable =
+    [
+    //  Pedal \ A/S   0.00    10.29    20.58    36.01    46.30    51.44    61.73    66.88    72.02
+         ["A/S",    0.00,   10.29,   20.58,   36.01,   46.30,   51.44,   61.73,   66.88,   72.02]
+        ,[-1.00, -1.6086, -1.6338, -1.7483, -1.8162, -1.7608, -1.7130, -1.6086, -1.5662, -1.5462]
+        ,[-0.50, -0.8405, -0.8657, -0.9802, -1.0481, -0.9927, -0.9449, -0.8405, -0.7981, -0.7781]
+        ,[ 0.00, -0.0724, -0.0976, -0.2121, -0.2800, -0.2246, -0.1768, -0.0724, -0.0300, -0.0100]
+        ,[ 0.50,  0.6957,  0.6705,  0.5560,  0.4881,  0.5435,  0.5913,  0.6957,  0.7381,  0.7581]
+        ,[ 1.00,  1.4638,  1.4386,  1.3241,  1.2562,  1.3116,  1.3594,  1.4638,  1.5062,  1.5262]
+    ];
+    _dragCoefTable =
+    [
+    //  Pedal \ A/S   0.00    10.29    20.58    36.01    46.30    51.44    61.73    66.88    72.02
+         ["A/S",    0.00,   10.29,   20.58,   36.01,   46.30,   51.44,   61.73,   66.88,   72.02]
+        ,[-1.00,  0.0110,  0.0110,  0.0110,  0.0110,  0.0110,  0.0110,  0.0110,  0.0110,  0.0110]
+        ,[ 0.00,  0.0110,  0.0110,  0.0110,  0.0110,  0.0110,  0.0110,  0.0110,  0.0110,  0.0110]
+        ,[ 1.00,  0.0110,  0.0110,  0.0110,  0.0110,  0.0110,  0.0110,  0.0110,  0.0110,  0.0110]
+    ];
+};
+
+//Coefficients off the control/airspeed surfaces
+private _liftGrid    = [_liftCoefTable, "liftCoefTable"] call bmkhs_fnc_mathBuildInterpGrid;
+private _liftCoef    = [_liftGrid, _collOutput, _velXY] call bmkhs_fnc_mathLinearInterp2D;
+private _bladeLift   = _liftCoef * 0.5 * _dryAirDensity * _bladeArea * (_bladeVel_75 * _bladeVel_75);
+
+private _dragGrid    = [_dragCoefTable, "dragCoefTable"] call bmkhs_fnc_mathBuildInterpGrid;
+private _dragCoef    = [_dragGrid, _collOutput, _velXY] call bmkhs_fnc_mathLinearInterp2D;
+private _bladeDrag   = _dragCoef * 0.5 * _dryAirDensity * _bladeArea * (_bladeVel_75 * _bladeVel_75);
+
+private _thrust      = _bladeLift * _numBlades;
+
+private _torqueSign     = [-1.0, 1.0] select (_dir == CW);
+private _bladeTorque    = _bladeDrag * _bladeRad_75;
+private _rotorTorque    = _bladeTorque * _numBlades;
+private _reactionTorque = (_bladeTorque * _numBlades) * _torqueSign * _deltaTime;
+
 //Induced velocity
 private _viScalar = 1.0;
 if (_velZ < -VEL_VRS && _velXY < VEL_ETL) then {
@@ -95,15 +164,14 @@ if (_velZ < -VEL_VRS && _velXY < VEL_ETL) then {
     _viScalar = 1 - (_velZ / VEL_VRS);
 };
 
-//Thrust vector
 _thrust = _thrust * _viScalar;
 private _thrustVector = _uVec vectorMultiply (_thrust * _deltaTime);
 
 private _deltaPos = [0,0,0];
 private _moment   = [0,0,0];
 if (_type == MAIN) then {
-	private _rollFrac  = (sin _rollFeather)  * _cyclicGain;
-	private _pitchFrac = (sin _pitchFeather) * _cyclicGain;
+	private _rollFrac  = (sin _rollFeather)  * _cyclicRollGain;
+	private _pitchFrac = (sin _pitchFeather) * _cyclicPitchGain;
 	//Local thrust
 	private _locThrustVec = _thrustVector vectorMultiply 0.25;
 	//Right force pos
@@ -123,26 +191,30 @@ if (_type == MAIN) then {
 	_deltaPos         = _d_forcePosAft vectorDiff _heliCom;
 	private _d_moment = (_locThrustVec vectorMultiply  _pitchFrac) vectorCrossProduct _deltaPos;
 	
-	//Total moment
-	_moment   = _a_moment vectorAdd _b_moment vectorAdd _c_moment vectorAdd _d_moment;
+	//Total moment - the four thrust couples plus the drag torque about the mast
+	_moment   = _a_moment vectorAdd _b_moment vectorAdd _c_moment vectorAdd _d_moment vectorAdd (_mVec vectorMultiply _reactionTorque);
 
-		if (BMKHS_FM_DEBUG) then {
+	if (BMKHS_FM_DEBUG) then {
 		[_heli, _a_forcePosRight, 0.5, "red"]   call bmkhs_fnc_debugDrawCross;
 		[_heli, _b_forcePosFwd,   0.5, "green"] call bmkhs_fnc_debugDrawCross;
 		[_heli, _c_forcePosLeft,  0.5, "red"]   call bmkhs_fnc_debugDrawCross;
 		[_heli, _d_forcePosAft,   0.5, "green"] call bmkhs_fnc_debugDrawCross;
 	};
 } else {
+
 	_deltaPos = _pos vectorDiff _heliCom;
-	_moment   = _thrustVector vectorCrossProduct _deltaPos;
+	_moment   = (_thrustVector vectorCrossProduct _deltaPos);// vectorAdd (_mVec vectorMultiply _reactionTorque);
 	_moment set [1, (_moment select 1) * _rollGain];
 };
+
+systemChat format ["v3 SR %1: _thrust = [%2, %3, %4] _moment = [%5, %6, %7]", _rotorIndex, (_thrustVector select 0) toFixed 0, (_thrustVector select 1) toFixed 0, (_thrustVector select 2) toFixed 0, (_moment select 0) toFixed 0, (_moment select 1) toFixed 0, (_moment select 2) toFixed 0];
+
 
 _heli addForce  [_heli vectorModelToWorld _thrustVector, _pos];
 _heli addTorque (_heli vectorModelToWorld _moment);
 
-systemChat format ["simpleRotor%1: _thrust = %2", _rotorIndex, _thrust toFixed 0];
-systemChat format ["simpleRotor%1: _moment = [%2, %3, %4]", _rotorIndex, _moment select 0 toFixed 0, _moment select 1 toFixed 0, _moment select 2 toFixed 0];
+//Refer to the engine shaft and publish what the transmission and gauge read.
+[_heli, _rotorIndex, _rotorTorque, _gearRatio, _numBlades, _bladeMass, _bladeRadius, _deltaTime] call bmkhs_fnc_simpleRotorTorque;
 
 if (BMKHS_FM_DEBUG) then {
 	[_heli, _pos, _pos vectorAdd _rVec, "red"]     call bmkhs_fnc_debugDrawLine;

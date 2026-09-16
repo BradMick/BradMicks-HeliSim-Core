@@ -125,6 +125,17 @@ private _magsAmmo = magazinesAmmo _heli;
     _longMom = _longMom + (_mass * (_arm select 1));
 } forEach (_heli getVariable ["bmkhs_stations", []]);
 
+//Fixed test weight. Clamped to the airframe's empty and max gross mass, and
+//ignored outright if either the entry or the declared max is not usable - a
+//zero here would take the CG divide below with it.
+if (bmkhs_testGwtEnabled) then {
+    private _maxGross = _heli getVariable "bmkhs_maxGrossMass";
+    private _target   = (parseNumber bmkhs_testGwtLbs) / KG_TO_LBS;
+    if (_maxGross > _emptyMass && {_target > 0}) then {
+        _curMass = [_target, _emptyMass, _maxGross] call BIS_fnc_clamp;
+    };
+};
+
 private _curLongCG = _longMom / _curMass;
 private _curLatCG  = _latMom  / _curMass;
 
