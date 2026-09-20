@@ -78,7 +78,7 @@ private _dirtyCircuit = {
     //_v, not _x: the inner forEach rebinds it.
     private _v    = _x;
     private _now  = _heli getVariable [_v, false];
-    if !(_now isEqualTo (_watched getOrDefault [_v, "unset"])) then {
+    if (_now isNotEqualTo (_watched getOrDefault [_v, "unset"])) then {
         _watched set [_v, _now];
         { [_x] call _wake } forEach (_watchers getOrDefault [_v, []]);
     };
@@ -139,7 +139,7 @@ if (([_heli, "Nr", "rotor", _nr, true] call bmkhs_fnc_systemCircuitFeed)) then {
 //Drain the queue. Each component that MOVES dirties what it feeds, which appends to the
 //queue - so the walk reaches exactly as far as the change does and then stops.
 private _guard = 0;
-while {(count _queue) > 0 && {_guard < SYS_WALK_LIMIT}} do {
+while {_queue isNotEqualTo [] && {_guard < SYS_WALK_LIMIT}} do {
     _guard = _guard + 1;
     private _ref  = _queue deleteAt 0;
     _ref params ["_kind", "_i"];

@@ -36,3 +36,7 @@ _heli setVariable ["bmkhs_accelZ_avg",        [bmkhs_movingAverageSize] call bmk
 _heli setVariable ["bmkhs_aero_beta_deg",      0.0];
 _heli setVariable ["bmkhs_aero_beta_g",        0.0];
 _heli setVariable ["bmkhs_aero_beta_g_prev",   0.0];   //EGI low-pass filter state for the skid/slip (beta_g)
+
+_heli setVariable ["bmkhs_barAlt",             0.0];
+_heli setVariable ["bmkhs_radAlt",             0.0];
+_heli setVariable ["bmkhs_radAltRaw",          0.0];

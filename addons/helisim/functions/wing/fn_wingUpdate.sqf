@@ -30,6 +30,8 @@ private _wingTipWidthScalar = _heli getVariable "bmkhs_wingTipWidthScalar";
 private _wingAirfoil        = _heli getVariable ["bmkhs_wingAirfoil", []];
 
 for "_i" from 0 to (_numWings - 1) do {
+    //TESTING - vertical fin skipped to see the yaw balance without its side force.
+    //if (_i == 2) then { continue };
     [ _heli
      ,_wingPos            select _i
      ,_wingPitch          select _i

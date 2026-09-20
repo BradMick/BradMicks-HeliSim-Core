@@ -32,10 +32,7 @@ _heli setVariable ["bmkhs_useSystems",          getNumber (_config >> "useSystem
 [_heli, _config] call bmkhs_fnc_inputVariables;
 [_heli, _config] call bmkhs_fnc_fmcVariables;
 [_heli, _config] call bmkhs_fnc_systemsVariables;
-//Before the graph - a component gates on the variable a control publishes.
 [_heli, _config] call bmkhs_fnc_controlsVariables;
-//After systemsVariables - components resolve against the damage map and the tuning
-//values it seeds.
 [_heli, _config] call bmkhs_fnc_systemsComponents;
 [_heli, _config] call bmkhs_fnc_fuelVariables;
 [_heli, _config] call bmkhs_fnc_massVariables;

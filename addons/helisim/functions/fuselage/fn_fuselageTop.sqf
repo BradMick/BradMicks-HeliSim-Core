@@ -103,16 +103,14 @@ for "_i" from 0 to (_count - 1) do {
     [_heli, _e vectorAdd (_dragVector vectorMultiply _debugLineScale), _e, "red"]   call bmkhs_fnc_debugDrawLine;
     };
 
-    _heli addForce [_heli vectorModelToWorld _liftVector, _heliCom];
-    _heli addForce [_heli vectorModelToWorld _dragVector, _heliCom];
+    if (BMKHS_FORCES_DEBUG) then {
+        private _acc = _heli getVariable ["bmkhs_dbgForces", []];
+        _acc pushBack ["fuse top", _liftVector vectorAdd _dragVector, _e vectorDiff _heliCom];
+        _heli setVariable ["bmkhs_dbgForces", _acc];
+    };
 
-    //This panel's OWN force and moment (F x r about the CoM), as named locals.
-    private _force  = _liftVector vectorAdd _dragVector;
-    private _moment = _force vectorCrossProduct _deltaPos;
-
-    //Accumulate this panel's force into the component total.
-
-    _heli addTorque (_heli vectorModelToWorld _moment);
+    _heli addForce [_heli vectorModelToWorld _liftVector, _e];// vectorDiff _heliCom];
+    _heli addForce [_heli vectorModelToWorld _dragVector, _e];// vectorDiff _heliCom];
 
     if (BMKHS_FM_DEBUG) then {
     //Draw the wing

@@ -85,11 +85,12 @@ if (_yawBreakout || _gndSpeed > POS_HOLD_SPEED_SWITCH) then {
 //
 //AERO uses the per-vehicle beta_g, NOT the gauge sideslip global - that one is clamped at
 //0.15g (the controller would go blind past it) and is stale for AI aircraft.
-private _betaG    = _heli getVariable "bmkhs_aero_beta_g";     // g,   + = accel right
-private _betaDeg  = _heli getVariable "bmkhs_aero_beta_deg";   // deg, + = flow from right
-//Use the RAW (3rd) return - the displayed radalt is rounded to 10ft above 50ft, which would
+private _betaG     = _heli getVariable "bmkhs_aero_beta_g";     // g,   + = accel right
+private _betaDeg   = _heli getVariable "bmkhs_aero_beta_deg";   // deg, + = flow from right
+//Use the RAW radar altitude - the displayed one is rounded to 10ft above 50ft, which would
 //turn the blend below into a staircase.
-([_heli] call bmkhs_fnc_stateAltitude) params ["", "", "_radAltRaw"];
+//Published in metres; the AGL gates below are in feet.
+private _radAltRaw = (_heli getVariable "bmkhs_radAltRaw") * METERS_TO_FEET;
 
 //Slip setpoints are zero, error formed (desired - actual). Heading keeps (actual - desired).
 private _desiredSlip = 0.0;

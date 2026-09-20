@@ -22,16 +22,15 @@ params ["_heli"];
 
 if (!local _heli) exitWith {};
 
-private _fs0    = _heli getVariable "bmkhs_fsDatum";
-private _fwdCg  = _heli getVariable "bmkhs_fwdCgLimit";
-private _aftCg  = _heli getVariable "bmkhs_aftCgLimit";
+private _fs0     = _heli getVariable "bmkhs_fsDatum";
+private _fwdCg   = _heli getVariable "bmkhs_fwdCgLimit";
+private _aftCg   = _heli getVariable "bmkhs_aftCgLimit";
+private _comCorr = _heli getVariable "bmkhs_comCorrection";
 
 private _curMass = 0;
 private _latMom  = 0;
 private _longMom = 0;
 
-//Empty airframe. The config moment is measured about the datum, so it converts to
-//model space here; the payload arms below are already in model space.
 private _emptyMass = 0;
 private _emptyMom  = 0;
 if (_heli animationPhase "fcr_enable" == 1) then {
@@ -44,14 +43,6 @@ if (_heli animationPhase "fcr_enable" == 1) then {
 _curMass = _emptyMass;
 _longMom = _emptyMom;
 
-//Seats. A seat contributes only when someone is in it, matched against fullCrew by the
-//identity the config declares, so the CG reflects who is actually aboard.
-//Single-argument fullCrew returns ONLY occupied positions, so every entry here is a real
-//occupant - do not switch to the [_heli, "", true] form without adding an isNull check.
-//Entries are [unit, role, cargoIndex, turretPath, isPersonTurret]; role is "driver",
-//"gunner", "commander", "Turret" or "cargo". Turret seats are matched on the PATH rather
-//than the role string, since a second turret reports "Turret" where the first reports
-//"gunner" and both are the same kind of seat.
 private _crew = fullCrew _heli;
 {
     private _arm        = _x get "arm";
@@ -139,13 +130,12 @@ if (bmkhs_testGwtEnabled) then {
 private _curLongCG = _longMom / _curMass;
 private _curLatCG  = _latMom  / _curMass;
 
-//setCenterOfMass works in the engine's shifted frame, so the surveyed CG has boundingCenter
-//removed before it goes in. See the debug readout below, which adds it back.
 private _comDatum = boundingCenter _heli;
+
 _heli setCenterOfMass [
-    _curLatCG  - (_comDatum select 0),
-    _curLongCG - (_comDatum select 1),
-               - (_comDatum select 2)
+      _curLatCG  - (_comDatum select 0) + (_comCorr select 0)
+    , _curLongCG - (_comDatum select 1) + (_comCorr select 1)
+    ,            - (_comDatum select 2) + (_comCorr select 2)
 ];
 
 _heli setMass _curMass;
@@ -158,11 +148,14 @@ if (BMKHS_FM_DEBUG) then {
     private _vecY = [0.0, 5.0, 0.0];
     private _vecZ = [0.0, 0.0, 5.0];
 
-    private _heliCoM = getCenterOfMass _heli;
-
-    [_heli, _heliCoM, _heliCoM vectorAdd _vecX, "red"]   call bmkhs_fnc_debugDrawLine;
-    [_heli, _heliCoM, _heliCoM vectorAdd _vecY, "green"] call bmkhs_fnc_debugDrawLine;
-    [_heli, _heliCoM, _heliCoM vectorAdd _vecZ, "blue"]  call bmkhs_fnc_debugDrawLine;
+    private _cgPos    = (getCenterOfMass _heli);// vectorDiff _comDatum;
+    private _cgR      = 5.0;
+    [_heli, 16, _cgPos, [0.0,  90.0, 0.0], _cgR, "blue"] call bmkhs_fnc_debugDrawCircle;
+    [_heli, 16, _cgPos, [-90.0, 0.0, 0.0], _cgR, "green"] call bmkhs_fnc_debugDrawCircle;
+    [_heli, 16, _cgPos, [0.0,   0.0, 0.0], _cgR, "red"] call bmkhs_fnc_debugDrawCircle;
+    [_heli, _cgPos vectorAdd [-_cgR, 0, 0], _cgPos vectorAdd [_cgR, 0, 0], "white"] call bmkhs_fnc_debugDrawLine;
+    [_heli, _cgPos vectorAdd [0, -_cgR, 0], _cgPos vectorAdd [0, _cgR, 0], "white"] call bmkhs_fnc_debugDrawLine;
+    [_heli, _cgPos vectorAdd [0, 0, -_cgR], _cgPos vectorAdd [0, 0, _cgR], "white"] call bmkhs_fnc_debugDrawLine;
 
     [_heli, [0.0, _fs0   - (_comDatum select 1),-5], [0.0, _fs0   - (_comDatum select 1), 5], "green"] call bmkhs_fnc_debugDrawLine;
     [_heli, [0.0, _fwdCg - (_comDatum select 1),-5], [0.0, _fwdCg - (_comDatum select 1), 5], "red"]   call bmkhs_fnc_debugDrawLine;

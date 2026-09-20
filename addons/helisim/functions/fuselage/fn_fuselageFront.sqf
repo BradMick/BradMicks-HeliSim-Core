@@ -49,28 +49,29 @@ for "_i" from 0 to (_count - 1) do {
     [_heli, _e, _e vectorAdd _vecFwd, "white"] call bmkhs_fnc_debugDrawLine;
     };
 
-    private _v          = (_heli getVariable "bmkhs_vel2D") min VEL_VNE;
+    private _velFwd     = (_heli getVariable "bmkhs_velModelSpace") select 1;
+    private _v          = [_velFwd, -VEL_VNE, VEL_VNE] call BIS_fnc_clamp;
     private _pa         = _heli getVariable "bmkhs_PA";
     private _CD         = [_dragCoefTable, _pa] call bmkhs_fnc_mathLinearInterp select 1;
     private _area       = [_a, _b, _c, _d] call bmkhs_fnc_mathGetArea;
     private _drag       = _CD * 0.5 * _rho * _area * (_v * _v);
 
-    private _dragVector = _vecFwd vectorMultiply -1.0;
-    _dragVector = _dragVector vectorMultiply (_drag * _deltaTime);
+    private _dragVector = _vecFwd vectorMultiply (if (_velFwd < 0.0) then {1.0} else {-1.0});
+    _dragVector         = _dragVector vectorMultiply (_drag * _deltaTime);
 
     if (BMKHS_FM_DEBUG) then {
     [_heli, _e vectorAdd (_dragVector vectorMultiply _debugLineScale), _e, "red"]   call bmkhs_fnc_debugDrawLine;
     };
 
+    //Applied AT the CoM, so the arm is zero and this makes no moment - published
+    //with a zero arm so the readout says that rather than implying one.
+    if (BMKHS_FORCES_DEBUG) then {
+        private _acc = _heli getVariable ["bmkhs_dbgForces", []];
+        _acc pushBack ["fuse front", _dragVector, [0,0,0]];
+        _heli setVariable ["bmkhs_dbgForces", _acc];
+    };
+
     _heli addForce[_heli vectorModelToWorld _dragVector, _heliCom];
-
-    //This panel's OWN force (drag) and moment (F x r about the CoM), as named locals.
-    private _force  = _dragVector;
-    private _moment = _force vectorCrossProduct (_e vectorDiff _heliCom);
-
-    _heli addTorque (_heli vectorModelToWorld _moment);
-
-    //Accumulate this panel's force into the component total.
 
     if (BMKHS_FM_DEBUG) then {
     //Draw the wing

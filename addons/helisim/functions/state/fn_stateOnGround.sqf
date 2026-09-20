@@ -18,12 +18,11 @@ Author:
 ---------------------------------------------------------------------------- */
 params ["_heli"];
 
-([_heli] call bmkhs_fnc_stateAltitude)
-    params ["_barAlt", "_radAlt"];
-
 private _onGround = false;
+private _radAlt   = _heli getVariable "bmkhs_radAltRaw";
 
-if (isTouchingGround _heli || _radAlt < 0.5) then {
+//Metres. Was 0.5 ft when the raw value was published in feet.
+if (isTouchingGround _heli || _radAlt < 0.15) then {
     _onGround = true;
 };
 

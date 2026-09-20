@@ -33,9 +33,10 @@ if (isAutoHoverOn _heli) then {
 //Environment
 [_heli] call bmkhs_fnc_environment;
 
-//Velocities
+//State
 [_heli] call bmkhs_fnc_stateVelocities;
 [_heli] call bmkhs_fnc_stateAccelerations;
+[_heli] call bmkhs_fnc_stateAltitude;
 
 //Input
 [_heli] call bmkhs_fnc_fmc;
@@ -62,6 +63,9 @@ if (isAutoHoverOn _heli) then {
 
 //Damage - stub, see fn_damageApply
 //[_heli] call bmkhs_fnc_damageApply;
+
+//Forces and moments readout. Runs after every contributor has published its row.
+[_heli] call bmkhs_fnc_fmDebugUpdate;
 
 //The systems display owns the hint while it is up - both use hintSilent, and this one
 //runs last, so it would simply overwrite the other.
@@ -145,14 +149,9 @@ if (bmkhs_fmDebug && {!bmkhs_sysDebug}) then {
     _heli getVariable "bmkhs_forceTrimPosPitch" toFixed 3,                 //24
     _heli getVariable "bmkhs_forceTrimPosRoll" toFixed 3,                  //25
     _heli getVariable "bmkhs_forceTrimPosYaw" toFixed 3,                   //26
-    //Report the CoM in SURVEYED space - the frame the user measured in Object Builder and typed
-    //into the arms - not the engine's shifted frame. setCenterOfMass was handed the surveyed CG
-    //with boundingCenter subtracted, so adding it back here undoes that and the readout matches
-    //what the user expects to see (e.g. 1.201 against surveyed CG limits of 1.117 / 0.944, rather
-    //than the shifted 1.926 which means nothing to them).
-    ((getCenterOfMass _heli) vectorAdd (boundingCenter _heli)) select 0 toFixed 3,   //27
-    ((getCenterOfMass _heli) vectorAdd (boundingCenter _heli)) select 1 toFixed 3,   //28
-    ((getCenterOfMass _heli) vectorAdd (boundingCenter _heli)) select 2 toFixed 3,   //29
+    (getCenterOfMass _heli) select 0 toFixed 3,   //27
+    (getCenterOfMass _heli) select 1 toFixed 3,   //28
+    (getCenterOfMass _heli) select 2 toFixed 3,   //29
     ((_heli getVariable "bmkhs_GWT") * 2.20462) toFixed 0,              //30
     _heli getVariable "bmkhs_attHoldActive",                               //31
     _heli getVariable "bmkhs_attHoldSubMode",                              //32

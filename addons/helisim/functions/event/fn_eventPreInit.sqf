@@ -145,11 +145,11 @@
 ] call CBA_fnc_addSetting;
 
 [
-    "bmkhs_windEnabled",
+    "bmkhs_windDisabled",
     "CHECKBOX",
-    ["Enable Wind", "When disabled, the flight model sees still air regardless of the mission weather. For testing, so a result is not confounded by whatever the wind is doing."],
+    ["Disable Wind", "When enabled, the flight model sees still air regardless of the mission weather. For testing, so a result is not confounded by whatever the wind is doing."],
     [BMKHS_SETTINGS_CATEGORY, "Testing"],
-    [true],
+    [false],
     2
 ] call CBA_fnc_addSetting;
 
@@ -166,6 +166,15 @@
     "bmkhs_sysDebug",
     "CHECKBOX",
     ["Enable Systems Debugging", "Shows every circuit, what feeds it, and whether each component is awake or asleep. Takes over the hint from FM debugging while on."],
+    [BMKHS_SETTINGS_CATEGORY, "Testing"],
+    [false],
+    2
+] call CBA_fnc_addSetting;
+
+[
+    "bmkhs_forcesDebug",
+    "CHECKBOX",
+    ["Enable Forces Readout", "Window listing every force the model applies each frame - what each rotor, panel and surface produces, and where it acts relative to the centre of mass. Needs FM Debugging on, which is what makes the contributors publish."],
     [BMKHS_SETTINGS_CATEGORY, "Testing"],
     [false],
     2

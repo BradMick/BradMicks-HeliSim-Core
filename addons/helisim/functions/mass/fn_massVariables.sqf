@@ -15,10 +15,10 @@ Returns:
 params ["_heli", "_config"];
 
 //Mass and balance - datum and CG limits
-_heli setVariable ["bmkhs_fsDatum",        getNumber (_config >> "fsDatum")];
-_heli setVariable ["bmkhs_fwdCgLimit",     getNumber (_config >> "fwdCgLimit")];
-_heli setVariable ["bmkhs_aftCgLimit",     getNumber (_config >> "aftCgLimit")];
-
+_heli setVariable ["bmkhs_fsDatum",            getNumber (_config >> "fsDatum")];
+_heli setVariable ["bmkhs_fwdCgLimit",         getNumber (_config >> "fwdCgLimit")];
+_heli setVariable ["bmkhs_aftCgLimit",         getNumber (_config >> "aftCgLimit")];
+_heli setVariable ["bmkhs_comCorrection",      getArray  (_config >> "comCorrection")];
 //Empty mass and moment
 _heli setVariable ["bmkhs_emptyMassFCR",       getNumber (_config >> "emptyMassFCR")];        //kg
 _heli setVariable ["bmkhs_emptyMomFCR",        getNumber (_config >> "emptyMomFCR")];

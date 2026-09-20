@@ -76,7 +76,7 @@ private _feeds = _heli getVariable ["bmkhs_sysFeeds", createHashMap];
 
 {
     _x params ["_list", "_label"];
-    if !(_list isEqualTo []) then {
+    if (_list isNotEqualTo []) then {
         _txt = _txt + format ["<br/><t color='#88ccff'>%1</t><br/>", _label];
         {
             private _comp = _x;

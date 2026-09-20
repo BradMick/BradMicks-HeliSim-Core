@@ -6,6 +6,7 @@
 
 class RscText;
 class RscFrame;
+class RscStructuredText;
 
 class RscTitles
 {
@@ -286,6 +287,10 @@ class RscTitles
 
     }; // class controls
     }; // class bmkhs_ctrlvis
+
+    //Flight model forces readout. Same RscTitles block - the class may only be
+    //declared once, so the display lives in its own file but is included here.
+    #include "RscFmDebug.hpp"
 }; // class RscTitles
 
 // Register with the Arma layout editor (Options → Video → Edit Layout).
@@ -312,6 +317,16 @@ class CfgUIGrids
                         "safeZoneH * 0.005",
                         "safeZoneH * 0.005"
                     };
+                    grid_bmkhs_fmdebug[] = {
+                        {
+                            "safeZoneX + safeZoneW * 0.010",
+                            "safeZoneY + safeZoneH * 0.080",
+                            "safeZoneH * 0.520",
+                            "safeZoneH * 0.640"
+                        },
+                        "safeZoneH * 0.005",
+                        "safeZoneH * 0.005"
+                    };
                 };
             };
         };
@@ -324,6 +339,14 @@ class CfgUIGrids
                 description     = "HeliSim control input and SAS visualiser overlay";
                 // preview is the image the layout editor renders as the draggable element.
                 // Without this the widget is invisible on the canvas and cannot be interacted with.
+                preview         = "\bmkhs_helisim\data\ui\IGUI_ctrlvis_preview.paa";
+                saveToProfile[] = {0, 1, 2, 3};
+                canResize       = 1;
+            };
+            class grid_bmkhs_fmdebug
+            {
+                displayName     = "FZA AH-64D: Flight Model Forces";
+                description     = "Per-frame forces and application points from every force generator";
                 preview         = "\bmkhs_helisim\data\ui\IGUI_ctrlvis_preview.paa";
                 saveToProfile[] = {0, 1, 2, 3};
                 canResize       = 1;

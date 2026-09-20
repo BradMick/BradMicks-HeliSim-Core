@@ -89,6 +89,6 @@ private _lastKey = 0;
     if (_err isEqualTo "") then { _lastKey = _row select 0; };
 } forEach _rows;
 
-if !(_err isEqualTo "") exitWith { _err call _fail };
+if (_err isNotEqualTo "") exitWith { _err call _fail };
 
 [_colKeys, _rows]

@@ -51,6 +51,10 @@ class CfgFunctions
             class coreUpdate  {R;};
             class coreUpdateFlightModel {R;};
         };
+        class fmDebug {
+            file = "\bmkhs_helisim\functions\fmDebug";
+            class fmDebugUpdate {R;};
+        };
         class ctrlVis {
             file = "\bmkhs_helisim\functions\ctrlVis";
             class ctrlVisToggle {R;};

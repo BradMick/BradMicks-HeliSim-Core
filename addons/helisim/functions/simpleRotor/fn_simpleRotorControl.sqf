@@ -1,6 +1,6 @@
 #include "\bmkhs_helisim\functions\rotor\rotor.hpp"
 
-params ["_heli", "_type", "_pitchMin", "_pitchMid", "_pitchMax", "_rollMin", "_rollMid", "_rollMax", "_collMin", "_collMid", "_collMax", "_dragMin", "_dragMid", "_dragMax"];
+params ["_heli", "_type", "_pitchMin", "_pitchMid", "_pitchMax", "_rollMin", "_rollMid", "_rollMax"];
 
 private _cyclicFwdAft           = _heli getVariable "bmkhs_cyclicFwdAft";
 private _forceTrimPosPitch      = _heli getVariable "bmkhs_forceTrimPosPitch";
@@ -35,9 +35,10 @@ switch (_type) do {
 		_pitchFeather = [-1, 1, _pitchInput, _pitchMin, _pitchMid, _pitchMax] call bmkhs_fnc_mathLinearInterpFromCenter;
 		_rollFeather  = [-1, 1, _rollInput,  _rollMin,  _rollMid,  _rollMax]  call bmkhs_fnc_mathLinearInterpFromCenter;
 		_collOutput   = [_collInput, 0.0, 1.0] call BIS_fnc_clamp;
+		//systemChat format ["roll: input %1 feather %2", _rollInput toFixed 3, _rollFeather toFixed 3];
 	};
 	case TAIL: {
-		_collOutput   = [-_yawInput, -1.0, 1.0] call BIS_fnc_clamp;
+		_collOutput   = [_yawInput, -1.0, 1.0] call BIS_fnc_clamp;
 	};
 };
 

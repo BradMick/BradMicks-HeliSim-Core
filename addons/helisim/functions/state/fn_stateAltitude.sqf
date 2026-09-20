@@ -16,18 +16,23 @@ Examples:
 Author:
     BradMick
 ---------------------------------------------------------------------------- */
-params ["_heli"];
+#include "\bmkhs_helisim\functions\core\core.hpp"
 
-#define SCALE_METERS_FEET 3.28084
+params ["_heli"];
 
 private _barAlt  = _heli getVariable "bmkhs_PA";
 _barAlt = [_barAlt, 0.0, 20000] call bis_fnc_clamp;
 
-private _radAltRaw = getPos _heli # 2 * SCALE_METERS_FEET;
-private _radAlt    = _radAltRaw;
-if (_radAlt > 50) then {
-    _radAlt = round (_radAlt / 10) * 10;
-};
-_radAlt     = [_radAlt, 0.0, 1420.0] call bis_fnc_clamp;
+//Both in METRES - the flight model works in metres, and a caller that wants feet
+//says so. RAW is what it is; the other carries the altimeter's own rounding.
+private _radAltRaw = getPos _heli # 2;
 
-[_barAlt, _radAlt, _radAltRaw];
+private _radAlt    = _radAltRaw;
+if (_radAlt > RADALT_ROUND_ABOVE) then {
+    _radAlt = round (_radAlt / RADALT_ROUND_STEP) * RADALT_ROUND_STEP;
+};
+_radAlt     = [_radAlt, 0.0, RADALT_MAX] call bis_fnc_clamp;
+
+_heli setVariable ["bmkhs_barAlt",    _barAlt];
+_heli setVariable ["bmkhs_radAlt",    _radAlt];
+_heli setVariable ["bmkhs_radAltRaw", _radAltRaw];

@@ -66,7 +66,7 @@ private _windSpeed   = vectorMagnitude wind;
 private _windDirFrom = (windDir + 180) mod 360;
 
 //CBA-gated still air, so a test is not confounded by the mission weather.
-if !(bmkhs_windEnabled) then {
+if (bmkhs_windDisabled) then {
     _windSpeed   = 0.0;
     _windDirFrom = 0.0;
 };

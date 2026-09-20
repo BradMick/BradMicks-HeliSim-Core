@@ -43,7 +43,7 @@ if (_torqued isEqualTo []) exitWith {};
     //work of two is a different case from both sharing it.
     private _limits  = _x get "tqLimits";
     private _seLimits = _x get "tqLimitsSE";
-    if ((count _seLimits) > 0 && {_heli getVariable ["bmkhs_isSingleEng", false]}) then {
+    if (_seLimits isNotEqualTo [] && {_heli getVariable ["bmkhs_isSingleEng", false]}) then {
         _limits = _seLimits;
     };
 
