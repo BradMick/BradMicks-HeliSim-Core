@@ -107,10 +107,12 @@ if (_velZ < -VEL_VRS && _velXY < VEL_ETL) then {
     _viScalar = 1 - (_velZ / VEL_VRS);
 };
 
-//Ground effect
+//Ground effect - strongest on the deck, gone by one rotor diameter up
 private _heightAgl    = _heli getVariable "bmkhs_radAltRaw";
-private _gndEffScalar = if(_heightAgl <= 0) then { 1.25 } else { (_bladeRadius * 2.0) / _heightAgl; };
-_gndEffScalar         = [_gndEffScalar, 1.0, GND_EFF] call BIS_fnc_clamp;
+private _gndEffLimit  = _bladeRadius * 2.0;
+private _gndEffScalar = if (_heightAgl >= _gndEffLimit) then { 1.0 } else {
+    1.0 + ((GND_EFF - 1.0) * (1.0 - ((_heightAgl max 0.0) / _gndEffLimit)))
+};
 
 _thrust               = _thrust * _viScalar * _gndEffScalar;
 private _rotorThrust  = _uVec vectorMultiply (_thrust * _deltaTime);
@@ -171,13 +173,14 @@ for "_i" from 0 to 3 do {
 	};
 };
 
-//Main rotor torque
-if (_type == MAIN) then {
+//Rotor torque & main rotor reaction torque
     private _torqueSign      = [1.0, -1.0] select (_dir == CW);
     private _bladeTorque     = _bladeDrag * _bladeRad_75;
     private _rotorTorque     = _bladeTorque * _numBlades;
+if (_type == MAIN) then {
     private _reactionTorque  = _rotorTorque * _torqueSign * _deltaTime;
     
+    //Apply main rotor reaction torque
     _heli addTorque (_heli vectorModelToWorld (_uVec vectorMultiply _reactionTorque));
 
 	if (BMKHS_FORCES_DEBUG) then {
