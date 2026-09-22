@@ -8,7 +8,7 @@ private _sasPitchOut            = _heli getVariable "bmkhs_fmcSasPitchOut";
 private _attHoldCycPitchOut     = _heli getVariable "bmkhs_fmcAttHoldCycPitchOut";
 private _pitchInput             = ([_cyclicFwdAft, _forceTrimPosPitch] call bmkhs_fnc_inputGetInterp) + _sasPitchOut + _attHoldCycPitchOut;
 _pitchInput                     = [_pitchInput, -1.0, 1.0] call BIS_fnc_clamp;
-private _pitchFeather			= 0.0;
+private _pitchOutput			= 0.0;
 
 private _cyclicLeftRight        = _heli getVariable "bmkhs_cyclicLeftRight";
 private _forceTrimPosRoll       = _heli getVariable "bmkhs_forceTrimPosRoll";
@@ -16,7 +16,7 @@ private _sasRollOut             = _heli getVariable "bmkhs_fmcSasRollOut";
 private _attHoldCycRollOut      = _heli getVariable "bmkhs_fmcAttHoldCycRollOut";
 private _rollInput              = ([_cyclicLeftRight, _forceTrimPosRoll] call bmkhs_fnc_inputGetInterp) + _sasRollOut + _attHoldCycRollOut;
 _rollInput                      = [_rollInput, -1.0, 1.0] call BIS_fnc_clamp;
-private _rollFeather			= 0.0;
+private _rollOutput 			= 0.0;
 
 private _pedalLeftRight         = _heli getVariable "bmkhs_pedalLeftRight";
 private _forceTrimPosYaw        = _heli getVariable "bmkhs_forceTrimPosYaw";
@@ -32,8 +32,10 @@ private _collOutput 			= 0.0;
 
 switch (_type) do {
 	case MAIN: {
-		_pitchFeather = [-1, 1, _pitchInput, _pitchMin, _pitchMid, _pitchMax] call bmkhs_fnc_mathLinearInterpFromCenter;
-		_rollFeather  = [-1, 1, _rollInput,  _rollMin,  _rollMid,  _rollMax]  call bmkhs_fnc_mathLinearInterpFromCenter;
+		//_pitchFeather = [-1, 1, _pitchInput, _pitchMin, _pitchMid, _pitchMax] call bmkhs_fnc_mathLinearInterpFromCenter;
+		//_rollFeather  = [-1, 1, _rollInput,  _rollMin,  _rollMid,  _rollMax]  call bmkhs_fnc_mathLinearInterpFromCenter;
+		_pitchOutput  = [_pitchInput, -1.0, 1.0] call BIS_fnc_clamp;
+		_rollOutput   = [_rollInput,  -1.0, 1.0] call BIS_fnc_clamp;
 		_collOutput   = [_collInput, 0.0, 1.0] call BIS_fnc_clamp;
 		//systemChat format ["roll: input %1 feather %2", _rollInput toFixed 3, _rollFeather toFixed 3];
 	};
@@ -42,4 +44,4 @@ switch (_type) do {
 	};
 };
 
-[_pitchFeather, _rollFeather, _collOutput];
+[_pitchOutput, _rollOutput, _collOutput];

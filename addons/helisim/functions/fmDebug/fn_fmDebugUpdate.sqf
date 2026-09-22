@@ -107,6 +107,38 @@ private _order  = [];
     };
 } forEach _rows;
 
+//TEMP - CSV trace to the RPT, one row per merged component plus the state that
+//produced it. RTR_LOG = true to start, false to stop.
+if (!isNil "RTR_LOG" && {RTR_LOG}) then {
+    private _vel = _heli getVariable ["bmkhs_velModelSpace", [0,0,0]];
+    (_heli call BIS_fnc_getPitchBank) params ["_pitchDeg", "_bankDeg"];
+
+    private _state = format ["%1,%2,%3,%4,%5,%6,%7,%8,%9",
+        CBA_missionTime toFixed 3,
+        (_vel select 0) toFixed 2, (_vel select 1) toFixed 2, (_vel select 2) toFixed 2,
+        _pitchDeg toFixed 2, _bankDeg toFixed 2,
+        (_heli getVariable ["bmkhs_collectiveOutput", 0]) toFixed 3,
+        (_heli getVariable ["bmkhs_cyclicFwdAft", 0])     toFixed 3,
+        (_heli getVariable ["bmkhs_cyclicLeftRight", 0])  toFixed 3];
+
+    {
+        _x params ["_n", "_f", "_a", ["_c", []], ["_w", 0]];
+        if (_w > 0) then { _a = _a vectorMultiply (1.0 / _w) };
+
+        //A couple has no force or arm - its three numbers are the moment, so they
+        //go in the same columns rather than logging a row of zeros.
+        if (_c isNotEqualTo [] && {vectorMagnitude _c > 0}) then {
+            _f = _c;
+            _a = [0,0,0];
+        };
+
+        diag_log text format ["RTRLOG,%1,%2,%3,%4,%5,%6,%7,%8",
+            _state, _n,
+            (_f select 0) toFixed 1, (_f select 1) toFixed 1, (_f select 2) toFixed 1,
+            (_a select 0) toFixed 2, (_a select 1) toFixed 2, (_a select 2) toFixed 2];
+    } forEach _merged;
+};
+
 private _txt = "<t size='0.8' font='EtelkaMonospacePro'>";
 _txt = _txt + "<t color='#88ff88'>" + (["component", 14] call _pad)
             + (["Fx", 10] call _pad) + (["Fy", 10] call _pad) + (["Fz", 10] call _pad)

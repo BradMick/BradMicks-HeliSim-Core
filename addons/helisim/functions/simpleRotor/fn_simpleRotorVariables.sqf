@@ -37,9 +37,8 @@ _heli setVariable ["bmkhs_simpleRotorRollFlapMin",     [-10.5,   0.0]];//getArra
 _heli setVariable ["bmkhs_simpleRotorRollFlapMid",     [  0.0,   0.0]];//getArray  (_config >> "rotorRollFlapMid")];
 _heli setVariable ["bmkhs_simpleRotorRollFlapMax",     [  7.0,   0.0]];//getArray  (_config >> "rotorRollFlapMax")];
 _heli setVariable ["bmkhs_simpleRotorFlapTimeConst",   [[0.15, 0.15], [0.15, 0.15]]];//getArray  (_config >> "rotorFlapTimeConst")];
-_heli setVariable ["bmkhs_simpleRotorCyclicPitchGain", [5.0,    0.0]];//getArray  (_config >> "rotorCyclicGain")];
+_heli setVariable ["bmkhs_simpleRotorCyclicPitchGain", [10.0,    0.0]];//getArray  (_config >> "rotorCyclicGain")];
 _heli setVariable ["bmkhs_simpleRotorCyclicRollGain",  [2.5,    0.0]];//getArray  (_config >> "rotorCyclicGain")];
-_heli setVariable ["bmkhs_simpleRotorRollGain",        [1.0,    0.25]];//getArray  (_config >> "rotorRollGain")];
 _heli setVariable ["bmkhs_simpleRotorFlapGain",        [6.0,    0.0]];
 _heli setVariable ["bmkhs_simpleRotorTorqueTau",       [0.10,   0.10]];
 private _liftCoefTables =

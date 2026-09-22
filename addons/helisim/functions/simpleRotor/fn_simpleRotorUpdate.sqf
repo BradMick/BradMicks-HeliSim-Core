@@ -27,7 +27,6 @@ for "_rotorIndex" from 0 to (_numRotor - 1) do {
     , (_heli getVariable "bmkhs_simpleRotorCyclicRollGain")  select _rotorIndex
     , (_heli getVariable "bmkhs_simpleRotorFlapGain")        select _rotorIndex
     , (_heli getVariable "bmkhs_simpleRotorFlapTimeConst")   select _rotorIndex
-    , (_heli getVariable "bmkhs_simpleRotorRollGain")        select _rotorIndex
     , (_heli getVariable "bmkhs_simpleRotorBladeRadius")     select _rotorIndex
     , (_heli getVariable "bmkhs_simpleRotorBladeChord")      select _rotorIndex
     , (_heli getVariable "bmkhs_simpleRotorBladeMass")       select _rotorIndex

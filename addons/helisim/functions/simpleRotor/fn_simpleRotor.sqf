@@ -21,13 +21,31 @@ Author:
 #include "\bmkhs_helisim\functions\core\core.hpp"
 #include "\bmkhs_helisim\functions\rotor\rotor.hpp"
 
-params ["_heli", "_rotorIndex", "_type", "_dir", "_numBlades", "_gearRatio"
-       ,"_pivot", "_mastLength", "_rot"
-       ,"_pitchMin", "_pitchMid", "_pitchMax", "_cyclicPitchGain"
-       ,"_rollMin", "_rollMid", "_rollMax", "_cyclicRollGain"
-       ,"_flapGainLat", "_flapTimeConst", "_rollGain"
-       ,"_bladeRadius", "_bladeChord", "_bladeMass"
-       ,"_liftCoefTable", "_dragCoefTable"];
+params [ "_heli"
+       , "_rotorIndex"
+       , "_type"
+       , "_dir"
+       , "_numBlades"
+       , "_gearRatio"
+       , "_pivot"
+       , "_mastLength"
+       , "_rot"
+       , "_pitchMin"
+       , "_pitchMid"
+       , "_pitchMax"
+       , "_cyclicPitchGain"
+       ,"_rollMin"
+       , "_rollMid"
+       , "_rollMax"
+       , "_cyclicRollGain"
+       , "_flapGainLat"
+       , "_flapTimeConst"
+       , "_bladeRadius"
+       , "_bladeChord"
+       , "_bladeMass"
+       , "_liftCoefTable"
+       , "_dragCoefTable"
+       ];
 
 if (!local _heli) exitWith {};
 
@@ -41,8 +59,8 @@ private _deltaTime          = _heli getVariable "bmkhs_deltaTime";
  , _rollMin
  , _rollMid
  , _rollMax ] call bmkhs_fnc_simpleRotorControl)
-	params [ "_pitchFeather"
-		   , "_rollFeather"
+	params [ "_pitchOutput"
+		   , "_rollOutput"
 		   , "_collOutput"];
 
 //Disc tilt
@@ -96,7 +114,6 @@ private _bladeLift   = _liftCoef * 0.5 * _dryAirDensity * _bladeArea * (_bladeVe
 
 private _dragCoef    = [_dragCoefTable, _collOutput, _velXY] call bmkhs_fnc_mathLinearInterp2D;
 private _bladeDrag   = _dragCoef * 0.5 * _dryAirDensity * _bladeArea * (_bladeVel_75 * _bladeVel_75);
-
 private _thrust      = _bladeLift * _numBlades;
 
 //Induced velocity
@@ -104,7 +121,8 @@ private _viScalar = 1.0;
 if (_velZ < -VEL_VRS && _velXY < VEL_ETL) then {
     _viScalar = 0.0;
 } else {
-    _viScalar = 1 - (_velZ / VEL_VRS);
+    //private _denom = linearConversion [VEL_ETL, VEL_VNE, _velXY, VEL_VRS, VEL_VRS * 2.5, true];
+    _viScalar = 1 - (_velZ / VEL_VRS);//_denom);
 };
 
 //Ground effect - strongest on the deck, gone by one rotor diameter up
@@ -115,6 +133,10 @@ private _gndEffScalar = if (_heightAgl >= _gndEffLimit) then { 1.0 } else {
 };
 
 _thrust               = _thrust * _viScalar * _gndEffScalar;
+//private _curGwt       = _heli getVariable "bmkhs_GWT";
+//private _thrustMax    = _curGwt * GRAVITY * 2.5;
+//_thrust               = _thrust min _thrustMax;
+
 private _rotorThrust  = _uVec vectorMultiply (_thrust * _deltaTime);
 private _bladeThrust  = _rotorThrust vectorMultiply 0.25;
 
@@ -150,15 +172,18 @@ for "_i" from 0 to 3 do {
     private _blade             = [_pos vectorAdd  (_locRVec vectorMultiply _bladeRadius), _locFVec, _bladeFlap] call bmkhs_fnc_mathVectorRotateAroundAxis;
     private _bladeThrustPos    = _pos vectorAdd ((_blade vectorDiff _pos) vectorMultiply 0.75);
     //Finally, build the thrust vector
-    private _thrustScalar      = 1.0 
-                               + (_rollFrac * (cos _psi))
+    private _thrustScalar      = 1.0
+                               + (_rollFrac  * (cos _psi))
                                + (_pitchFrac * (sin _psi))
                                - ((sin _fbRoll)  * _cyclicRollGain)
                                - ((sin _fbPitch) * _cyclicPitchGain);
+    //_bladeThrustScalar         = [_bladeThrustScalar, -BLADE_SCALE_MAX, BLADE_SCALE_MAX] call BIS_fnc_clamp;
+    //private _thrustScalar      = 1.0 + _bladeThrustScalar;
     private _bladeThrustVector = [_bladeThrust vectorMultiply _thrustScalar, _locFVec, _bladeFlap] call bmkhs_fnc_mathVectorRotateAroundAxis;
 
     //Apply thrust at the thrust position
-    _heli addForce [_heli vectorModelToWorld _bladeThrustVector, _bladeThrustPos];// vectorDiff _heliCom];
+    //_heli addForce [_heli vectorModelToWorld _bladeThrustVector, _bladeThrustPos];// vectorDiff _heliCom];
+    _heli addForce [_heli vectorModelToWorld _bladeThrustVector, _pos];
 
     if (BMKHS_FM_DEBUG) then {
         [_heli, _pos, _blade, "white"] call bmkhs_fnc_debugDrawLine;
@@ -179,8 +204,13 @@ for "_i" from 0 to 3 do {
     private _rotorTorque     = _bladeTorque * _numBlades;
 if (_type == MAIN) then {
     private _reactionTorque  = _rotorTorque * _torqueSign * _deltaTime;
+    _reactionTorque = _reactionTorque * REAC_TQ;
     
     //Apply main rotor reaction torque
+    //TEST
+    //private _moment = [20000.0 * _pitchFeather * _deltaTime, 10000 * _rollFeather * _deltaTime, 0.0];
+    //_heli addTorque (_heli vectorModelToWorld _moment);
+    //END TEST
     _heli addTorque (_heli vectorModelToWorld (_uVec vectorMultiply _reactionTorque));
 
 	if (BMKHS_FORCES_DEBUG) then {
