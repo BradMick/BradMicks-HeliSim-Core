@@ -216,6 +216,10 @@ class CfgFunctions
             class rotorUpdate {R;};
             class rotorVariables {R;};
         };
+        class effects {
+            file = "\bmkhs_helisim\functions\effects";
+            class rotorEffects {R;};
+        };
         class simpleRotor {
             file = "\bmkhs_helisim\functions\simpleRotor";
             class simpleRotor {R;};

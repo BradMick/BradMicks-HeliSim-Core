@@ -2,42 +2,44 @@
 Function: bmkhs_fnc_fuselageVariables
 
 Description:
-    Defines core fuselage variables.
+    Loads the fuselage panel configuration. Core loops over numFuselagePanels, so
+    an aircraft declares as many panel sets as its shape needs.
+
+    Each set becomes one hashmap keyed by the config's own property names, and
+    names which way it faces rather than being found by position.
 
 Parameters:
-    _heli - The helicopter to get information from [Unit].
+    _heli   - The helicopter to get information from [Unit].
+    _config - The aircraft's HeliSim config [Config].
 
 Returns:
-    ...
-
-Examples:
-    ...
+    Nothing
 
 Author:
     BradMick
 ---------------------------------------------------------------------------- */
 params ["_heli", "_config"];
 
-private _config = configOf _heli >> "BMKHS_HeliSim";
+private _numPanelSets = getNumber (_config >> "numFuselagePanels");
+private _panelSets    = createHashMap;
 
-_heli setVariable ["bmkhs_fuselagePosition",            getArray  (_config >> "fuselagePosition")];
+for "_i" from 1 to _numPanelSets do {
+    private _p = (_config >> "FuselagePanels") >> format ["FuselagePanel%1%2", ["0", ""] select (_i > 9), _i];
 
-_heli setVariable ["bmkhs_fuselageTopRotation",         getArray  (_config >> "fuselageTopRotation")];
-_heli setVariable ["bmkhs_fuselageTopDragCoefTable",    getArray  (_config >> "fuselageTopDragCoefTable")];
-_heli setVariable ["bmkhs_fuselageTopCount",     	    getNumber (_config >> "fuselageTopCount")];
-_heli setVariable ["bmkhs_fuselageTop",	 		        getArray  (_config >> "fuselageTop")];
+    private _facing = toLower getText (_p >> "facing");
+    private _panels = getArray (_p >> "panels");
 
-_heli setVariable ["bmkhs_fuselageSideRotation",        getArray  (_config >> "fuselageSideRotation")];
-_heli setVariable ["bmkhs_fuselageSideDragCoefTable",   getArray  (_config >> "fuselageSideDragCoefTable")];
-_heli setVariable ["bmkhs_fuselageSideCount",           getNumber (_config >> "fuselageSideCount")];
-_heli setVariable ["bmkhs_fuselageSide",			    getArray  (_config >> "fuselageSide")];
+    //Keyed by what the set IS, so nothing downstream assumes set 0 is the top.
+    _panelSets set [_facing, createHashMapFromArray [
+        ["facing",        _facing],
+        ["dragCoefTable", getArray (_p >> "dragCoefTable")],
+        ["panels",        _panels],
+        ["count",         count _panels]
+    ]];
+};
 
-_heli setVariable ["bmkhs_fuselageFrontRotation",       getArray  (_config >> "fuselageFrontRotation")];
-_heli setVariable ["bmkhs_fuselageFrontDragCoefTable",  getArray  (_config >> "fuselageFrontDragCoefTable")];
-_heli setVariable ["bmkhs_fuselageFrontCount",          getNumber (_config >> "fuselageFrontCount")];
-_heli setVariable ["bmkhs_fuselageFront",			    getArray  (_config >> "fuselageFront")];
-
-_heli setVariable ["bmkhs_fuselageAirfoil",             getText (_config >> "fuselageAirfoil")];
-
-//Aerodynamic centre
-_heli setVariable ["bmkhs_aerodynamicCenter",           getArray  (_config >> "aerodynamicCenter")];   //m
+_heli setVariable ["bmkhs_fuselagePosition",     getArray (_config >> "fuselagePosition")];
+_heli setVariable ["bmkhs_fuselageRotation",     getArray (_config >> "fuselageRotation")];
+_heli setVariable ["bmkhs_fuselageAirfoil",      getText  (_config >> "fuselageAirfoil")];
+_heli setVariable ["bmkhs_numFuselagePanels",    _numPanelSets];
+_heli setVariable ["bmkhs_fuselagePanels",       _panelSets];

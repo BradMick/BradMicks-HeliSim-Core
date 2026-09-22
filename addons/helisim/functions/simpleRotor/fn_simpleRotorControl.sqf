@@ -1,6 +1,6 @@
 #include "\bmkhs_helisim\functions\rotor\rotor.hpp"
 
-params ["_heli", "_type", "_pitchMin", "_pitchMid", "_pitchMax", "_rollMin", "_rollMid", "_rollMax"];
+params ["_heli", "_type"];
 
 private _cyclicFwdAft           = _heli getVariable "bmkhs_cyclicFwdAft";
 private _forceTrimPosPitch      = _heli getVariable "bmkhs_forceTrimPosPitch";
@@ -32,15 +32,12 @@ private _collOutput 			= 0.0;
 
 switch (_type) do {
 	case MAIN: {
-		//_pitchFeather = [-1, 1, _pitchInput, _pitchMin, _pitchMid, _pitchMax] call bmkhs_fnc_mathLinearInterpFromCenter;
-		//_rollFeather  = [-1, 1, _rollInput,  _rollMin,  _rollMid,  _rollMax]  call bmkhs_fnc_mathLinearInterpFromCenter;
-		_pitchOutput  = [_pitchInput, -1.0, 1.0] call BIS_fnc_clamp;
-		_rollOutput   = [_rollInput,  -1.0, 1.0] call BIS_fnc_clamp;
-		_collOutput   = [_collInput, 0.0, 1.0] call BIS_fnc_clamp;
-		//systemChat format ["roll: input %1 feather %2", _rollInput toFixed 3, _rollFeather toFixed 3];
+		_pitchOutput = [_pitchInput, -1.0, 1.0] call BIS_fnc_clamp;
+		_rollOutput  = [_rollInput,  -1.0, 1.0] call BIS_fnc_clamp;
+		_collOutput  = [_collInput, 0.0, 1.0] call BIS_fnc_clamp;
 	};
 	case TAIL: {
-		_collOutput   = [_yawInput, -1.0, 1.0] call BIS_fnc_clamp;
+		_collOutput  = [_yawInput, -1.0, 1.0] call BIS_fnc_clamp;
 	};
 };
 

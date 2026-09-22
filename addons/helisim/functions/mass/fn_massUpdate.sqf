@@ -130,13 +130,16 @@ if (bmkhs_testGwtEnabled) then {
 private _curLongCG = _longMom / _curMass;
 private _curLatCG  = _latMom  / _curMass;
 
-private _comDatum = boundingCenter _heli;
+
+private _comDatum = [0.0,0.0,0.0];//boundingCenter _heli;
 
 _heli setCenterOfMass [
       _curLatCG  - (_comDatum select 0) + (_comCorr select 0)
     , _curLongCG - (_comDatum select 1) + (_comCorr select 1)
     ,            - (_comDatum select 2) + (_comCorr select 2)
 ];
+//_heli setCenterOfMass TEST_COM;
+
 
 _heli setMass _curMass;
 
@@ -148,7 +151,7 @@ if (BMKHS_FM_DEBUG) then {
     private _vecY = [0.0, 5.0, 0.0];
     private _vecZ = [0.0, 0.0, 5.0];
 
-    private _cgPos    = (getCenterOfMass _heli);// vectorDiff _comDatum;
+    private _cgPos    = (getCenterOfMass _heli);// vectorAdd _comDatum;
     private _cgR      = 5.0;
     [_heli, 16, _cgPos, [0.0,  90.0, 0.0], _cgR, "blue"] call bmkhs_fnc_debugDrawCircle;
     [_heli, 16, _cgPos, [-90.0, 0.0, 0.0], _cgR, "green"] call bmkhs_fnc_debugDrawCircle;

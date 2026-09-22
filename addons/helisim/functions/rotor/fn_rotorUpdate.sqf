@@ -88,3 +88,5 @@ for "_rotorIndex" from 0 to (_numRotor - 1) do {
     , _dmgThreshold  select _rotorIndex
     ] call bmkhs_fnc_rotor;
 };
+
+[_heli] call bmkhs_fnc_rotorEffects;

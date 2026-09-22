@@ -11,12 +11,13 @@ private _deltaTime      = _heli getVariable "bmkhs_deltaTime";
 private _heliCom        = getCenterOfMass _heli;
 private _rho            = _heli getVariable "bmkhs_rho";
 private _debugLineScale = 1.0 / 30.0;
+private _panelSet       = (_heli getVariable "bmkhs_fuselagePanels") get "top";
 private _position       = _heli getVariable "bmkhs_fuselagePosition";
-private _rotation       = _heli getVariable "bmkhs_fuselageTopRotation";
-//private _dragCoefTable  = _heli getVariable "bmkhs_fuselageTopDragCoefTable";
+private _rotation       = _heli getVariable "bmkhs_fuselageRotation";
+//private _dragCoefTable  = _panelSet get "dragCoefTable";
 private _airfoilTable   = [_heli, _heli getVariable ["bmkhs_fuselageAirfoil", ""], "fuselage top"] call bmkhs_fnc_airfoilGet;
-private _count          = _heli getVariable "bmkhs_fuselageTopCount";
-private _coords         = _heli getVariable "bmkhs_fuselageTop";
+private _count          = _panelSet get "count";
+private _coords         = _panelSet get "panels";
 
 private _pitch          = _rotation select 0;
 private _roll           = _rotation select 1;
@@ -109,8 +110,8 @@ for "_i" from 0 to (_count - 1) do {
         _heli setVariable ["bmkhs_dbgForces", _acc];
     };
 
-    _heli addForce [_heli vectorModelToWorld _liftVector, _e];// vectorDiff _heliCom];
-    _heli addForce [_heli vectorModelToWorld _dragVector, _e];// vectorDiff _heliCom];
+    _heli addForce [_heli vectorModelToWorld _liftVector, _e vectorDiff _heliCom];
+    _heli addForce [_heli vectorModelToWorld _dragVector, _e vectorDiff _heliCom];
 
     if (BMKHS_FM_DEBUG) then {
     //Draw the wing

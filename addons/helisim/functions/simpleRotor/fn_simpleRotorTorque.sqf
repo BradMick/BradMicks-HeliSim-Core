@@ -18,6 +18,7 @@ Parameters:
     _numBlades   - Blade count [Number].
     _bladeMass   - Mass of one blade (kg) [Number].
     _bladeRadius - Blade radius (m) [Number].
+    _torqueTau   - Torque filter time constant (s) [Number].
     _deltaTime   - Frame time (s) [Number].
 
 Returns:
@@ -26,7 +27,7 @@ Returns:
 Author:
     BradMick
 ---------------------------------------------------------------------------- */
-params ["_heli", "_rotorIndex", "_rotorTorque", "_gearRatio", "_numBlades", "_bladeMass", "_bladeRadius", "_deltaTime"];
+params ["_heli", "_rotorIndex", "_rotorTorque", "_gearRatio", "_numBlades", "_bladeMass", "_bladeRadius", "_torqueTau", "_deltaTime"];
 
 if (!local _heli) exitWith {};
 
@@ -38,7 +39,7 @@ private _reqEngTorque = if (_gearRatio > 0.0) then { _rotorTorque / _gearRatio }
 
 //1 - exp(-dt/tau), so the filter is the same at 30 fps and 144.
 private _tqSmoothed = (_heli getVariable "bmkhs_reqEngTorque") select _rotorIndex;
-private _tqAlpha    = 1.0 - (exp (-_deltaTime / ((_heli getVariable "bmkhs_simpleRotorTorqueTau") select _rotorIndex)));
+private _tqAlpha    = 1.0 - (exp (-_deltaTime / _torqueTau));
 _tqSmoothed         = _tqSmoothed + ((_reqEngTorque - _tqSmoothed) * _tqAlpha);
 if ([_tqSmoothed] call bmkhs_fnc_mathIsNAN || [_tqSmoothed] call bmkhs_fnc_mathIsINF) then { _tqSmoothed = 0.0; };
 

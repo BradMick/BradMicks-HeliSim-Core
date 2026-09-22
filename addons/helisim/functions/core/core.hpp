@@ -57,6 +57,13 @@
 #define RADALT_MAX             432.816  //1420 ft - display ceiling
 
 #define VRS_SCALAR_EXPONENT     0.3
+
+//Vortex ring state warning bands. Metres per second of descent, because the flight model
+//works in metres - the feet per minute are what they were specified in. VEL_VRS is the
+//fourth band, fully developed.
+#define VRS_BAND_ENTERING       10.160  //2000 fpm
+#define VRS_BAND_DEVELOPING     14.897  //2933 fpm
+#define VRS_BAND_IMMINENT       19.634  //3867 fpm
 //Advance ratio ceiling - the 4.65*mu^2 profile growth diverges past here
 #define MU_MAX                  0.35
 

@@ -12,12 +12,13 @@ private _heliCom        = getCenterOfMass _heli;
 private _rho            = _heli getVariable "bmkhs_rho";
 private _debugLineScale = 1.0 / 30.0;
 
+private _panelSet       = (_heli getVariable "bmkhs_fuselagePanels") get "side";
 private _position       = _heli getVariable "bmkhs_fuselagePosition";
-private _rotation       = _heli getVariable "bmkhs_fuselageSideRotation";
-private _dragCoefTable  = _heli getVariable "bmkhs_fuselageSideDragCoefTable";
+private _rotation       = _heli getVariable "bmkhs_fuselageRotation";
+private _dragCoefTable  = _panelSet get "dragCoefTable";
 private _airfoilTable   = [_heli, _heli getVariable ["bmkhs_fuselageAirfoil", ""], "fuselage side"] call bmkhs_fnc_airfoilGet;
-private _count          = _heli getVariable "bmkhs_fuselageSideCount";
-private _coords         = _heli getVariable "bmkhs_fuselageSide";
+private _count          = _panelSet get "count";
+private _coords         = _panelSet get "panels";
 
 //Fuselage side-force scalar vs airspeed. The fuselage produces a physical side
 //force (and thus a yaw moment) when the aircraft flies crabbed - this scalar
@@ -133,8 +134,8 @@ for "_i" from 0 to (_count - 1) do {
         _heli setVariable ["bmkhs_dbgForces", _acc];
     };
 
-    _heli addForce [_heli vectorModelToWorld _liftVector, _e];// vectorDiff _heliCom];
-    _heli addForce [_heli vectorModelToWorld _dragVector, _e];// vectorDiff _heliCom];
+    _heli addForce [_heli vectorModelToWorld _liftVector, _e vectorDiff _heliCom];
+    _heli addForce [_heli vectorModelToWorld _dragVector, _e vectorDiff _heliCom];
 
     if (BMKHS_FM_DEBUG) then {
     //Draw the wing

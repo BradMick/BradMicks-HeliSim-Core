@@ -1,9 +1,23 @@
 #include "\bmkhs_helisim\functions\core\core.hpp"
 #include "\bmkhs_helisim\functions\systems\systems.hpp"
 
-params ["_heli","_wingPos","_pitch","_roll","_span","_chord","_sweep","_twist","_tipWidthScalar",["_isStab", false],["_wingIndex", 0],["_airfoilTable", []]];
+params ["_heli", "_wingIndex", "_wing"];
 
 if (!local _heli) exitWith {};
+
+//Keys are the config's own property names - see helisim_wings.hpp.
+private _wingPos        = _wing get "pos";
+private _pitch          = _wing get "pitch";
+private _roll           = _wing get "roll";
+private _span           = _wing get "span";
+private _chord          = _wing get "chord";
+private _sweep          = _wing get "sweep";
+private _twist          = _wing get "twist";
+private _tipWidthScalar = _wing get "tipWidthScalar";
+private _numElements    = _wing get "numElements";
+private _chordLinePos   = _wing get "chordLinePos";
+private _airfoilTable   = _wing get "airfoilTable";
+private _isStab         = (_wing get "isStabilator") > 0;
 
 private _cfg           = configOf _heli;
 private _sfmPlusConfig = _cfg >> "BMKHS_HeliSim";
@@ -11,8 +25,6 @@ private _sfmPlusConfig = _cfg >> "BMKHS_HeliSim";
 private _deltaTime      = _heli getVariable "bmkhs_deltaTime";
 private _rho            = _heli getVariable "bmkhs_rho";
 private _heliCom        = getCenterOfMass _heli;
-private _numElements    = (_heli getVariable "bmkhs_wingNumElements")  select _wingIndex;
-private _chordLinePos   = (_heli getVariable "bmkhs_wingChordLinePos") select _wingIndex;
 
 private _debugLineScale = 1.0 / 30.0;
 
@@ -200,8 +212,8 @@ for "_j" from 0 to (_numElements - 1) do {
         _heli setVariable ["bmkhs_dbgForces", _acc];
     };
 
-    _heli addForce [_heli vectorModelToWorld _liftVector, _e];// vectorDiff _heliCom];
-    _heli addForce [_heli vectorModelToWorld _dragVector, _e];// vectorDiff _heliCom];
+    _heli addForce [_heli vectorModelToWorld _liftVector, _e vectorDiff _heliCom];
+    _heli addForce [_heli vectorModelToWorld _dragVector, _e vectorDiff _heliCom];
 };
 /////////////////////////////////////////////////////////////////////////////////////////////
 // Debug                /////////////////////////////////////////////////////////////////////
