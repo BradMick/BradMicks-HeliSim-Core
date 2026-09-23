@@ -25,9 +25,3 @@ Depends only on vanilla Arma and CBA. No mod dependencies.
 
 Start with the guide. The two `.hpp` files are the authority on what each field
 means, and they sit beside the code so they stay honest.
-
-## Layout
-
-The addon folder is `addons/helisim`, and the project prefix is `bmkhs`, so the
-built PBO is `bmkhs_helisim.pbo` and every include path is `\bmkhs_helisim\...`.
-Renaming either half breaks those paths.
