@@ -26,14 +26,6 @@ Depends only on vanilla Arma and CBA. No mod dependencies.
 Start with the guide. The two `.hpp` files are the authority on what each field
 means, and they sit beside the code so they stay honest.
 
-History, kept for the reasoning rather than as current instructions:
-
-| file | is |
-|---|---|
-| `docs/BOUNDARY_REPORT.md` | the SFM+ retirement and what separating Core required |
-| `docs/CONFIG_PLAN.md` | moving every airframe number out of Core and into config |
-| `docs/CONFIG_SWEEP.md` | the constant-by-constant audit that plan came from |
-
 ## Layout
 
 The addon folder is `addons/helisim`, and the project prefix is `bmkhs`, so the
