@@ -134,8 +134,8 @@ for "_i" from 0 to (_count - 1) do {
         _heli setVariable ["bmkhs_dbgForces", _acc];
     };
 
-    _heli addForce [_heli vectorModelToWorld _liftVector, _e vectorDiff _heliCom];
-    _heli addForce [_heli vectorModelToWorld _dragVector, _e vectorDiff _heliCom];
+    _heli addForce [_heli vectorModelToWorld _liftVector, _e];
+    _heli addForce [_heli vectorModelToWorld _dragVector, _e];
 
     if (BMKHS_FM_DEBUG) then {
     //Draw the wing

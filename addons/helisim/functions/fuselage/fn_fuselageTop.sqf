@@ -106,12 +106,12 @@ for "_i" from 0 to (_count - 1) do {
 
     if (BMKHS_FORCES_DEBUG) then {
         private _acc = _heli getVariable ["bmkhs_dbgForces", []];
-        _acc pushBack ["fuse top", _liftVector vectorAdd _dragVector, _e vectorDiff _heliCom];
+        _acc pushBack ["fuse top", _liftVector vectorAdd _dragVector, _e];// vectorDiff _heliCom];
         _heli setVariable ["bmkhs_dbgForces", _acc];
     };
 
-    _heli addForce [_heli vectorModelToWorld _liftVector, _e vectorDiff _heliCom];
-    _heli addForce [_heli vectorModelToWorld _dragVector, _e vectorDiff _heliCom];
+    _heli addForce [_heli vectorModelToWorld _liftVector, _e];
+    _heli addForce [_heli vectorModelToWorld _dragVector, _e];
 
     if (BMKHS_FM_DEBUG) then {
     //Draw the wing

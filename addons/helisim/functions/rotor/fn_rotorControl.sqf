@@ -14,7 +14,8 @@ private _cyclicLeftRight        = _heli getVariable "bmkhs_cyclicLeftRight";
 private _forceTrimPosRoll       = _heli getVariable "bmkhs_forceTrimPosRoll";
 private _sasRollOut             = _heli getVariable "bmkhs_fmcSasRollOut";
 private _attHoldCycRollOut      = _heli getVariable "bmkhs_fmcAttHoldCycRollOut";
-private _rollInput              = ([_cyclicLeftRight, _forceTrimPosRoll] call bmkhs_fnc_inputGetInterp) + _sasRollOut + _attHoldCycRollOut;
+private _autoAttCycRollOut      = _heli getVariable "bmkhs_autoAttCycRollOut";
+private _rollInput              = ([_cyclicLeftRight, _forceTrimPosRoll] call bmkhs_fnc_inputGetInterp) + _sasRollOut + _attHoldCycRollOut + _autoAttCycRollOut;
 _rollInput                      = [_rollInput, -1.0, 1.0] call BIS_fnc_clamp;
 private _rollFeather			= 0.0;
 

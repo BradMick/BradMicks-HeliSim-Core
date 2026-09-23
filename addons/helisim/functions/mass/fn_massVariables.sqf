@@ -19,6 +19,7 @@ _heli setVariable ["bmkhs_fsDatum",            getNumber (_config >> "fsDatum")]
 _heli setVariable ["bmkhs_fwdCgLimit",         getNumber (_config >> "fwdCgLimit")];
 _heli setVariable ["bmkhs_aftCgLimit",         getNumber (_config >> "aftCgLimit")];
 _heli setVariable ["bmkhs_comCorrection",      getArray  (_config >> "comCorrection")];
+_heli setVariable ["bmkhs_casualModeCom",      getArray  (_config >> "casualModeCom")];
 //Empty mass and moment
 _heli setVariable ["bmkhs_emptyMassFCR",       getNumber (_config >> "emptyMassFCR")];        //kg
 _heli setVariable ["bmkhs_emptyMomFCR",        getNumber (_config >> "emptyMomFCR")];

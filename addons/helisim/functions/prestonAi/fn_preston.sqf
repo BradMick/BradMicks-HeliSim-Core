@@ -60,12 +60,4 @@ private _deltaTime = _heli getVariable "bmkhs_deltaTime";
 //With no human aboard they are zero; the guidance loop will drive them once it exists.
 [_heli, _deltaTime, 0.0, 0.0, false] call bmkhs_fnc_prestonPilot;
 
-//FEET - the pedals. Skipped when the PLAYER already has the auto-pedal option on, because
-//fn_getInput has run it for this frame already and running it twice would double-integrate.
-if (!bmkhs_autoPedal) then {
-    private _kbPedal      = _heli getVariable ["bmkhs_kbPedalLeftRight", 0.0];
-    private _pedal        = _heli getVariable ["bmkhs_pedalLeftRight",   0.0];
-    //Same hover -> nose-to-tail handover speed fn_getInput uses: ~24kts GS.
-    private _yawSwitchVel = 5.14444 * 2.4;
-    [_heli, _deltaTime, _pedal, _kbPedal, _yawSwitchVel] call bmkhs_fnc_prestonPedal;
-};
+//FEET - not yet implemented. Auto pedal is a separate input assist, not Preston's feet.

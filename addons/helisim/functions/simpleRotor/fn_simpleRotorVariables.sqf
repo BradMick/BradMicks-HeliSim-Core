@@ -45,10 +45,11 @@ private _numFields = [
    , "coneAngle"
    , "flapBackRollMax"
    , "flapBackPitchMax"
-   , "rollGain"
-   , "pitchGain"
+   , "rollLiftCoef"
+   , "pitchLiftCoef"
    , "gndEffValue"
    , "reacTqScalar"
+   , "autoTorque"
 ];
 private _arrFields   = ["pivot", "rotation"];
 private _gridFields  = ["liftCoefTable", "dragCoefTable"];

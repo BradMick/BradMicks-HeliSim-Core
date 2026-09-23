@@ -3,15 +3,14 @@ params ["_heli"];
 
 if (currentPilot _heli != player || !local _heli) exitWith {};
 
-//Keyboard auto-attitude (CASUAL) OWNS the pitch and roll trim channels: it writes force-trim
-//every frame as the output of an attitude PID. Setting force-trim from raw stick position here
-//would stomp that write and leave the PID fighting a trim offset it did not command, so both
-//owned axes are skipped. Same single gate as fn_getInput - realistic pilots are untouched, and
-//yaw is never owned by auto-attitude so it always trims normally.
-private _autoAttOwns = bmkhs_helisimRealismSetting != REALISTIC;
+//Auto attitude writes force-trim every frame as a PID output, so trimming from stick position
+//would stomp it. Same gates as fn_inputUpdate.
+private _casual    = bmkhs_helisimRealismSetting != REALISTIC;
+private _autoPitch = bmkhs_autoPitch && _casual;
+private _autoRoll  = bmkhs_autoRoll  && _casual;
 
 //Cyclic pitch trim
-if (!_autoAttOwns) then {
+if (!_autoPitch) then {
     private _curCyclicFwdAft  = (_heli getVariable "bmkhs_cyclicFwdAft");
     private _prevCyclicFwdAft = _heli getVariable "bmkhs_forceTrimPosPitch";
     private _pitchTrimVal     = [_curCyclicFwdAft, _prevCyclicFwdAft] call bmkhs_fnc_inputGetInterp;
@@ -22,7 +21,7 @@ if (!_autoAttOwns) then {
     };
 };
 //Cyclic roll trim
-if (!_autoAttOwns) then {
+if (!_autoRoll) then {
     private _curCyclicLeftRight  = (_heli getVariable "bmkhs_cyclicLeftRight");
     private _prevCyclicLeftRight = _heli getVariable "bmkhs_forceTrimPosRoll";
     private _rollTrimVal         = [_curCyclicLeftRight, _prevCyclicLeftRight] call bmkhs_fnc_inputGetInterp;
@@ -33,11 +32,13 @@ if (!_autoAttOwns) then {
     };
 };
 //Pedal trim
-private _curPedalLeftRight  = (_heli getVariable "bmkhs_pedalLeftRight");
-private _prevPedalLeftRight = _heli getVariable "bmkhs_forceTrimPosYaw";
-private _pedalTrimVal       = [_curPedalLeftRight, _prevPedalLeftRight] call bmkhs_fnc_inputGetInterp;
-if (bmkhs_springlessPedals || bmkhs_keyboardStickyYaw) then {
-    _heli setVariable ["bmkhs_forceTrimPosYaw", 0.0];
-} else {
-    _heli setVariable ["bmkhs_forceTrimPosYaw", _pedalTrimVal, true];
+if (!bmkhs_autoPedal) then {
+    private _curPedalLeftRight  = (_heli getVariable "bmkhs_pedalLeftRight");
+    private _prevPedalLeftRight = _heli getVariable "bmkhs_forceTrimPosYaw";
+    private _pedalTrimVal       = [_curPedalLeftRight, _prevPedalLeftRight] call bmkhs_fnc_inputGetInterp;
+    if (bmkhs_springlessPedals || bmkhs_keyboardStickyYaw) then {
+        _heli setVariable ["bmkhs_forceTrimPosYaw", 0.0];
+    } else {
+        _heli setVariable ["bmkhs_forceTrimPosYaw", _pedalTrimVal, true];
+    };
 };

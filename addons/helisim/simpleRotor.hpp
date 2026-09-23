@@ -149,7 +149,7 @@
 //                      (1 - h/D). The SHAPE is physics and lives in Core; this is the
 //                      STRENGTH, which is the airframe's. 0.0 disables ground effect.
 //  climbGain           Excess torque -> climb thrust. MAIN only.
-//  autoroTorque        Driving torque per m/s of descent in autorotation. MAIN only.
+//  autoTorque        Driving torque per m/s of descent in autorotation. MAIN only.
 //  torqueScalar        TAIL only. Nm of engine torque per N of tail thrust. A TAIL ROTOR
 //                      COSTS POWER - typically 5-15% of total - and costs MORE when you
 //                      stomp a pedal. Scaling off the tail's own thrust means that falls

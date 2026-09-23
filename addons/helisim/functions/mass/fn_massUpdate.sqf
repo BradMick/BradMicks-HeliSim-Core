@@ -26,6 +26,7 @@ private _fs0       = _heli getVariable "bmkhs_fsDatum";
 private _fwdCg     = _heli getVariable "bmkhs_fwdCgLimit";
 private _aftCg     = _heli getVariable "bmkhs_aftCgLimit";
 private _comCorr   = _heli getVariable "bmkhs_comCorrection";
+private _casualCom = _heli getVariable "bmkhs_casualModeCom";
 
 private _curMass = 0;
 private _latMom  = 0;
@@ -127,12 +128,18 @@ if (bmkhs_testGwtEnabled) then {
 private _curLongCG = _longMom / _curMass;
 private _curLatCG  = _latMom  / _curMass;
 
+//Get the bounding center
+private _comDatum = boundingCenter _heli;
 //Update the center of mass
-_heli setCenterOfMass [
-      _curLatCG  + (_comCorr select 0)
-    , _curLongCG + (_comCorr select 1)
-    ,            + (_comCorr select 2)
-];
+if (bmkhs_helisimRealismSetting != REALISTIC) then {
+    _heli setCenterOfMass _casualCom;
+} else {
+    _heli setCenterOfMass [
+          _curLatCG  - (_comDatum select 0) + (_comCorr select 0)
+        , _curLongCG - (_comDatum select 1) + (_comCorr select 1)
+        ,            - (_comDatum select 2) + (_comCorr select 2)
+    ];
+};
 
 //Update mass
 _heli setMass _curMass;
@@ -145,7 +152,7 @@ if (BMKHS_FM_DEBUG) then {
     private _vecY = [0.0, 5.0, 0.0];
     private _vecZ = [0.0, 0.0, 5.0];
 
-    private _cgPos    = (getCenterOfMass _heli);// vectorAdd _comDatum;
+    private _cgPos    = getCenterOfMass _heli;
     private _cgR      = 5.0;
     [_heli, 16, _cgPos, [0.0,  90.0, 0.0], _cgR, "blue"] call bmkhs_fnc_debugDrawCircle;
     [_heli, 16, _cgPos, [-90.0, 0.0, 0.0], _cgR, "green"] call bmkhs_fnc_debugDrawCircle;
@@ -154,7 +161,7 @@ if (BMKHS_FM_DEBUG) then {
     [_heli, _cgPos vectorAdd [0, -_cgR, 0], _cgPos vectorAdd [0, _cgR, 0], "white"] call bmkhs_fnc_debugDrawLine;
     [_heli, _cgPos vectorAdd [0, 0, -_cgR], _cgPos vectorAdd [0, 0, _cgR], "white"] call bmkhs_fnc_debugDrawLine;
 
-    [_heli, [0.0, _fs0  ,-5], [0.0, _fs0  , 5], "green"] call bmkhs_fnc_debugDrawLine;
-    [_heli, [0.0, _fwdCg,-5], [0.0, _fwdCg, 5], "red"]   call bmkhs_fnc_debugDrawLine;
-    [_heli, [0.0, _aftCg,-5], [0.0, _aftCg, 5], "red"]   call bmkhs_fnc_debugDrawLine;
+    [_heli, [0.0, _fs0   - (_comDatum select 1),-5], [0.0, _fs0   - (_comDatum select 1), 5], "green"] call bmkhs_fnc_debugDrawLine;
+    [_heli, [0.0, _fwdCg - (_comDatum select 1),-5], [0.0, _fwdCg - (_comDatum select 1), 5], "red"]   call bmkhs_fnc_debugDrawLine;
+    [_heli, [0.0, _aftCg - (_comDatum select 1),-5], [0.0, _aftCg - (_comDatum select 1), 5], "red"]   call bmkhs_fnc_debugDrawLine;
 };

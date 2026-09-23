@@ -212,8 +212,8 @@ for "_j" from 0 to (_numElements - 1) do {
         _heli setVariable ["bmkhs_dbgForces", _acc];
     };
 
-    _heli addForce [_heli vectorModelToWorld _liftVector, _e vectorDiff _heliCom];
-    _heli addForce [_heli vectorModelToWorld _dragVector, _e vectorDiff _heliCom];
+    _heli addForce [_heli vectorModelToWorld _liftVector, _e];
+    _heli addForce [_heli vectorModelToWorld _dragVector, _e];
 };
 /////////////////////////////////////////////////////////////////////////////////////////////
 // Debug                /////////////////////////////////////////////////////////////////////

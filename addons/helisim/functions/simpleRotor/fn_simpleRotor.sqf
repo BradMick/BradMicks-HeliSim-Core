@@ -48,12 +48,15 @@ private _reacTqScalar     = _rotor get "reacTqScalar";
 private _flapBackRollMax  = _rotor get "flapBackRollMax";
 private _flapBackPitchMax = _rotor get "flapBackPitchMax";
 private _gndEffValue      = _rotor get "gndEffValue";
-private _rollGain         = _rotor get "rollGain";
-private _pitchGain        = _rotor get "pitchGain";
+private _rollLiftCoef     = _rotor get "rollLiftCoef";
+private _pitchLiftCoef    = _rotor get "pitchLiftCoef";
 private _coneAngle        = _rotor get "coneAngle";
+private _autoTorque       = _rotor get "autoTorque";
 
+//Delta time
 private _deltaTime          = _heli getVariable "bmkhs_deltaTime";
 
+//Control outputs
 ([_heli, _type] call bmkhs_fnc_simpleRotorControl)
 	params [ "_pitchOutput"
 		   , "_rollOutput"
@@ -62,7 +65,7 @@ private _deltaTime          = _heli getVariable "bmkhs_deltaTime";
 //Disc tilt
 private _flapLon = [-1, 1, _pitchOutput, _flapLonMin, _flapLonMid, _flapLonMax] call bmkhs_fnc_mathLinearInterpFromCenter;
 private _flapLat = [-1, 1, _rollOutput,  _flapLatMin, _flapLatMid, _flapLatMax] call bmkhs_fnc_mathLinearInterpFromCenter;
-
+//Rotor orientation
 private _p              = _rot select 0;
 private _r              = _rot select 1;
 private _y              = _rot select 2;
@@ -90,6 +93,7 @@ if ([_velY]  call bmkhs_fnc_mathIsNAN || [_velY]  call bmkhs_fnc_mathIsINF) then
 if ([_velXY] call bmkhs_fnc_mathIsNAN || [_velXY] call bmkhs_fnc_mathIsINF) then { _velXY = 0.0; };
 if ([_velZ]  call bmkhs_fnc_mathIsNAN || [_velZ]  call bmkhs_fnc_mathIsINF) then { _velZ  = 0.0; };
 
+//Rpm, and blade geometry/velocity
 private _xmsnRpm        = _heli getVariable "bmkhs_xmsnOutputRpm";
 private _rpm            = _xmsnRpm / _gearRatio;
 private _omega          = if (_rpm == 0.0) then { 0.0 } else { (2.0 * pi) * (_rpm / 60.0) };
@@ -116,7 +120,7 @@ private _flapBackRollAngle  = _flapBackRollMax  * _advanceRatio;
 private _flapBackPitchAngle = _flapBackPitchMax * _advanceRatio;
 
 //Total torque of the four blade positions
-//private _viScalarDenom  = linearConversion [VEL_ETL, VEL_VNE, _velXY, VEL_VRS, VEL_VRS * VRS_SCALAR, true];
+private _viScalarDenom  = linearConversion [-7.62, -19.30, _velZ, VEL_VRS, VEL_VRS * 0.1, true];
 private _rotorTorque    = 0.0;
 private _torqueSign     = [1.0, -1.0] select (_dir == CW);
 
@@ -145,23 +149,27 @@ for "_i" from 0 to 3 do {
     private _bladeLift      = _liftCoef * 0.5 * _dryAirDensity * _bladeArea * (_bladeVel_75 * _bladeVel_75);
     _bladeLift              = _bladeLift * _bladeScalar;
     //Differential lift from cyclic application
-    private _liftCoefDelta  = (_rollOutput  * (cos _psi) * _rollGain)
-                            + (_pitchOutput * (sin _psi) * _pitchGain);
-    private _bladeLiftDelta = (_liftCoef * _liftCoefDelta) * 0.5 * _dryAirDensity * _bladeArea * (_bladeVel_75 * _bladeVel_75);
+    private _liftCoefDelta  = (_rollOutput  * (cos _psi) * _rollLiftCoef)
+                            + (_pitchOutput * (sin _psi) * _pitchLiftCoef);
+    private _bladeLiftDelta = _liftCoefDelta * 0.5 * _dryAirDensity * _bladeArea * (_bladeVel_75 * _bladeVel_75);
     _bladeLiftDelta         = _bladeLiftDelta * _bladeScalar;
     //Blade drag
     private _dragCoef       = [_dragCoefTable, _collOutput, _velXY] call bmkhs_fnc_mathLinearInterp2D;
     private _bladeDrag      = _dragCoef * 0.5 * _dryAirDensity * _bladeArea * (_bladeVel_75 * _bladeVel_75);
     _bladeDrag              = _bladeDrag * _bladeScalar;
-    //Total rotor torque
+    //Total rotor torque - drag brakes the rotor, upflow in a descent drives it
     _rotorTorque            = _rotorTorque + (_bladeDrag * _bladeRad_75);
+    if (_type == MAIN) then {
+        private _upflow     = (-_velZ) max 0.0;
+        _rotorTorque        = _rotorTorque - (_autoTorque * _upflow * (1.0 - _collOutput) * _bladeScalar);
+    };
 
     //Induced velocity
     private _viScalar = 1.0;
     if (_velZ < -VEL_VRS && _velXY < VEL_ETL) then {
         _viScalar = 0.0;
     } else {
-        _viScalar = 1 - (_velZ / VEL_VRS);//_viScalarDenom);
+        _viScalar = 1 - (_velZ / _viScalarDenom);
     };
 
     //Ground effect - strongest on the deck, gone by one rotor diameter up
@@ -178,13 +186,13 @@ for "_i" from 0 to 3 do {
     private _bladeDragVector = _locFVec vectorMultiply (-_bladeDrag * _deltaTime * _torqueSign * _reacTqScalar);
 
     //Apply thrust at the thrust position
-    _heli addForce [_heli vectorModelToWorld _bladeLiftVector, _bladeThrustPos vectorDiff _heliCom];
-    _heli addForce [_heli vectorModelToWorld _bladeDragVector, _bladeThrustPos vectorDiff _heliCom];
+    _heli addForce [_heli vectorModelToWorld _bladeLiftVector, _bladeThrustPos];
+    _heli addForce [_heli vectorModelToWorld _bladeDragVector, _bladeThrustPos];
 
     if (BMKHS_FM_DEBUG) then {
         [_heli, _pos, _blade, "white"] call bmkhs_fnc_debugDrawLine;
-        [_heli, _bladeThrustPos, _bladeThrustPos vectorAdd (_bladeLiftVector vectorMultiply (1.0 / 30.0)), "green"] call bmkhs_fnc_debugDrawLine;
-        [_heli, _bladeThrustPos, _bladeThrustPos vectorAdd (_bladeDragVector vectorMultiply (1.0 / 30.0)), "red"] call bmkhs_fnc_debugDrawLine;
+        [_heli, _bladeThrustPos, _bladeThrustPos vectorAdd (_bladeLiftVector vectorMultiply (1.0 / 100.0)), "green"] call bmkhs_fnc_debugDrawLine;
+        [_heli, _bladeThrustPos, _bladeThrustPos vectorAdd (_bladeDragVector vectorMultiply (1.0 / 100.0)), "red"] call bmkhs_fnc_debugDrawLine;
 		[_heli, _bladeThrustPos,   0.5, "red"] call bmkhs_fnc_debugDrawCross;
 	};
 

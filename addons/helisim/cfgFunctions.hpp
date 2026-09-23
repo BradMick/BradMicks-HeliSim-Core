@@ -105,7 +105,6 @@ class CfgFunctions
         class prestonAi {
             file = "\bmkhs_helisim\functions\prestonAi";
             class preston {R;};
-            class prestonPedal {R;};
             class prestonPilot {R;};
             class prestonVariables {R;};
         };
@@ -141,6 +140,8 @@ class CfgFunctions
         class input {
             file = "\bmkhs_helisim\functions\input";
             class inputAnalogHandler {R;};
+            class inputAutoAttitude {R;};
+            class inputAutoPedal {R;};
             class inputCenterTrimMode {R;};
             class inputControlHandle {R;};
             class inputUpdate {R;};
@@ -224,7 +225,6 @@ class CfgFunctions
             file = "\bmkhs_helisim\functions\simpleRotor";
             class simpleRotor {R;};
             class simpleRotorControl {R;};
-            class simpleRotorTail {R;};
             class simpleRotorTorque {R;};
             class simpleRotorUpdate {R;};
             class simpleRotorVariables {R;};

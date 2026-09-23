@@ -81,7 +81,7 @@
 #define ATT_HOLD_BREAKOUT_VALUE       0.20//0.09
 
 #define CENTER_TRIM_VAL               0.05
-#define BETA_G_TAU                    0.30
+#define BETA_G_TAU                    0.60
 
 //Keyboard auto-attitude (CASUAL only - gated purely on bmkhs_helisimRealismSetting; it is
 //intrinsic to the casual flight model, not an independently switchable option).
@@ -316,8 +316,22 @@
 //the ball's own resolution but still above the frame-to-frame noise floor.
 #define AUTOPEDAL_AERO_DEADBAND_G     0.004
 #define AUTOPEDAL_NTT_DEADBAND_DEG    0.750
-#define AUTOPEDAL_PEDAL_RATE          0.350
-#define AUTOPEDAL_PEDAL_TAU           0.450
+//Keyboard pedal fade, in and back out. A key is on or off; the pedal it drives is not.
+#define AUTOPEDAL_KB_FADE_TIME        1.000
+//Forward speed at which the pedals hand over from heading hold to nose-to-tail trim
+#define AUTOPEDAL_NTT_SPD             5.144   //10kt forward
+
+//AUTO ATTITUDE (CASUAL + KEYBOARD). Drives the aircraft to wings level so a keyboard player is
+//not fighting the pitch-up the airframe develops with forward airspeed. There is no attitude
+//TARGET and no capture - the setpoint is always zero, so there is nothing to snap.
+//It never fights an input: authority fades out with stick deflection and returns as it centres.
+#define AUTOATT_KEY_DEADBAND          0.10    //below this the key counts as released
+#define AUTOATT_SPD_LO                7.717   //15kt GS - assist starts fading in
+#define AUTOATT_SPD_HI                15.433  //30kt GS - assist at full authority
+#define AUTOATT_ROLL_IN_TIME          0.250   //s, roll target sweep into the bank
+#define AUTOATT_ROLL_OUT_TIME         1.000   //s, roll target sweep back to level
+#define AUTOATT_PITCH_OUT_CLAMP       0.07    //max share of the cyclic the pitch assist may command
+#define AUTOATT_ROLL_OUT_CLAMP        0.80    //max share of the cyclic the roll assist may command
 
 //Force-vector debug drawing. This was previously #ifdef __A3_DEBUG__, which is dead
 //code under HEMTT - that macro is hardcoded to 0 in a lookup the #ifdef existence

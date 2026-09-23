@@ -83,12 +83,23 @@
     2
 ] call CBA_fnc_addSetting;
 
-//NOTE: there is deliberately no "Auto Pitch"/"Auto Roll" setting here. Keyboard auto-attitude is
-//intrinsic to the CASUAL flight model - always on there, always off on REALISTIC - so the realism
-//setting above is its only gate and every consumer tests that directly. The old Auto Pitch
-//checkbox was both redundant (the assist was already gated on casual, so it did nothing on
-//realistic) and a trap: it defaulted ON while the pitch-SAS gate keyed off the checkbox alone, so
-//a realistic pilot who left it ticked lost pitch SAS to an assist that never ran.
+[
+    "bmkhs_autoPitch",
+    "CHECKBOX",
+    ["Keyboard Auto Pitch", "When enabled, the aircraft is held at its level flight pitch attitude. CASUAL only."],
+    [BMKHS_SETTINGS_CATEGORY, "Keyboard"],
+    [true],
+    2
+] call CBA_fnc_addSetting;
+
+[
+    "bmkhs_autoRoll",
+    "CHECKBOX",
+    ["Keyboard Auto Roll", "When enabled, the roll key commands a bank angle up to the airframe's limit and returns to wings level on release. CASUAL only."],
+    [BMKHS_SETTINGS_CATEGORY, "Keyboard"],
+    [false],
+    2
+] call CBA_fnc_addSetting;
 
 [
     "bmkhs_mouseAsJoystick",
@@ -205,6 +216,29 @@
     ], 0],
     2
 ] call CBA_fnc_addSetting;
+
+//An auto assist and a sticky axis cannot both own the same control, so selecting an auto
+//clears the sticky settings it conflicts with.
+["bmkhs_autoPitch", {
+    params ["_value"];
+    if (_value) then {
+        ["bmkhs_keyboardStickyPitch", false, false, true] call CBA_settings_fnc_set;
+    };
+}] call CBA_settings_fnc_addEventHandler;
+
+["bmkhs_autoRoll", {
+    params ["_value"];
+    if (_value) then {
+        ["bmkhs_keyboardStickyRoll", false, false, true] call CBA_settings_fnc_set;
+    };
+}] call CBA_settings_fnc_addEventHandler;
+
+["bmkhs_autoPedal", {
+    params ["_value"];
+    if (_value) then {
+        ["bmkhs_keyboardStickyYaw", false, false, true] call CBA_settings_fnc_set;
+    };
+}] call CBA_settings_fnc_addEventHandler;
 
 bmkhs_keyboardCollective         = true;
 bmkhs_keyboardCollectivePrevious = true;

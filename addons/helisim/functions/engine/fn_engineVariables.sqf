@@ -65,7 +65,6 @@ _heli setVariable ["bmkhs_pid_engine", [ _engPidGains call bmkhs_fnc_pidCreate
 //RUNTIME STATE - what the model carries frame to frame.
 _heli setVariable ["bmkhs_shiftLocked",           false];
 _heli setVariable ["bmkhs_isSingleEng",           false];
-//_heli setVariable ["bmkhs_isAutorotating",        false];
 
 //Outputs
 _heli setVariable ["bmkhs_engFF",                 [0.0, 0.0]];
