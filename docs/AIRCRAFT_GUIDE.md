@@ -11,9 +11,9 @@ addon, which this guide calls the PACK. The AH-64's pack is
 Two field references sit beside this one and are the authority on what each
 field means:
 
-- `addons/bmkhs_helisim/components.hpp` - systems: producers, converters,
+- `addons/helisim/components.hpp` - systems: producers, converters,
   storage, circuits, consumers
-- `addons/bmkhs_helisim/controls.hpp` - switches, buttons and levers
+- `addons/helisim/controls.hpp` - switches, buttons and levers
 
 This guide is the ORDER. Those are the DETAIL.
 
@@ -81,6 +81,76 @@ class CfgPatches {
 
 `bmkhsBaseClass` is load-bearing: it is how the per-frame scheduler finds your
 aircraft. Get it wrong and nothing runs, with no error.
+
+### Building your mod against Core's headers
+
+**Your mod ships a committed copy of the Core headers it uses.** Anything in your
+mod that writes `#include "\bmkhs_helisim\..."` is preprocessed at BUILD time, and
+HEMTT resolves `\bmkhs_helisim\` from your project's `include\bmkhs_helisim\`
+folder. So that folder must hold real files, committed to your repo - the same
+arrangement mods already use for CBA and ACE headers (`include\x\cba`,
+`include\z\ace`).
+
+Done this way, a fresh clone builds with nothing but `hemtt build`: no submodule
+to forget, no junction, no setup script, no network step. That is the point -
+this is the arrangement with the fewest ways to fail for someone building your
+mod for the first time.
+
+**Do not junction or symlink it to a Core checkout.** It works on the one machine
+that has the link and nowhere else: git cannot track files through a junction,
+so a clone gets an empty folder and every Core include fails. That is precisely
+how the AH-64's first outside build broke.
+
+**Copy only the headers your mod includes, keeping Core's paths.** Find them
+with a search for `\bmkhs_helisim\` across your mod. The AH-64 needs six:
+
+| Core header | what it carries |
+|---|---|
+| `functions\systems\systems.hpp` | `SYS_*` damage and pressure thresholds |
+| `functions\core\core.hpp` | unit conversions, speeds, mode constants |
+| `functions\fuel\fuel.hpp` | fuel transfer and advisory thresholds |
+| `fmOverride.hpp` | the flight model override block for your vehicle class |
+| `hitPoints.hpp` | Core's hitpoint base |
+| `controlMacros.hpp` | the keybind row macros, if you declare controls |
+
+Core's field references (`components.hpp`, `controls.hpp`) are documentation, not
+headers you include - they do not need copying.
+
+**Put a README in the folder** naming the Core version the copy came from and
+saying not to edit it. The AH-64's is `include\bmkhs_helisim\README.md`.
+
+#### When Core's headers change
+
+**The copy must match the Core mod loaded in game.** Headers are constants baked
+into your PBO at build time, while Core's functions run from the Core mod at
+runtime. A stale copy builds without a single warning and then misbehaves - a
+threshold one side thinks is 0.85 and the other 0.9, or a macro that no longer
+exists evaluating to nil in game.
+
+Refresh the copy whenever you move your mod to a new Core version:
+
+1. Copy the files from Core's `addons\helisim\` into your `include\bmkhs_helisim\`,
+   keeping their paths. From your mod's root, in PowerShell:
+
+   ```powershell
+   $core = "<path to Core checkout>\addons\helisim"
+   $dest = "include\bmkhs_helisim"
+   "functions\systems\systems.hpp", "functions\core\core.hpp", "functions\fuel\fuel.hpp",
+   "fmOverride.hpp", "hitPoints.hpp", "controlMacros.hpp" | ForEach-Object {
+       New-Item -ItemType Directory -Force (Split-Path "$dest\$_") | Out-Null
+       Copy-Item "$core\$_" "$dest\$_"
+   }
+   ```
+
+2. Update the Core version in the folder's README.
+3. `hemtt check`. A macro your mod uses that Core removed or renamed shows up
+   here as an unresolved name - fix it now, not in game.
+4. Commit the copy on its own, with the Core version in the message, so the
+   history shows exactly when your mod moved to which Core.
+
+**Never edit the copy.** A change belongs in Core, then comes back over with the
+next refresh. An edit made only in the copy is silently lost the next time
+anyone refreshes it.
 
 ---
 
@@ -405,11 +475,23 @@ is read outside the flight model, network it.
 
 ## Things that will catch you
 
-Learned the hard way; all of them are in `SYSTEMS_REDESIGN.md` with more detail.
+Learned the hard way.
 
-**`bmkhs_fnc_utilUpdateNetworkGlobal` throws on a variable that has never been
-set.** It reads with no default. Seed with a plain `setVariable` before the first
-networked publish.
+**Core publishes everything you declare, from init - so read it plainly.** Core
+seeds every declared component's variable when the aircraft initialises, straight
+from your declarations, so your pack reads `_heli getVariable "bmkhs_x"` with no
+default. A declared variable that is nil is a Core bug; a default in your reader
+would only hide it, and that is exactly how the reservoir levels went unpublished
+for weeks while Core's own defaulted readers looked fine. If you publish a NEW
+networked variable from your own code, seed it plainly first:
+`bmkhs_fnc_utilUpdateNetworkGlobal` only writes on a change, and never writes a
+variable that has never been set.
+
+**Fuel stays out of the systems model - for transfer and for supply.** Fuel moves
+mass from one tank to another and must conserve it; a circuit is a
+highest-feeder-wins level that conserves nothing. Flow indicators are declared per
+path in your fuel config (`flowingVar` on a transfer tank's `Outputs` or an aux
+tank, `xferFlowingVars[]` for the pump), named by you, never as circuits.
 
 **Absent is not failed.** Undeclared circuits publish NOTHING rather than zero,
 so the read-side defaults that keep a no-hydraulics airframe flying still fire.

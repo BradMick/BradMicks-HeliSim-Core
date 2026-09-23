@@ -1,10 +1,18 @@
 // Generates version.hpp for each addon from the project version plus the git hash.
 
-let head = HEMTT_RFS.join(".git").join("HEAD").open_file().read();
-head.trim();
+// No .git directory to read - a source zip, or a submodule checkout where .git is a file
+// pointing elsewhere. That build is versioned without a hash rather than failing.
+let head_file = HEMTT_RFS.join(".git").join("HEAD");
+let head = "";
+if head_file.is_file() {
+    head = head_file.open_file().read();
+    head.trim();
+}
 
 let full_hash = "";
-if head.contains("ref: ") {
+if head == "" {
+    // No hash available - falls through to the zero hash below.
+} else if head.contains("ref: ") {
     let ref_path = head;
     ref_path.replace("ref: ", "");
     ref_path.trim();
