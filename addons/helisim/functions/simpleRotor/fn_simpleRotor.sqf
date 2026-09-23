@@ -99,17 +99,21 @@ private _tipVel         = _omega * _bladeRadius;
 private _bladeRad_75    = _bladeRadius * 0.75;
 private _bladeVel_75    = _omega * _bladeRad_75;
 
-//Dissymetry of lift
+//Rotor cone angle
+private _collCone       = _collOutput * _coneAngle;
+
+//Dissymetry of lift - casual has none, the disc does not tilt with speed
+if (bmkhs_helisimRealismSetting != REALISTIC) then {
+    _flapBackRollMax  = 0.0;
+    _flapBackPitchMax = 0.0;
+    _reacTqScalar     = 0.0;
+};
+
+//"Flapback" a.k.a. "Blow Back"
 private _advanceRatio       = if (_tipVel > 1.0) then { _velXY / _tipVel } else { 0.0; };
 private _windAzimuth        = if (_velXY > 0.01) then { _velX atan2 _velY } else { 0.0 };
 private _flapBackRollAngle  = _flapBackRollMax  * _advanceRatio;
 private _flapBackPitchAngle = _flapBackPitchMax * _advanceRatio;
-
-//Rotor cone angle
-private _collCone  = _collOutput * _coneAngle;
-//TEMP
-if (_type == TAIL) then { _collCone = 0.0; };
-//END TEMP
 
 //Total torque of the four blade positions
 //private _viScalarDenom  = linearConversion [VEL_ETL, VEL_VNE, _velXY, VEL_VRS, VEL_VRS * VRS_SCALAR, true];
@@ -129,8 +133,9 @@ for "_i" from 0 to 3 do {
     private _pitchFlap = (_flapLon * (sin _psi)) + _fbPitch;
     private _bladeFlap = _collCone + _rollFlap + _pitchFlap;
     //Build the blade and thrust position
-    private _blade             = [_pos vectorAdd  (_locRVec vectorMultiply _bladeRadius), _locFVec, _bladeFlap] call bmkhs_fnc_mathVectorRotateAroundAxis;
-    private _bladeThrustPos    = _pos vectorAdd ((_blade vectorDiff _pos) vectorMultiply 0.75);
+    private _bladeOffset       = [_locRVec vectorMultiply _bladeRadius, _locFVec, _bladeFlap] call bmkhs_fnc_mathVectorRotateAroundAxis;
+    private _blade             = _pos vectorAdd _bladeOffset;
+    private _bladeThrustPos    = _pos vectorAdd (_bladeOffset vectorMultiply 0.75);
 
     //Because the model is 4 fixed points, we have to scale based on the number of blades
     private _bladeScalar    = _numBlades / 4;
@@ -178,14 +183,14 @@ for "_i" from 0 to 3 do {
 
     if (BMKHS_FM_DEBUG) then {
         [_heli, _pos, _blade, "white"] call bmkhs_fnc_debugDrawLine;
-        [_heli, _bladeThrustPos, _bladeThrustPos vectorAdd (_bladeLiftVector vectorMultiply (1.0 / 300.0)), "green"] call bmkhs_fnc_debugDrawLine;
-        [_heli, _bladeThrustPos, _bladeThrustPos vectorAdd (_bladeDragVector vectorMultiply (1.0 / 300.0)), "red"] call bmkhs_fnc_debugDrawLine;
+        [_heli, _bladeThrustPos, _bladeThrustPos vectorAdd (_bladeLiftVector vectorMultiply (1.0 / 30.0)), "green"] call bmkhs_fnc_debugDrawLine;
+        [_heli, _bladeThrustPos, _bladeThrustPos vectorAdd (_bladeDragVector vectorMultiply (1.0 / 30.0)), "red"] call bmkhs_fnc_debugDrawLine;
 		[_heli, _bladeThrustPos,   0.5, "red"] call bmkhs_fnc_debugDrawCross;
 	};
 
 	if (BMKHS_FORCES_DEBUG) then {
 		private _acc = _heli getVariable ["bmkhs_dbgForces", []];
-		_acc pushBack [format ["%1 blade %2", ["main","tail"] select (_type == TAIL), _i], _bladeLiftVector vectorAdd _bladeDragVector, _bladeThrustPos];
+		_acc pushBack [format ["%1 blade %2", ["main","tail"] select (_type == TAIL), _i], _bladeLiftVector vectorAdd _bladeDragVector, _bladeThrustPos vectorDiff _heliCom];
 		_heli setVariable ["bmkhs_dbgForces", _acc];
 	};
 };

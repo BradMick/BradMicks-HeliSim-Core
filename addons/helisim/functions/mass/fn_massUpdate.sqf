@@ -22,10 +22,10 @@ params ["_heli"];
 
 if (!local _heli) exitWith {};
 
-private _fs0     = _heli getVariable "bmkhs_fsDatum";
-private _fwdCg   = _heli getVariable "bmkhs_fwdCgLimit";
-private _aftCg   = _heli getVariable "bmkhs_aftCgLimit";
-private _comCorr = _heli getVariable "bmkhs_comCorrection";
+private _fs0       = _heli getVariable "bmkhs_fsDatum";
+private _fwdCg     = _heli getVariable "bmkhs_fwdCgLimit";
+private _aftCg     = _heli getVariable "bmkhs_aftCgLimit";
+private _comCorr   = _heli getVariable "bmkhs_comCorrection";
 
 private _curMass = 0;
 private _latMom  = 0;
@@ -116,9 +116,6 @@ private _magsAmmo = magazinesAmmo _heli;
     _longMom = _longMom + (_mass * (_arm select 1));
 } forEach (_heli getVariable ["bmkhs_stations", []]);
 
-//Fixed test weight. Clamped to the airframe's empty and max gross mass, and
-//ignored outright if either the entry or the declared max is not usable - a
-//zero here would take the CG divide below with it.
 if (bmkhs_testGwtEnabled) then {
     private _maxGross = _heli getVariable "bmkhs_maxGrossMass";
     private _target   = (parseNumber bmkhs_testGwtLbs) / KG_TO_LBS;
@@ -130,17 +127,14 @@ if (bmkhs_testGwtEnabled) then {
 private _curLongCG = _longMom / _curMass;
 private _curLatCG  = _latMom  / _curMass;
 
-
-private _comDatum = [0.0,0.0,0.0];//boundingCenter _heli;
-
+//Update the center of mass
 _heli setCenterOfMass [
-      _curLatCG  - (_comDatum select 0) + (_comCorr select 0)
-    , _curLongCG - (_comDatum select 1) + (_comCorr select 1)
-    ,            - (_comDatum select 2) + (_comCorr select 2)
+      _curLatCG  + (_comCorr select 0)
+    , _curLongCG + (_comCorr select 1)
+    ,            + (_comCorr select 2)
 ];
-//_heli setCenterOfMass TEST_COM;
 
-
+//Update mass
 _heli setMass _curMass;
 
 _heli setVariable ["bmkhs_GWT", _curMass,   true];
@@ -160,7 +154,7 @@ if (BMKHS_FM_DEBUG) then {
     [_heli, _cgPos vectorAdd [0, -_cgR, 0], _cgPos vectorAdd [0, _cgR, 0], "white"] call bmkhs_fnc_debugDrawLine;
     [_heli, _cgPos vectorAdd [0, 0, -_cgR], _cgPos vectorAdd [0, 0, _cgR], "white"] call bmkhs_fnc_debugDrawLine;
 
-    [_heli, [0.0, _fs0   - (_comDatum select 1),-5], [0.0, _fs0   - (_comDatum select 1), 5], "green"] call bmkhs_fnc_debugDrawLine;
-    [_heli, [0.0, _fwdCg - (_comDatum select 1),-5], [0.0, _fwdCg - (_comDatum select 1), 5], "red"]   call bmkhs_fnc_debugDrawLine;
-    [_heli, [0.0, _aftCg - (_comDatum select 1),-5], [0.0, _aftCg - (_comDatum select 1), 5], "red"]   call bmkhs_fnc_debugDrawLine;
+    [_heli, [0.0, _fs0  ,-5], [0.0, _fs0  , 5], "green"] call bmkhs_fnc_debugDrawLine;
+    [_heli, [0.0, _fwdCg,-5], [0.0, _fwdCg, 5], "red"]   call bmkhs_fnc_debugDrawLine;
+    [_heli, [0.0, _aftCg,-5], [0.0, _aftCg, 5], "red"]   call bmkhs_fnc_debugDrawLine;
 };
