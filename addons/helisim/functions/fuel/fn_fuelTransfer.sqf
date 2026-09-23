@@ -24,23 +24,23 @@ Parameters:
     _mains     - Indices of the tanks with role "main" [Array]
     _transfers - Indices of the tanks with role "xfer" [Array]
     _auxArmed  - True if any armed auxiliary tank still holds fuel [Bool]
+    _flowing   - Flow flag name to whether it flowed this frame, mutated [HashMap]
     _deltaTime - Frame time [Number]
 
 Returns:
-    [_intercellActive, _intercellDir, _cellFlowing] - dir 1 = first main to
-    second, 2 = second to first [Array]
+    Nothing
 
 Author:
     BradMick / FZA Development Team
 ---------------------------------------------------------------------------- */
 #include "\bmkhs_helisim\functions\fuel\fuel.hpp"
-params ["_heli", "_fuelMass", "_fuelMax", "_fuelLow", "_fuelTanks", "_mains", "_transfers", "_auxArmed", "_deltaTime"];
+params ["_heli", "_fuelMass", "_fuelMax", "_fuelLow", "_fuelTanks", "_mains", "_transfers", "_auxArmed", "_flowing", "_deltaTime"];
 
 //Two mains to balance between. A is the first, B the second; neither has any fore/aft or
 //left/right meaning - the aircraft decides what its XFER labels map onto.
 private _idxA = _mains param [0, -1];
 private _idxB = _mains param [1, -1];
-if (_idxA < 0 || _idxB < 0 || _idxA == _idxB) exitWith { [false, 0, false] };
+if (_idxA < 0 || _idxB < 0 || _idxA == _idxB) exitWith {};
 
 private _xferStep = XFER_RATE_KGS * _deltaTime;
 private _massA    = _fuelMass param [_idxA, 0];
@@ -95,16 +95,19 @@ if (_xferMode == "AUTO") then {
     if (_dest == 0) then { _doBToA = _massB > _xferStep && _massA < _maxA };
 };
 
-private _intercellActive = false;
-private _intercellDir    = 0;
+//The pump's flag is named for the main it fills, in main order like the labels.
+private _xferFlowVars = _heli getVariable ["bmkhs_xferFlowVars", []];
+private _markFlow = {
+    params ["_var"];
+    if (_var != "") then { _flowing set [_var, true] };
+};
 
 if (_doAToB) then {
     private _amt = _massA min _xferStep min (_maxB - _massB);
     if (_amt > 0) then {
         _massA = _massA - _amt;
         _massB = _massB + _amt;
-        _intercellActive = true;
-        _intercellDir    = 1;
+        [_xferFlowVars param [1, ""]] call _markFlow;
     };
 };
 if (_doBToA) then {
@@ -112,26 +115,28 @@ if (_doBToA) then {
     if (_amt > 0) then {
         _massB = _massB - _amt;
         _massA = _massA + _amt;
-        _intercellActive = true;
-        _intercellDir    = 2;
+        [_xferFlowVars param [0, ""]] call _markFlow;
     };
 };
 
 _fuelMass set [_idxA, _massA];
 _fuelMass set [_idxB, _massB];
 
-//Transfer cells gravity-feed the mains, but only once the aux tanks are done.
-private _cellFlowing = false;
+//Transfer cells gravity-feed the tanks they declare, but only once the aux tanks are done.
+//A cell that declares no outputs feeds every main.
 if (!_auxArmed) then {
     {
-        private _cellIdx = _x;
-        private _varName   = (_fuelTanks select _cellIdx) get "varName";
+        private _cellIdx   = _x;
+        private _cellTank  = _fuelTanks select _cellIdx;
+        private _varName   = _cellTank get "varName";
         private _switchOn  = _heli getVariable [_varName + "XferOn",    false];
         private _installed = _heli getVariable [_varName + "Installed", false];
+        private _outputs   = _cellTank getOrDefault ["outputs", []];
+        if (_outputs isEqualTo []) then { _outputs = _mains apply {[_x, ""]} };
 
         if (_switchOn && _installed) then {
             {
-                private _dstIdx = _x;
+                _x params ["_dstIdx", "_flowVar"];
                 private _cell   = _fuelMass param [_cellIdx, 0];
                 private _dst    = _fuelMass param [_dstIdx, 0];
                 private _room   = (_fuelMax param [_dstIdx, 0]) - _dst;
@@ -140,9 +145,9 @@ if (!_auxArmed) then {
                     private _flow = _xferStep min _cell min _room;
                     _fuelMass set [_cellIdx, _cell - _flow];
                     _fuelMass set [_dstIdx,  _dst  + _flow];
-                    if (_flow > 0) then { _cellFlowing = true };
+                    if (_flow > 0) then { [_flowVar] call _markFlow };
                 };
-            } forEach _mains;
+            } forEach _outputs;
 
             //Auto-shutoff once the cell is dry.
             if ((_fuelMass param [_cellIdx, 0]) <= 0) then {
@@ -151,5 +156,3 @@ if (!_auxArmed) then {
         };
     } forEach _transfers;
 };
-
-[_intercellActive, _intercellDir, _cellFlowing]
