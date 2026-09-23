@@ -73,6 +73,10 @@
 //components has nothing to solve - both fly on the read-side defaults of whatever would
 //have consumed the state. A designer who only wants the flight model declares nothing.
 //
+//Core seeds every declared variable at init, so a reader outside Core reads it plainly -
+//no default. A declared variable that is nil is Core's bug; read-side defaults are only
+//for components an airframe does NOT declare.
+//
 //Networked state publishes through a change-gated helper, so it only sends when the value
 //actually differs. Pair it with `increment` on anything continuous - rounding pressure to
 //tens instead of single psi cuts traffic during a ramp by roughly a factor of ten.
