@@ -335,7 +335,7 @@ class CfgUIGrids
         {
             class grid_bmkhs_ctrlvis
             {
-                displayName     = "FZA AH-64D: Control Input Visualiser";
+                displayName     = "HeliSim: Control Input Visualiser";
                 description     = "HeliSim control input and SAS visualiser overlay";
                 // preview is the image the layout editor renders as the draggable element.
                 // Without this the widget is invisible on the canvas and cannot be interacted with.
@@ -345,7 +345,7 @@ class CfgUIGrids
             };
             class grid_bmkhs_fmdebug
             {
-                displayName     = "FZA AH-64D: Flight Model Forces";
+                displayName     = "HeliSim: Flight Model Forces";
                 description     = "Per-frame forces and application points from every force generator";
                 preview         = "\bmkhs_helisim\data\ui\IGUI_ctrlvis_preview.paa";
                 saveToProfile[] = {0, 1, 2, 3};

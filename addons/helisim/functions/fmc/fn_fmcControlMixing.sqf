@@ -5,7 +5,7 @@ params ["_heli"];
 //Collective to pitch - compensates for rotor downwash on stabilator <- Not currently used or simulated in helisim
 //Collective to roll  - compensates for translating tendency (right rolling moment). Applies left cyclic w/ increased collective.
 //Collective to yaw   - compensates for torque effect. Increase colletive, increases left pedal.
-//Yaw to pitch        - not used in ah64, used in uh-60, compensates for canted tail rotor. Applies aft cyclic with left pedal, and forward cyclic with right pedal
+//Yaw to pitch        - for a canted tail rotor (a UH-60, say). Applies aft cyclic with left pedal, and forward cyclic with right pedal
 //Collective airspeed to yaw - helps compensate for torque effect in addition to collective to yaw mechanical mixing by increasing or decreasing tail rotor
 //                             pitch by the use of the yaw trim actuator. Is a function of the SAS/FPS computer. 0 to 40 knots 100% tail rotor mixing, from
 //                             40 to 100 knots goes from 100% to 0% tail rotor mixing

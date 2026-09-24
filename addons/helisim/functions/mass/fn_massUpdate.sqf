@@ -32,15 +32,16 @@ private _curMass = 0;
 private _latMom  = 0;
 private _longMom = 0;
 
-private _emptyMass = 0;
-private _emptyMom  = 0;
-if (_heli animationPhase "fcr_enable" == 1) then {
-    _emptyMass = _heli getVariable "bmkhs_emptyMassFCR";
-    _emptyMom  = (_emptyMass * _fs0) - (_heli getVariable "bmkhs_emptyMomFCR");
-} else {
-    _emptyMass = _heli getVariable "bmkhs_emptyMassNonFCR";
-    _emptyMom  = (_emptyMass * _fs0) - (_heli getVariable "bmkhs_emptyMomNonFCR");
-};
+//The airframe as it comes, unless fitted equipment the aircraft declared says otherwise.
+private _emptyMass  = _heli getVariable "bmkhs_emptyMass";
+private _emptyMomFs = _heli getVariable "bmkhs_emptyMom";
+{
+    if (_heli animationPhase (_x get "animation") == (_x get "phase")) exitWith {
+        _emptyMass  = _x get "mass";
+        _emptyMomFs = _x get "moment";
+    };
+} forEach (_heli getVariable "bmkhs_emptyMassVariants");
+private _emptyMom = (_emptyMass * _fs0) - _emptyMomFs;
 _curMass = _emptyMass;
 _longMom = _emptyMom;
 

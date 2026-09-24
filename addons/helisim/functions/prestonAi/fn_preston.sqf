@@ -4,7 +4,7 @@ Function: bmkhs_fnc_preston
 Description:
     Preston Pilot AI module entry. Preston is the PILOT for aircraft no human is
     flying - Arma's AI cannot drive this flight model (it moves aircraft
-    kinematically and exposes no control demand to SQF), so for an AI Apache
+    kinematically and exposes no control demand to SQF), so for an AI aircraft
     Preston is the only thing on the controls.
 
     Called from fn_coreUpdate, NOT fn_getInput - that function exits early unless
@@ -17,7 +17,7 @@ Description:
     desired state (position / velocity / attitude) and works the controls to hold
     it. Something must turn Arma's navigation goals (expectedDestination,
     waypointPosition, flyInHeight, waypointSpeed) into those setpoints, or an AI
-    Apache simply holds station where it spawned.
+    aircraft simply holds station where it spawned.
 
 Parameters:
     _heli - The helicopter to get information from [Unit].

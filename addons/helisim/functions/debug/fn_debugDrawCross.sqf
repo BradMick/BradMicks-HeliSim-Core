@@ -6,7 +6,7 @@ Description:
   run along the model X, Y and Z axes.
 
 Parameters:
-  _heli - The apache helicopter to get information from [Unit].
+  _heli - The helicopter to get information from [Unit].
   _pos  - Model space center of the cross [Array].
   _size - Half length of each arm of the cross [Number].
   _col  - Line color [String].
