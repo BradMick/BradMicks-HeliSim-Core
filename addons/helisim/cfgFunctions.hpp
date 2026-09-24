@@ -179,6 +179,7 @@ class CfgFunctions
             file = "\bmkhs_helisim\functions\util";
             class utilSmoothAverage {R;};
             class utilNotify {R;};
+            class utilNotifyRegister {R;};
             class utilSetArrayVariable {R;};
             class utilSetMultiArrayVariable {R;};
             class utilUpdateNetworkGlobal {R;};
