@@ -43,4 +43,7 @@ class CfgUserActions {
     BMKHS_ACTION(bmkhs_holdModeAttitude,"Attitude Hold","Toggle attitude hold");
     BMKHS_ACTION(bmkhs_holdModesOff,"Hold Modes Off","Disengage all hold modes");
     BMKHS_ACTION(bmkhs_stickyInterrupt,"Sticky Control Interrupt","Hold to stop keyboard cyclic/pedal accumulating");
+
+    //The control input visualiser is Core's display of Core's own inputs, so its bind is too
+    BMKHS_ACTION(bmkhs_ctrlVisToggle,"Control Input Visualiser: Toggle","Show or hide the control input visualiser");
 };

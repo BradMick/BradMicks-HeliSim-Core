@@ -31,7 +31,8 @@ class UserActionGroups {
             "bmkhs_holdModeAltitude",
             "bmkhs_holdModeAttitude",
             "bmkhs_holdModesOff",
-            "bmkhs_stickyInterrupt"
+            "bmkhs_stickyInterrupt",
+            "bmkhs_ctrlVisToggle"
         };
     };
 };
