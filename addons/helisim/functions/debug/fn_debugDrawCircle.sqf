@@ -7,7 +7,7 @@ Description:
   whatever it is representing (rotor disc, etc).
 
 Parameters:
-  _heli     - The apache helicopter to get information from [Unit].
+  _heli     - The helicopter to get information from [Unit].
   _numSides - Number of segments used to approximate the circle [Number].
   _pos      - Model space center of the circle [Array].
   _rot      - [pitch, roll, yaw] setting the orientation of the circle [Array].

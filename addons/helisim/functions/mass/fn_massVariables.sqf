@@ -20,11 +20,19 @@ _heli setVariable ["bmkhs_fwdCgLimit",         getNumber (_config >> "fwdCgLimit
 _heli setVariable ["bmkhs_aftCgLimit",         getNumber (_config >> "aftCgLimit")];
 _heli setVariable ["bmkhs_comCorrection",      getArray  (_config >> "comCorrection")];
 _heli setVariable ["bmkhs_casualModeCom",      getArray  (_config >> "casualModeCom")];
-//Empty mass and moment
-_heli setVariable ["bmkhs_emptyMassFCR",       getNumber (_config >> "emptyMassFCR")];        //kg
-_heli setVariable ["bmkhs_emptyMomFCR",        getNumber (_config >> "emptyMomFCR")];
-_heli setVariable ["bmkhs_emptyMassNonFCR",    getNumber (_config >> "emptyMassNonFCR")];     //kg
-_heli setVariable ["bmkhs_emptyMomNonFCR",     getNumber (_config >> "emptyMomNonFCR")];
+//Empty mass and moment - the airframe as it comes.
+_heli setVariable ["bmkhs_emptyMass",          getNumber (_config >> "emptyMass")];           //kg
+_heli setVariable ["bmkhs_emptyMom",           getNumber (_config >> "emptyMom")];
+//Fitted equipment that changes it, each selected by one of the aircraft's own animations at a
+//given phase. Core does not know what any of them are; the first that matches applies.
+_heli setVariable ["bmkhs_emptyMassVariants", ("true" configClasses (_config >> "EmptyMassVariants")) apply {
+    createHashMapFromArray [
+        ["animation", getText   (_x >> "animation")],
+        ["phase",     getNumber (_x >> "phase")],
+        ["mass",      getNumber (_x >> "mass")],
+        ["moment",    getNumber (_x >> "moment")]
+    ]
+}];
 //Maximum gross mass - bounds the fixed test weight
 _heli setVariable ["bmkhs_maxGrossMass",       getNumber (_config >> "maxGrossMass")];        //kg
 

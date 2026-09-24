@@ -6,11 +6,12 @@ Description:
     opinion on what an event should look or sound like - it only reports that
     something happened.
 
-    A pack registers a handler by setting bmkhs_notifyHandler to a code block:
+    The event goes to the handler registered for this aircraft's pack, found by
+    base class - so with two packs installed, each only hears its own aircraft.
+    A pack registers with bmkhs_fnc_utilNotifyRegister.
 
-        bmkhs_notifyHandler = { params ["_heli", "_event", ["_data", []]]; ... };
-
-    If no handler is registered the call is a no-op, so Core runs standalone.
+    With no handler registered for the aircraft the call is a no-op, so Core
+    runs standalone.
 
 Parameters:
     _heli  - The helicopter [Object]
@@ -22,6 +23,8 @@ Returns:
 ---------------------------------------------------------------------------- */
 params ["_heli", "_event", ["_data", []]];
 
-if (isNil "bmkhs_notifyHandler") exitWith {};
-
-[_heli, _event, _data] call bmkhs_notifyHandler;
+{
+    if (_heli isKindOf _x) exitWith {
+        [_heli, _event, _data] call _y;
+    };
+} forEach (missionNamespace getVariable ["bmkhs_notifyHandlers", createHashMap]);

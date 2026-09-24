@@ -26,7 +26,7 @@ private _hdgError      = [_curHdg - _desiredHdg] call CBA_fnc_simplifyAngle180;
 //  1. it is CLAMPED to +-1 at 0.15 g, so past that the controller goes blind - it sees a constant
 //     maxed-out error however hard the aircraft is actually skidding, and the loop just pins its
 //     output (measured: _hdgHoldPedalYawOut sat at exactly -0.100, the clamp, in cruise)
-//  2. fn_avionicsSlipIndicator exits early unless the PLAYER is aboard, so for an AI Apache it is
+//  2. fn_avionicsSlipIndicator exits early unless the PLAYER is aboard, so for an AI aircraft it is
 //     whatever stale value was left there by another aircraft
 //The auto-pedal was already moved off the gauge onto beta_g for these same reasons.
 //

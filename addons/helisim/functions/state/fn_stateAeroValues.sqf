@@ -10,7 +10,7 @@ Description:
     https://trace.tennessee.edu/cgi/viewcontent.cgi?referer=&httpsredir=1&article=5851&context=utk_gradthes
 
 Parameters:
-    _heli - The apache helicopter to check.
+    _heli - The helicopter to check.
 
 Returns:
     _alpha (angle of attack) in degrees

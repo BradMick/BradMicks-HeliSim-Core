@@ -205,25 +205,42 @@ with no guarantee about what else has run, so a variable `coreConfig` reads with
 no default has to be written in the lines above the call, not by some other
 addon's init.
 
-### The per-frame scheduler
+### The per-frame scheduler and your event handler
 
 `XEH_preInit.sqf`, copied from the AH-64's:
 
 ```sqf
+//This pack's own airframe, from its own CfgPatches entry - never another pack's.
+yourAircraft_helisim_baseClass = getText (configFile >> "CfgPatches" >> "yourAircraft_helisim" >> "bmkhsBaseClass");
+
+//Core's events for THIS pack's aircraft. Optional - leave it out and events are ignored.
+[yourAircraft_helisim_baseClass, {
+    params ["_heli", "_event", ["_data", []]];
+    switch (_event) do {
+        case "apuStateChanged": { /* your cockpit light */ };
+    };
+}] call bmkhs_fnc_utilNotifyRegister;
+
 yourAircraft_helisim_frameHandler = addMissionEventHandler ["EachFrame", {
     {
         if (alive _x && {_x getVariable ["bmkhs_initialised", false]}) then {
             [_x] call yourAircraft_helisim_fnc_perFrame;
         };
-    } forEach (vehicles select {
-        private _veh = _x;
-        local _veh && {bmkhs_packBaseClasses findIf {_veh isKindOf _x} > -1}
-    });
+    } forEach (vehicles select {local _x && {_x isKindOf yourAircraft_helisim_baseClass}});
 }];
 ```
 
 This runs for every LOCAL aircraft of your declared base class - AI included, so
 an unoccupied aircraft still burns fuel and overtorques its gearboxes.
+
+**Schedule your own base class and nothing else.** Every installed pack runs its
+own frame handler. One that ticks every pack's aircraft runs each of them twice a
+frame - once from its own pack, once from yours - doubling every force.
+
+**Register your handler; never assign a global.** Core hands each event to the
+handler registered for the aircraft's base class, so two packs never hear each
+other's aircraft. A shared global would give every aircraft's events to whichever
+pack loaded last.
 
 `fn_perFrame.sqf` calls Core in this order:
 
@@ -428,11 +445,11 @@ error.
 
 ## Step 7 - Animation and audio
 
-Core raises events through a single-slot handler. Your pack assigns it in
-`XEH_preInit.sqf`:
+Core raises events to the handler your pack registers for its base class, in
+`XEH_preInit.sqf` (see Step 2):
 
 ```sqf
-bmkhs_notifyHandler = {
+[yourAircraft_helisim_baseClass, {
     params ["_heli", "_event", ["_data", []]];
     switch (_event) do {
         case "controlMoved": {
@@ -441,10 +458,11 @@ bmkhs_notifyHandler = {
             //what a position is worth - move a detent in config and this follows.
         };
     };
-};
+}] call bmkhs_fnc_utilNotifyRegister;
 ```
 
-**It is one slot, not a bus.** A second assignment replaces the first.
+**One handler per base class.** Registering again for the same class replaces
+it; another pack's aircraft never reach it.
 
 ---
 
