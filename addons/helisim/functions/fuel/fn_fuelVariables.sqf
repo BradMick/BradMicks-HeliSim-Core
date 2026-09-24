@@ -144,6 +144,56 @@ private _fuelNames = _fuelTanks apply {_x get "varName"};
 _heli setVariable ["bmkhs_numAuxTanks", _numAuxTanks];
 _heli setVariable ["bmkhs_auxTanks",    _auxTanks];
 
+//FLOW FLAGS. Every path fuel moves along may name a variable that reads true while fuel is
+//moving on it. The aircraft chooses the name, so Core never knows whether a path runs
+//forward, aft, left, right or into a reserve. Several paths may share one name - it reads
+//true while ANY of them flows. A path with no name still moves fuel; it just reports nothing.
+private _flowVars = [];
+private _flowVar  = {
+    params ["_raw"];
+    if (_raw == "") exitWith {""};
+    if (_raw select [0, 6] == "bmkhs_") then { _raw = _raw select [6] };
+    private _name = "bmkhs_" + _raw;
+    _flowVars pushBackUnique _name;
+    _name
+};
+
+//A transfer cell's destinations. Declared, so a cell can feed any subset of tanks; one that
+//declares none feeds every main, as it always has.
+{
+    private _tank    = _x;
+    private _t       = (_config >> "FuelTanks") >> format ["FuelTank%1%2", ["0", ""] select (_forEachIndex >= 9), _forEachIndex + 1];
+    private _outputs = [];
+    {
+        private _dstName = getText (_x >> "tank");
+        private _dstIdx  = _fuelNames find ("bmkhs_" + _dstName);
+        if (_dstIdx < 0) then {
+            diag_log text format [
+                "[BMKHS] FUEL CONFIG ERROR: %1 output '%2' names tank '%3', which matches no fuel tank variableName. This output will not transfer.",
+                _tank get "varName", configName _x, _dstName
+            ];
+        } else {
+            _outputs pushBack [_dstIdx, [getText (_x >> "flowingVar")] call _flowVar];
+        };
+    } forEach ("true" configClasses (_t >> "Outputs"));
+    _tank set ["outputs", _outputs];
+} forEach _fuelTanks;
+
+//An aux tank's own flag.
+{
+    private _t = (_config >> "AuxTanks") >> format ["AuxTank%1%2", ["0", ""] select (_forEachIndex >= 9), _forEachIndex + 1];
+    _x set ["flowVar", [getText (_t >> "flowingVar")] call _flowVar];
+} forEach _auxTanks;
+
+//The XFER pump's flag per destination, in main order like the labels.
+_heli setVariable ["bmkhs_xferFlowVars", (getArray (_config >> "xferFlowingVars")) apply {[_x] call _flowVar}];
+
+//Seeded plainly on every machine, never broadcast: a client joining late runs this too, and
+//broadcasting its false would clear a flag that is live. The machine the aircraft is local
+//to publishes them; a seed is what lets that first publish happen at all.
+{ _heli setVariable [_x, false] } forEach _flowVars;
+_heli setVariable ["bmkhs_fuelFlowVars", _flowVars];
+
 //Crossfeed positions - which main each engine draws from in each valve position. Static
 //aircraft data, resolved once here rather than rebuilt every frame. The valve starts in
 //the first position declared.
@@ -168,8 +218,6 @@ _heli setVariable ["bmkhs_xferMode", "AUTO"];
 _heli setVariable ["bmkhs_boostOn", false];
 
 // Fuel system status flags
-_heli setVariable ["bmkhs_intercellTransferActive", false];
-_heli setVariable ["bmkhs_intercellTransferDir", 0];
 _heli setVariable ["bmkhs_eng1FuelAvail", true];
 _heli setVariable ["bmkhs_eng2FuelAvail", true];
 _heli setVariable ["bmkhs_apuFuelAvail",  true];

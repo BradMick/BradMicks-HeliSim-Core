@@ -253,6 +253,48 @@ _heli setVariable ["bmkhs_sysStorage",   _storage];
 _heli setVariable ["bmkhs_sysConsumers", _consumers];
 _heli setVariable ["bmkhs_sysCircuits",  _circuits];
 
+//Everything declared is published from the start. Core is the source of these values, so
+//anything outside it reads them plainly - a declared component whose variable is still nil
+//is Core's bug, not the reader's. It also has to exist before its first networked publish:
+//utilUpdateNetworkGlobal only writes on a change, and never writes a variable that was
+//never set, which is how the reservoir levels went unpublished.
+//
+//fn_systemsVariables runs first and its hand seeds win - they carry the no-systems wake
+//behaviour. This covers everything else, straight from the declarations, so an airframe
+//declaring a new component cannot miss one.
+//
+//Without systems nothing is ever solved, so the seed is final and reads as running, like
+//the rest of a no-systems aircraft. With them it starts cold and dark and the first solve
+//takes over.
+if (local _heli) then {
+    private _sys  = _heli getVariable ["bmkhs_useSystems", false];
+    private _seed = {
+        params ["_var", "_value", "_networked"];
+        if (_var == "bmkhs_" || {!isNil {_heli getVariable _var}}) exitWith {};
+        _heli setVariable [_var, _value, _networked];
+    };
+
+    {
+        private _c = _x;
+        [_c get "varName", [0, _c get "nominal"] select !_sys, _c get "networked"] call _seed;
+        if ((_c get "stateVar") != "") then {
+            [format ["bmkhs_%1", _c get "stateVar"], !_sys, true] call _seed;
+        };
+    } forEach (_producers + _converters);
+
+    //A store holds its charge either way - that is state, not supply.
+    {
+        private _c     = _x;
+        private _value = (_c get "nominal") * (_heli getVariable [(_c get "varName") + "Charge", 1.0]);
+        [_c get "varName", _value, _c get "networked"] call _seed;
+        if ((_c get "stateVar") != "") then {
+            [format ["bmkhs_%1", _c get "stateVar"], _value >= (_c get "stateAbove"), true] call _seed;
+        };
+    } forEach _storage;
+
+    { [_x get "varName", !_sys, _x get "networked"] call _seed } forEach (_named + _consumers);
+};
+
 //The dependency graph, built once. A component is woken by whatever it READS, so the
 //edges come from the fields it already declares rather than a separate dependsOn that
 //could drift out of step with what the code actually looks at.

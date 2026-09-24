@@ -87,13 +87,15 @@ private _auxArmed = false;
 ([_heli, _fuelMass, _mains, _deltaTime] call bmkhs_fnc_fuelDraw)
     params ["_eng1FuelAvail", "_eng2FuelAvail", "_apuFuelAvail"];
 
-([_heli, _fuelMass, _fuelMax, _fuelLow, _fuelTanks, _mains, _transfers, _auxArmed, _deltaTime] call bmkhs_fnc_fuelTransfer)
-    params ["_intercellActive", "_intercellDir", "_cellFlowing"];
+//Every declared flow flag starts the frame false; whatever moved fuel marks its own.
+private _flowing = createHashMap;
+{ _flowing set [_x, false] } forEach (_heli getVariable ["bmkhs_fuelFlowVars", []]);
+
+[_heli, _fuelMass, _fuelMax, _fuelLow, _fuelTanks, _mains, _transfers, _auxArmed, _flowing, _deltaTime] call bmkhs_fnc_fuelTransfer;
 
 [_heli, _fuelMass, _fuelTanks, _deltaTime] call bmkhs_fnc_fuelLeak;
 
-([_heli, _fuelMass, _fuelMax, _auxMass, _auxTanks, _groupOn, _deltaTime] call bmkhs_fnc_fuelTransferAux)
-    params ["_auxPresent", "_groupFlow"];
+private _auxPresent = [_heli, _fuelMass, _fuelMax, _auxMass, _auxTanks, _groupOn, _flowing, _deltaTime] call bmkhs_fnc_fuelTransferAux;
 
 //Clamp every tank to its capacity.
 { _fuelMass set [_forEachIndex, 0 max _x min (_fuelMax param [_forEachIndex, 0])] } forEach _fuelMass;
@@ -122,13 +124,9 @@ private _auxArmed = false;
 //The APU gets no grace period - it cuts as soon as its tank is dry.
 [_heli, "bmkhs_apuFuelAvail", _apuFuelAvail] call bmkhs_fnc_utilUpdateNetworkGlobal;
 
-_heli setVariable ["bmkhs_intercellTransferActive", _intercellActive];
-_heli setVariable ["bmkhs_intercellTransferDir",    _intercellDir];
-_heli setVariable ["bmkhs_iafsFlowing",             _cellFlowing];
-
-{
-    _heli setVariable [format ["bmkhs_%1AuxFlowing", toLower _x], (_groupFlow getOrDefault [_x, 0]) > 0];
-} forEach (keys _groupOn);
+//Crew stations read these, so they are networked - and change-gated, so a flag only sends
+//when it flips.
+{ [_heli, _x, _y] call bmkhs_fnc_utilUpdateNetworkGlobal } forEach _flowing;
 
 private _totFuelMass = 0;
 { _totFuelMass = _totFuelMass + _x } forEach (_fuelMass + _auxMass);

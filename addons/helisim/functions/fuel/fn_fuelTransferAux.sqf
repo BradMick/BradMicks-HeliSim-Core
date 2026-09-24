@@ -20,17 +20,17 @@ Parameters:
     _auxMass   - Per-tank auxiliary masses, mutated [Array]
     _auxTanks  - Auxiliary tank table [Array]
     _groupOn   - Group name to armed state [HashMap]
+    _flowing   - Flow flag name to whether it flowed this frame, mutated [HashMap]
     _deltaTime - Frame time [Number]
 
 Returns:
-    [_auxPresent, _groupFlow] - presence per aux tank, and kg moved per group
-    [Array]
+    Presence per aux tank [Array]
 
 Author:
     BradMick / FZA Development Team
 ---------------------------------------------------------------------------- */
 #include "\bmkhs_helisim\functions\fuel\fuel.hpp"
-params ["_heli", "_fuelMass", "_fuelMax", "_auxMass", "_auxTanks", "_groupOn", "_deltaTime"];
+params ["_heli", "_fuelMass", "_fuelMax", "_auxMass", "_auxTanks", "_groupOn", "_flowing", "_deltaTime"];
 
 private _xferStep       = XFER_RATE_KGS * _deltaTime;
 private _pylonMagazines = getPylonMagazines _heli;
@@ -49,8 +49,6 @@ private _auxPresent = [];
     _auxPresent pushBack _present;
     if (!_present) then { _auxMass set [_forEachIndex, 0] };
 } forEach _auxTanks;
-
-private _groupFlow = createHashMap;
 
 //Two passes: tanks with no prerequisite, then the ones gated behind another tank.
 {
@@ -72,9 +70,10 @@ private _groupFlow = createHashMap;
             private _flow = _xferStep min _src min _room;
             _auxMass  set [_idx,    _src - _flow];
             _fuelMass set [_dstIdx, _dst + _flow];
-            _groupFlow set [_group, (_groupFlow getOrDefault [_group, 0]) + _flow];
+            private _flowVar = _x get "flowVar";
+            if (_flow > 0 && {_flowVar != ""}) then { _flowing set [_flowVar, true] };
         };
     } forEach _auxTanks;
 } forEach [false, true];
 
-[_auxPresent, _groupFlow]
+_auxPresent

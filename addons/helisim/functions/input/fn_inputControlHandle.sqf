@@ -24,6 +24,7 @@ if (_state) then {
         case "bmkhs_holdModeAttitude":   { [_heli] call bmkhs_fnc_fmcAttitudeHoldEnable; };
         case "bmkhs_holdModesOff":       { [_heli] call bmkhs_fnc_fmcHoldModesDisable; };
         case "bmkhs_stickyInterrupt":    { [_heli, true] call bmkhs_fnc_stickyInterrupt; };
+        case "bmkhs_ctrlVisToggle":      { [_heli] call bmkhs_fnc_ctrlVisToggle; };
     };
 } else {
     switch (_name) do {

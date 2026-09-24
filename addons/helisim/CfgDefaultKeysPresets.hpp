@@ -19,6 +19,7 @@ class CfgDefaultKeysPresets {
             bmkhs_collectiveDn[] = {};
             bmkhs_kbCollectiveUp[] = {0x2A};
             bmkhs_kbCollectiveDn[] = {0x1D};
+            bmkhs_ctrlVisToggle[] = {0x1D130017};   //Ctrl+I
         };
     };
 };
