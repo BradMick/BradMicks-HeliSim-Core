@@ -51,6 +51,10 @@ class CfgFunctions
             class coreUpdate  {R;};
             class coreUpdateFlightModel {R;};
         };
+        class engDisplay {
+            file = "\bmkhs_helisim\functions\engDisplay";
+            class engDisplayUpdate {R;};
+        };
         class fmDebug {
             file = "\bmkhs_helisim\functions\fmDebug";
             class fmDebugUpdate {R;};
