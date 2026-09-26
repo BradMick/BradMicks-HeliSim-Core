@@ -2,16 +2,16 @@
 Function: bmkhs_fnc_coreUpdate
 
 Description:
-    The per-frame tick. A pack calls this and keeps only its EachFrame handler.
+    Updates all of the modules core functions.
 
 Parameters:
     _heli - The helicopter to get information from [Unit].
 
 Returns:
-    Nothing
+    ...
 
 Examples:
-    [_heli] call bmkhs_fnc_coreUpdate;
+    ...
 
 Author:
     BradMick
@@ -61,20 +61,8 @@ if (isAutoHoverOn _heli) then {
 //Transmission
 [_heli] call bmkhs_fnc_transmissionUpdate;
 
-//Systems - after the transmission, which publishes the Nr the solve feeds in
-[_heli] call bmkhs_fnc_systemsUpdate;
-
 //Damage - stub, see fn_damageApply
 //[_heli] call bmkhs_fnc_damageApply;
-
-//Flight model
-[_heli] call bmkhs_fnc_coreUpdateFlightModel;
-
-//Control visualisation
-[_heli] call bmkhs_fnc_ctrlVisUpdate;
-
-//Repair
-[_heli] call bmkhs_fnc_repair;
 
 //Forces and moments readout. Runs after every contributor has published its row.
 [_heli] call bmkhs_fnc_fmDebugUpdate;
