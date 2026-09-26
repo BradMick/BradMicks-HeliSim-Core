@@ -81,7 +81,7 @@ private _npFs  = _npOvsp * 1.05;
 
 // ── Geometry ─────────────────────────────────────────────────────────────────
 private _pad   = _W * 0.030;
-private _dragH = safeZoneH * 0.030;
+private _dragH = _H * 0.020;          //grab strip, unlabelled
 private _inner = _W - (_pad * 2);
 
 //Three groups: torque (N tapes), tachs (N + 1 tapes), TGT (N tapes).
@@ -91,18 +91,20 @@ private _gapG   = _inner * 0.045;
 private _tapeW  = ((_inner - (_gapG * 2)) / _nTapes) * 0.68;
 private _gapT   = (((_inner - (_gapG * 2)) - (_tapeW * _nTapes)) / ((_nTapes - 1) max 1)) max 0;
 
-private _lblH  = safeZoneH * 0.020;
-private _numH  = safeZoneH * 0.022;
-private _rowH  = safeZoneH * 0.021;
-private _annH  = safeZoneH * 0.052;
+//Text rows take a fixed share of the panel, so everything left over is tape.
+private _lblH  = _H * 0.040;
+private _numH  = _H * 0.042;
+private _rowH  = _H * 0.040;
+private _annH  = _H * 0.110;
 
 private _yLbl  = _y0 + _dragH + (_H * 0.010);
 private _yEng  = _yLbl + _lblH;
 private _yTape = _yEng + _lblH;
-private _tapeH = _H - (_dragH + (_H * 0.010) + (_lblH * 2) + _numH + (_rowH * 3) + _annH + (_H * 0.030));
+//Two label rows at the top (group + engine number), one more above the digital rows.
+private _tapeH = _H - (_dragH + (_H * 0.010) + (_lblH * 3) + _numH + (_rowH * 3) + _annH + (_H * 0.030));
 if (_tapeH < 0.01) then { _tapeH = _H * 0.30 };
 private _yNum  = _yTape + _tapeH;
-private _yRows = _yNum + _numH + (_H * 0.010);
+private _yRows = _yNum + _numH + (_H * 0.010) + _lblH;
 private _yAnn  = _yRows + (_rowH * 3) + (_H * 0.008);
 
 //Left edge of each group, walked across the panel.
@@ -112,7 +114,7 @@ private _xTgt  = _xTach + (_nTach * _tapeW) + ((_nTach - 1) * _gapT) + _gapG;
 
 private _tapeX = { params ["_base", "_i"]; _base + (_i * (_tapeW + _gapT)) };
 
-//A tape: frame, the two limit bands, then the fill drawn bottom-up.
+//A tape: frame, fill bottom-up, and the limit ticks over the top of it.
 private _drawTape = {
     params ["_fIdc", "_lIdc", "_tx", "_val", "_fs", "_amber", "_red", "_aIdc", "_rIdc"];
 
@@ -121,21 +123,22 @@ private _drawTape = {
     _f ctrlCommit 0;
     _f ctrlShow true;
 
+    //Limit ticks - a line across the tape at each threshold, not a filled band.
+    private _tickH = (_tapeH * 0.012) max 0.0015;
     {
-        _x params ["_idc", "_from", "_to"];
+        _x params ["_idc", "_at"];
         private _c = _display displayCtrl _idc;
         if (!isNull _c) then {
-            if (_idc > 0 && {_fs > 0} && {_to > _from}) then {
-                private _yb = _yTape + (_tapeH * (1 - ((_to / _fs) min 1)));
-                private _hb = _tapeH * (((_to min _fs) - _from) / _fs);
-                _c ctrlSetPosition [_tx, _yb, _tapeW, _hb max 0];
+            if (_idc > 0 && {_fs > 0} && {_at > 0} && {_at < _fs}) then {
+                _c ctrlSetPosition [_tx, _yTape + (_tapeH * (1 - (_at / _fs))) - (_tickH / 2),
+                                    _tapeW, _tickH];
                 _c ctrlCommit 0;
                 _c ctrlShow true;
             } else {
                 _c ctrlShow false;
             };
         };
-    } forEach [[_aIdc, _amber, _red], [_rIdc, _red, _fs]];
+    } forEach [[_aIdc, _amber], [_rIdc, _red]];
 
     private _frac = ((_val / _fs) max 0) min 1;
     private _fill = _display displayCtrl _lIdc;
@@ -182,54 +185,63 @@ for "_i" from 0 to (ED_MAX_ENG - 1) do {
         //Np tape - engine 0 left of Nr, the rest to its right, so Nr stays centred.
         private _slot = [_i, _i + 1] select (_i >= (_nTach / 2) - 0.5);
         private _xN = [_xTach, _slot] call _tapeX;
-        [5340 + _i, 5350 + _i, _xN, _npV, _npFs, 1.05, _npOvsp, -1, -1] call _drawTape;
+        [5340 + _i, 5350 + _i, _xN, _npV, _npFs, 1.05, _npOvsp, 5490 + _i, 5500 + _i] call _drawTape;
         [5360 + _i, (_npV * 100) toFixed 0, _xN, _yNum, _tapeW, _numH] call _setText;
-        [5470 + _i, "NP", _xN, _yEng, _tapeW, _lblH] call _setText;
+        [5470 + _i, str (_i + 1), _xN, _yEng, _tapeW, _lblH] call _setText;
 
         private _xG = [_xTgt, _i] call _tapeX;
-        [5370 + _i, 5380 + _i, _xG, _tgV, _tgtFs, _tgtDe, _tgtSe, -1, -1] call _drawTape;
+        [5370 + _i, 5380 + _i, _xG, _tgV, _tgtFs, _tgtDe, _tgtSe, 5510 + _i, 5520 + _i] call _drawTape;
         [5390 + _i, _tgV toFixed 0, _xG, _yNum, _tapeW, _numH,
             switch (true) do {
                 case (_tgV >= _tgtSe): { [1.00, 0.35, 0.35, 1.00] };
                 case (_tgV >= _tgtDe): { [1.00, 0.85, 0.30, 1.00] };
                 default                 { [0.80, 1.00, 0.80, 1.00] };
             }] call _setText;
+        [5540 + _i, str (_i + 1), _xG, _yEng, _tapeW, _lblH] call _setText;
     } else {
         [5310 + _i, 5320 + _i, 5330 + _i, 5340 + _i, 5350 + _i, 5360 + _i, 5370 + _i,
          5380 + _i, 5390 + _i, 5400 + _i, 5410 + _i, 5420 + _i, 5430 + _i, 5440 + _i,
-         5450 + _i, 5470 + _i] call _hide;
+         5450 + _i, 5470 + _i, 5490 + _i, 5500 + _i, 5510 + _i, 5520 + _i,
+         5540 + _i, 5550 + _i] call _hide;
     };
 };
 
 //Nr sits in the middle slot of the tach group.
 private _nrSlot = floor (_nTach / 2);
 private _xNr    = [_xTach, _nrSlot] call _tapeX;
-[5304, 5305, _xNr, _nr, _npFs, 1.05, _npOvsp, -1, -1] call _drawTape;
+[5304, 5305, _xNr, _nr, _npFs, ED_NR_HIGH, _npOvsp, 5530, 5531] call _drawTape;
 [5306, (_nr * 100) toFixed 0, _xNr, _yNum, _tapeW, _numH] call _setText;
-[5309, "NR", _xNr, _yEng, _tapeW, _lblH] call _setText;
+[5309, "R", _xNr, _yEng, _tapeW, _lblH] call _setText;
 
 // ── Group labels, centred on the tapes they name ─────────────────────────────
 private _span = { params ["_base", "_c"]; (_c * _tapeW) + ((_c - 1) * _gapT) };
-[5307, "TORQUE", _xTq,   _yLbl, [_xTq, _n] call _span,      _lblH] call _setText;
-[5308, "TGT",    _xTgt,  _yLbl, [_xTgt, _n] call _span,     _lblH] call _setText;
+[5307, "TORQUE", _xTq,   _yLbl, [_xTq, _n] call _span,     _lblH] call _setText;
+[5308, "TGT",    _xTgt,  _yLbl, [_xTgt, _n] call _span,    _lblH] call _setText;
+[5560, "NP / NR", _xTach, _yLbl, [_xTach, _nTach] call _span, _lblH] call _setText;
 
-// ── Digital rows ─────────────────────────────────────────────────────────────
-private _labW = _inner * 0.16;
+// ── Digital rows - a row label, then one even column per engine ──────────────
+private _labW = _inner * 0.22;
+private _colW = (_inner - _labW) / _n;
+private _colX = { params ["_i"]; _x0 + _pad + _labW + (_i * _colW) };
+
+//Header, so the columns here carry engine numbers like the tapes do.
+for "_i" from 0 to (_n - 1) do {
+    [5550 + _i, str (_i + 1), [_i] call _colX, _yRows - _lblH, _colW, _lblH] call _setText;
+};
+
 {
     _x params ["_lblIdc", "_txt", "_row"];
     [_lblIdc, _txt, _x0 + _pad, _yRows + (_rowH * _row), _labW, _rowH] call _setText;
 } forEach [[5460, "NG", 0], [5461, "OIL", 1], [5462, "RTG", 2]];
 
 for "_i" from 0 to (_n - 1) do {
-    private _xc = [_xTq, _i] call _tapeX;
-    private _cw = _tapeW;
-    //The value columns line up with the torque tapes, which is the leftmost group.
+    private _xc = [_i] call _colX;
     [5410 + _i, ((([_ng, _i, 0.0] call BIS_fnc_param) * 100) toFixed 1),
-        _xc + _labW, _yRows, _cw, _rowH] call _setText;
+        _xc, _yRows, _colW, _rowH] call _setText;
     [5420 + _i, ((([_oil, _i, 0.0] call BIS_fnc_param) * 100) toFixed 0),
-        _xc + _labW, _yRows + _rowH, _cw, _rowH] call _setText;
+        _xc, _yRows + _rowH, _colW, _rowH] call _setText;
     [5430 + _i, ([_rtg, _i, "--"] call BIS_fnc_param),
-        _xc + _labW, _yRows + (_rowH * 2), _cw, _rowH] call _setText;
+        _xc, _yRows + (_rowH * 2), _colW, _rowH] call _setText;
 };
 
 // ── Annunciators ─────────────────────────────────────────────────────────────

@@ -333,9 +333,9 @@ class CfgUIGrids
                     grid_bmkhs_engdisplay[] = {
                         {
                             "safeZoneX + safeZoneW * 0.780",
-                            "safeZoneY + safeZoneH * 0.180",
-                            "safeZoneH * 0.260",
-                            "safeZoneH * 0.260"
+                            "safeZoneY + safeZoneH * 0.120",
+                            "safeZoneH * 0.240",
+                            "safeZoneH * 0.400"
                         },
                         "safeZoneH * 0.005",
                         "safeZoneH * 0.005"

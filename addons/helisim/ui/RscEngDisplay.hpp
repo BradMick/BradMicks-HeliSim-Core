@@ -62,9 +62,9 @@ class bmkhs_engdisplay
             colorText[]       = {0, 0, 0, 0};
             text = "";
             x = "(profileNamespace getVariable ['IGUI_grid_bmkhs_engdisplay_X', safeZoneX + safeZoneW * 0.780])";
-            y = "(profileNamespace getVariable ['IGUI_grid_bmkhs_engdisplay_Y', safeZoneY + safeZoneH * 0.180])";
-            w = "(profileNamespace getVariable ['IGUI_grid_bmkhs_engdisplay_W', safeZoneH * 0.260])";
-            h = "(profileNamespace getVariable ['IGUI_grid_bmkhs_engdisplay_H', safeZoneH * 0.260])";
+            y = "(profileNamespace getVariable ['IGUI_grid_bmkhs_engdisplay_Y', safeZoneY + safeZoneH * 0.120])";
+            w = "(profileNamespace getVariable ['IGUI_grid_bmkhs_engdisplay_W', safeZoneH * 0.240])";
+            h = "(profileNamespace getVariable ['IGUI_grid_bmkhs_engdisplay_H', safeZoneH * 0.400])";
         };
 
         class BMKHS_EngDisplay_DragBar : RscText
@@ -72,13 +72,13 @@ class bmkhs_engdisplay
             idc  = 5302;
             colorBackground[] = {0.05, 0.20, 0.05, 0.90};
             colorText[]       = {0.70, 1.00, 0.70, 1.00};
-            text    = "Engine";
+            text    = "";
             font    = "PuristaMedium";
             sizeEx  = 0.028;
             style   = 2;
             x = "(profileNamespace getVariable ['IGUI_grid_bmkhs_engdisplay_X', safeZoneX + safeZoneW * 0.780])";
-            y = "(profileNamespace getVariable ['IGUI_grid_bmkhs_engdisplay_Y', safeZoneY + safeZoneH * 0.180])";
-            w = "(profileNamespace getVariable ['IGUI_grid_bmkhs_engdisplay_W', safeZoneH * 0.260])";
+            y = "(profileNamespace getVariable ['IGUI_grid_bmkhs_engdisplay_Y', safeZoneY + safeZoneH * 0.120])";
+            w = "(profileNamespace getVariable ['IGUI_grid_bmkhs_engdisplay_W', safeZoneH * 0.240])";
             h = "safeZoneH * 0.030";
         };
 
@@ -128,6 +128,12 @@ class bmkhs_engdisplay
         class ED_TqFrame1 : BMKHS_EngDisplay_TapeFrame { idc = 5311; };
         class ED_TqFrame2 : BMKHS_EngDisplay_TapeFrame { idc = 5312; };
         class ED_TqFrame3 : BMKHS_EngDisplay_TapeFrame { idc = 5313; };
+        //Fills before ticks - z-order follows declaration order, and a tick has to
+        //stay visible with the tape filled past it.
+        class ED_TqFill0  : BMKHS_EngDisplay_TapeFill  { idc = 5320; };
+        class ED_TqFill1  : BMKHS_EngDisplay_TapeFill  { idc = 5321; };
+        class ED_TqFill2  : BMKHS_EngDisplay_TapeFill  { idc = 5322; };
+        class ED_TqFill3  : BMKHS_EngDisplay_TapeFill  { idc = 5323; };
         class ED_TqAmber0 : BMKHS_EngDisplay_Band      { idc = 5440; };
         class ED_TqAmber1 : BMKHS_EngDisplay_Band      { idc = 5441; };
         class ED_TqAmber2 : BMKHS_EngDisplay_Band      { idc = 5442; };
@@ -136,10 +142,6 @@ class bmkhs_engdisplay
         class ED_TqRed1   : BMKHS_EngDisplay_Band      { idc = 5451; colorBackground[] = {0.90, 0.15, 0.15, 0.85}; };
         class ED_TqRed2   : BMKHS_EngDisplay_Band      { idc = 5452; colorBackground[] = {0.90, 0.15, 0.15, 0.85}; };
         class ED_TqRed3   : BMKHS_EngDisplay_Band      { idc = 5453; colorBackground[] = {0.90, 0.15, 0.15, 0.85}; };
-        class ED_TqFill0  : BMKHS_EngDisplay_TapeFill  { idc = 5320; };
-        class ED_TqFill1  : BMKHS_EngDisplay_TapeFill  { idc = 5321; };
-        class ED_TqFill2  : BMKHS_EngDisplay_TapeFill  { idc = 5322; };
-        class ED_TqFill3  : BMKHS_EngDisplay_TapeFill  { idc = 5323; };
         class ED_TqNum0   : BMKHS_EngDisplay_Num       { idc = 5330; };
         class ED_TqNum1   : BMKHS_EngDisplay_Num       { idc = 5331; };
         class ED_TqNum2   : BMKHS_EngDisplay_Num       { idc = 5332; };
@@ -158,6 +160,14 @@ class bmkhs_engdisplay
         class ED_NpNum1   : BMKHS_EngDisplay_Num       { idc = 5361; };
         class ED_NpNum2   : BMKHS_EngDisplay_Num       { idc = 5362; };
         class ED_NpNum3   : BMKHS_EngDisplay_Num       { idc = 5363; };
+        class ED_NpAmber0 : BMKHS_EngDisplay_Band      { idc = 5490; };
+        class ED_NpAmber1 : BMKHS_EngDisplay_Band      { idc = 5491; };
+        class ED_NpAmber2 : BMKHS_EngDisplay_Band      { idc = 5492; };
+        class ED_NpAmber3 : BMKHS_EngDisplay_Band      { idc = 5493; };
+        class ED_NpRed0   : BMKHS_EngDisplay_Band      { idc = 5500; colorBackground[] = {0.90, 0.15, 0.15, 0.85}; };
+        class ED_NpRed1   : BMKHS_EngDisplay_Band      { idc = 5501; colorBackground[] = {0.90, 0.15, 0.15, 0.85}; };
+        class ED_NpRed2   : BMKHS_EngDisplay_Band      { idc = 5502; colorBackground[] = {0.90, 0.15, 0.15, 0.85}; };
+        class ED_NpRed3   : BMKHS_EngDisplay_Band      { idc = 5503; colorBackground[] = {0.90, 0.15, 0.15, 0.85}; };
         class ED_NpLbl0   : BMKHS_EngDisplay_Label     { idc = 5470; text = "NP"; };
         class ED_NpLbl1   : BMKHS_EngDisplay_Label     { idc = 5471; text = "NP"; };
         class ED_NpLbl2   : BMKHS_EngDisplay_Label     { idc = 5472; text = "NP"; };
@@ -166,6 +176,8 @@ class bmkhs_engdisplay
         //Nr - one tape, centred among the Np tapes so a split reads instantly
         class ED_NrFrame : BMKHS_EngDisplay_TapeFrame { idc = 5304; };
         class ED_NrFill  : BMKHS_EngDisplay_TapeFill  { idc = 5305; };
+        class ED_NrAmber : BMKHS_EngDisplay_Band      { idc = 5530; };
+        class ED_NrRed   : BMKHS_EngDisplay_Band      { idc = 5531; colorBackground[] = {0.90, 0.15, 0.15, 0.85}; };
         class ED_NrNum   : BMKHS_EngDisplay_Num       { idc = 5306; };
         class ED_NrLbl   : BMKHS_EngDisplay_Label     { idc = 5309; text = "NR"; };
 
@@ -178,16 +190,33 @@ class bmkhs_engdisplay
         class ED_TgtFill1  : BMKHS_EngDisplay_TapeFill  { idc = 5381; };
         class ED_TgtFill2  : BMKHS_EngDisplay_TapeFill  { idc = 5382; };
         class ED_TgtFill3  : BMKHS_EngDisplay_TapeFill  { idc = 5383; };
+        class ED_TgtAmber0 : BMKHS_EngDisplay_Band      { idc = 5510; };
+        class ED_TgtAmber1 : BMKHS_EngDisplay_Band      { idc = 5511; };
+        class ED_TgtAmber2 : BMKHS_EngDisplay_Band      { idc = 5512; };
+        class ED_TgtAmber3 : BMKHS_EngDisplay_Band      { idc = 5513; };
+        class ED_TgtRed0   : BMKHS_EngDisplay_Band      { idc = 5520; colorBackground[] = {0.90, 0.15, 0.15, 0.85}; };
+        class ED_TgtRed1   : BMKHS_EngDisplay_Band      { idc = 5521; colorBackground[] = {0.90, 0.15, 0.15, 0.85}; };
+        class ED_TgtRed2   : BMKHS_EngDisplay_Band      { idc = 5522; colorBackground[] = {0.90, 0.15, 0.15, 0.85}; };
+        class ED_TgtRed3   : BMKHS_EngDisplay_Band      { idc = 5523; colorBackground[] = {0.90, 0.15, 0.15, 0.85}; };
         class ED_TgtNum0   : BMKHS_EngDisplay_Num       { idc = 5390; };
         class ED_TgtNum1   : BMKHS_EngDisplay_Num       { idc = 5391; };
         class ED_TgtNum2   : BMKHS_EngDisplay_Num       { idc = 5392; };
         class ED_TgtNum3   : BMKHS_EngDisplay_Num       { idc = 5393; };
 
-        //Engine number, above each torque tape
+        //Engine number - one above each tape in every group, and once more over the
+        //digital rows, so no column is unlabelled.
         class ED_EngNum0 : BMKHS_EngDisplay_Label { idc = 5400; };
         class ED_EngNum1 : BMKHS_EngDisplay_Label { idc = 5401; };
         class ED_EngNum2 : BMKHS_EngDisplay_Label { idc = 5402; };
         class ED_EngNum3 : BMKHS_EngDisplay_Label { idc = 5403; };
+        class ED_TgtEngNum0 : BMKHS_EngDisplay_Label { idc = 5540; };
+        class ED_TgtEngNum1 : BMKHS_EngDisplay_Label { idc = 5541; };
+        class ED_TgtEngNum2 : BMKHS_EngDisplay_Label { idc = 5542; };
+        class ED_TgtEngNum3 : BMKHS_EngDisplay_Label { idc = 5543; };
+        class ED_RowEngNum0 : BMKHS_EngDisplay_Label { idc = 5550; };
+        class ED_RowEngNum1 : BMKHS_EngDisplay_Label { idc = 5551; };
+        class ED_RowEngNum2 : BMKHS_EngDisplay_Label { idc = 5552; };
+        class ED_RowEngNum3 : BMKHS_EngDisplay_Label { idc = 5553; };
 
         //Digital rows
         class ED_NgNum0  : BMKHS_EngDisplay_Num { idc = 5410; };
@@ -205,6 +234,7 @@ class bmkhs_engdisplay
 
         class ED_LblTorque : BMKHS_EngDisplay_Label  { idc = 5307; text = "TORQUE"; };
         class ED_LblTgt    : BMKHS_EngDisplay_Label  { idc = 5308; text = "TGT"; };
+        class ED_LblTach   : BMKHS_EngDisplay_Label  { idc = 5560; text = "NP / NR"; };
         class ED_LblNg     : BMKHS_EngDisplay_LabelL { idc = 5460; text = "NG"; };
         class ED_LblOil    : BMKHS_EngDisplay_LabelL { idc = 5461; text = "OIL"; };
         class ED_LblRtg    : BMKHS_EngDisplay_LabelL { idc = 5462; text = "RTG"; };
