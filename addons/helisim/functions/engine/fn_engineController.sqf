@@ -220,7 +220,13 @@ if (isMultiplayer && (currentPilot _heli == player || local _heli) && (_heli get
         "bmkhs_engBaseOilPSI",
         "bmkhs_engOilPSI",
         "bmkhs_engState",
-        "bmkhs_engFF",
+        "bmkhs_gtEngPctNg",
+        "bmkhs_gtEngPctNp",
+        "bmkhs_gtEngPctTq",
+        "bmkhs_gtEngTgt",
+        "bmkhs_gtEngOilPsi",
+        "bmkhs_gtEngFf",
+        "bmkhs_gtEngState",
         "bmkhs_collectiveOutput",
         "bmkhs_xmsnOutputRpm",
         "bmkhs_xmsnDeltaRpm"
@@ -239,6 +245,13 @@ if (currentPilot _heli == player || local _heli) then {
         [_heli, 0] call bmkhs_fnc_engine2;
         [_heli, 1] call bmkhs_fnc_engine2;
     };
+
+    //The new model runs beside the old one, publishing to its own gt* variables. Config
+    //names the assembly, so a new engine type is a folder and a config string.
+    {
+        private _fnc = missionNamespace getVariable [format ["bmkhs_fnc_%1", _x get "engineType"], {}];
+        [_heli, _forEachIndex, _x] call _fnc;
+    } forEach (_heli getVariable "bmkhs_engines");
 };
 
 private _no1EngDmg = [_heli, "engines", 0] call bmkhs_fnc_damageGet;

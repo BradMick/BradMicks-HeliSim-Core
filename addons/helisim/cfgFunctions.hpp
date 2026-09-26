@@ -82,7 +82,19 @@ class CfgFunctions
             class engine2 {R;};
             class engineBET {R;};
             class engineController {R;};
+            class engineGovernor {R;};
             class engineVariables {R;};
+        };
+        class engineGasTurbine {
+            file = "\bmkhs_helisim\functions\engine\gasTurbine";
+            class gasTurbineStarter {R;};
+            class gasTurbineColdSection {R;};
+            class gasTurbineHotSection {R;};
+        };
+        class engineTurboShaft {
+            file = "\bmkhs_helisim\functions\engine\turboShaftEngine";
+            class turboShaftEngine {R;};
+            class turboShaftPowerTurbine {R;};
         };
         class environment {
             file = "\bmkhs_helisim\functions\environment";

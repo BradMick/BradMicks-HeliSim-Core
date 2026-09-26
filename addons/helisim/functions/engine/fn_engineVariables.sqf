@@ -36,9 +36,9 @@ private _numFields = [
    , "tgtK"
    , "unfiredDragMult"
    , "unfiredFriction"
-   , "thermalMass"
-   , "cooling"
-   , "soak"
+   , "thermalMassCoef"
+   , "coolingCoef"
+   , "stillAirFlow"
    , "idleTq"
    , "flyTq"
    , "fuelIdle"
@@ -49,8 +49,13 @@ private _numFields = [
    , "selfSustNg"
    , "startTgt"
    , "startMinTgt"
-   , "hotStartCarry"
+   , "residualHeatGain"
    , "startFuelBase"
+     //The physical ceiling: the flat speed limit, and the sloped Mach limit on temperature.
+   , "maxTgt"
+   , "maxNg"
+   , "ngLimitBase"
+   , "ngLimitSlope"
 ];
 private _arrFields  = ["pid"];
 private _textFields = ["name", "engineType", "damageRole"];
@@ -83,6 +88,9 @@ for "_i" from 1 to _numEngines do {
     _engine set ["starterType",   toLower getText (_s >> "type")];
     _engine set ["starterTorque", getNumber (_s >> "torque")];
     _engine set ["starterGates",  (getArray (_s >> "gate")) apply {_x}];
+
+    //What the ECU needs to keep metering fuel. Declaring none means always powered.
+    _engine set ["governorGates", (getArray (_e >> "Governor" >> "gate")) apply {_x}];
 
     //Author-named rating tiers, in declaration order - the first is the reference.
     private _ratings = ("true" configClasses (_e >> "PowerRatings")) apply {
@@ -196,7 +204,8 @@ _heli setVariable ["bmkhs_gtEngOilPsi",           +_zeros];
 _heli setVariable ["bmkhs_gtEngFf",               +_zeros];
 _heli setVariable ["bmkhs_gtEngOutputTq",         +_zeros];
 _heli setVariable ["bmkhs_gtEngState",            _engines apply {"OFF"}];
-//Latched from TGT on the OFF -> IDLE/FLY lever transition; 1.0 is a purged hot section.
-_heli setVariable ["bmkhs_gtEngHotFac",           _engines apply {1.0}];
+//Latched on the OFF -> IDLE/FLY transition; 1.0 is a purged hot section.
+_heli setVariable ["bmkhs_gtEngResidualHeat",     _engines apply {1.0}];
+_heli setVariable ["bmkhs_gtEngPrevLever",        _engines apply {"OFF"}];
 _heli setVariable ["bmkhs_engRatingIdx",          _engines apply {0}];
 _heli setVariable ["bmkhs_engRatingName",         _engines apply {((_x get "ratings") # 0) get "displayName"}];
