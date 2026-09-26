@@ -34,7 +34,7 @@ if (_mainRtrDamage == 1.0) then {
     //} else {
     //    _rtrRPM = _e1Np max _e2Np;
     //};
-    _rtrRPM = (_heli getVariable "bmkhs_xmsnOutputRpm") / 20900;
+    _rtrRPM = (_heli getVariable "bmkhs_xmsnOutputRpm") / (_heli getVariable "bmkhs_engDesignRPM");
 };
 _heli setVariable ["bmkhs_rtrRPM", _rtrRPM];
 

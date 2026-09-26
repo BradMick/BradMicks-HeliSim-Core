@@ -61,6 +61,9 @@ if (isAutoHoverOn _heli) then {
 //Transmission
 [_heli] call bmkhs_fnc_transmissionUpdate;
 
+//Nr, from the RPM the transmission just published
+[_heli] call bmkhs_fnc_stateRtrRPM;
+
 //Damage - stub, see fn_damageApply
 //[_heli] call bmkhs_fnc_damageApply;
 
