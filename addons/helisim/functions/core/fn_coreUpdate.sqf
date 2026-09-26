@@ -55,14 +55,14 @@ if (isAutoHoverOn _heli) then {
 //Performance
 [_heli] call bmkhs_fnc_perfData;
 
-//Systems
-[_heli] call bmkhs_fnc_systemsUpdate;
-
 //Engines
 [_heli] call bmkhs_fnc_engineController;
 
 //Transmission
 [_heli] call bmkhs_fnc_transmissionUpdate;
+
+//Systems - after the transmission, which publishes the Nr the solve feeds in
+[_heli] call bmkhs_fnc_systemsUpdate;
 
 //Damage - stub, see fn_damageApply
 //[_heli] call bmkhs_fnc_damageApply;
