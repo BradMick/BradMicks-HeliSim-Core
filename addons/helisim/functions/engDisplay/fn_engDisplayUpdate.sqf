@@ -152,11 +152,13 @@ private _drawTape = {
     _fill ctrlShow true;
 };
 
+//Glyphs scale with the row they sit in, so the text grows with the panel.
 private _setText = {
     params ["_idc", "_txt", "_x", "_y", "_w", "_h", ["_col", [0.80, 1.00, 0.80, 1.00]]];
     private _c = _display displayCtrl _idc;
     if (isNull _c) exitWith {};
     _c ctrlSetPosition [_x, _y, _w, _h];
+    _c ctrlSetFontHeight (_h * 0.80);
     _c ctrlSetText _txt;
     _c ctrlSetTextColor _col;
     _c ctrlCommit 0;
@@ -283,8 +285,9 @@ private _line = {
 
 private _ann = _display displayCtrl 5480;
 _ann ctrlSetPosition [_x0 + _pad, _yAnn, _inner, _annH];
+_ann ctrlSetFontHeight (_rowH * 0.75);
 _ann ctrlSetStructuredText parseText (
-      "<t size='0.85' font='EtelkaMonospacePro' align='left'>"
+      "<t font='EtelkaMonospacePro' align='left'>"
     + ([_warn, "#ff4040"] call _line)
     + ([_caut, "#ffc020"] call _line)
     + ([_advs, "#40ff40"] call _line)
