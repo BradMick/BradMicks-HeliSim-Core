@@ -2,16 +2,22 @@
 Function: bmkhs_fnc_coreUpdate
 
 Description:
-    Updates all of the modules core functions.
+    The per-frame tick, in order - every module Core updates for one aircraft, from the
+    frame delta through to the debug readout.
+
+    The schedule lives here rather than in each aircraft pack. It was duplicated
+    identically in every one of them, and all of it is Core work on Core state; a pack
+    calls this and keeps only what is genuinely its own - its EachFrame handler, its base
+    class, and its alive/initialised filter.
 
 Parameters:
     _heli - The helicopter to get information from [Unit].
 
 Returns:
-    ...
+    Nothing
 
 Examples:
-    ...
+    [_heli] call bmkhs_fnc_coreUpdate;
 
 Author:
     BradMick
@@ -55,6 +61,11 @@ if (isAutoHoverOn _heli) then {
 //Performance
 [_heli] call bmkhs_fnc_perfData;
 
+//Systems. Ahead of the engines so the engine reads THIS frame's solve rather than last
+//frame's - bmkhs_pneuAvail is init-only today, so this changes nothing now, but the
+//governor's electrical gate makes it live.
+[_heli] call bmkhs_fnc_systemsUpdate;
+
 //Engines
 [_heli] call bmkhs_fnc_engineController;
 
@@ -63,6 +74,17 @@ if (isAutoHoverOn _heli) then {
 
 //Damage - stub, see fn_damageApply
 //[_heli] call bmkhs_fnc_damageApply;
+
+//The flight model - rotor, fuselage, wings. The last of the force contributors, so it
+//goes in ahead of the readout below.
+[_heli] call bmkhs_fnc_coreUpdateFlightModel;
+
+//Cockpit control visualisation, which reads what the above just published.
+[_heli] call bmkhs_fnc_ctrlVisUpdate;
+
+//Restores the state that goes with a repaired component. Exits immediately unless a
+//HandleDamage event flagged one, so calling it every frame costs a variable read.
+[_heli] call bmkhs_fnc_repair;
 
 //Forces and moments readout. Runs after every contributor has published its row.
 [_heli] call bmkhs_fnc_fmDebugUpdate;
