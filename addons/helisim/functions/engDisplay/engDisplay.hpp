@@ -14,4 +14,7 @@
 //Fuel remaining, as a fraction of capacity, below which the low caution shows
 #define ED_FUEL_LOW         0.10
 
+//Drift from the position hold point, in metres, that raises the hover drift advisory
+#define ED_HOVER_DRIFT_M    14.630
+
 #endif

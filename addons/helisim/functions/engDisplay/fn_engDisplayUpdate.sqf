@@ -110,6 +110,22 @@ if (_nr > 0.01 && {_nr < ED_NR_LOW}) then { _warn pushBack "LOW RTR" };
 if (_nr > ED_NR_HIGH) then                { _warn pushBack "HIGH RTR" };
 if ((fuel _heli) < ED_FUEL_LOW) then      { _caut pushBack "FUEL LOW" };
 
+//Hold modes - the AH-64D WCA short forms, unpadded.
+if (_heli getVariable ["bmkhs_attHoldActive", false]) then {
+    _advs pushBack "ATT HOLD";
+
+    //Drifting off the hold point. The sub-mode is written lower case; the WCA compares
+    //it upper case, so its own copy never fires.
+    if ((_heli getVariable ["bmkhs_attHoldSubMode", ""]) == "pos"
+        && {!(_heli getVariable ["bmkhs_forceTrimInterupted", false])}) then {
+        private _desired = _heli getVariable ["bmkhs_attHoldDesiredPos", getPos _heli];
+        if ((_heli distance2D _desired) >= ED_HOVER_DRIFT_M) then { _advs pushBack "HOVER DRIFT" };
+    };
+};
+if (_heli getVariable ["bmkhs_altHoldActive", false]) then {
+    _advs pushBack (["BAR HOLD", "RAD HOLD"] select ((_heli getVariable ["bmkhs_altHoldSubMode", ""]) == "rad"));
+};
+
 // ── Geometry ─────────────────────────────────────────────────────────────────
 private _pad   = _W * 0.030;
 private _inner = _W - (_pad * 2);

@@ -95,7 +95,7 @@ private _collective   = _heli getVariable ["bmkhs_collectiveOutput",       0.0];
 private _pedal        = _heli getVariable ["bmkhs_pedalLeftRight",         0.0];
 
 private _attHoldActive  = _heli getVariable ["bmkhs_attHoldActive",  false];
-private _attSubMode     = _heli getVariable ["bmkhs_attHoldSubMode", "ATT"];
+private _attSubMode     = _heli getVariable ["bmkhs_attHoldSubMode", "att"];
 private _altHoldActive  = _heli getVariable ["bmkhs_altHoldActive",  false];
 private _hdgHoldActive  = _heli getVariable ["bmkhs_hdgHoldActive",  false];
 private _hdgHoldSubMode = _heli getVariable ["bmkhs_hdgHoldSubMode", ""];
@@ -191,7 +191,7 @@ CTRL(5110) ctrlSetBackgroundColor ([_bgInactive,  _bgActive]    select _altActiv
 CTRL(5110) ctrlCommit 0;
 
 // ATT-POS
-private _attPosActive = _attHoldActive && (_attSubMode == "POS");
+private _attPosActive = _attHoldActive && (_attSubMode == "pos");
 CTRL(5111) ctrlSetPosition [_x0 + _modeW,     _yMode, _modeW, _modeH];
 CTRL(5111) ctrlSetFontHeight _fontSzS;
 CTRL(5111) ctrlSetTextColor       ([_colInactive, _colActive]   select _attPosActive);
@@ -199,7 +199,7 @@ CTRL(5111) ctrlSetBackgroundColor ([_bgInactive,  _bgActive]    select _attPosAc
 CTRL(5111) ctrlCommit 0;
 
 // VEL
-private _velActive = _attHoldActive && (_attSubMode == "VEL");
+private _velActive = _attHoldActive && (_attSubMode == "vel");
 CTRL(5112) ctrlSetPosition [_x0 + _modeW * 2, _yMode, _modeW, _modeH];
 CTRL(5112) ctrlSetFontHeight _fontSzS;
 CTRL(5112) ctrlSetTextColor       ([_colInactive, _colActive]   select _velActive);
@@ -207,7 +207,7 @@ CTRL(5112) ctrlSetBackgroundColor ([_bgInactive,  _bgActive]    select _velActiv
 CTRL(5112) ctrlCommit 0;
 
 // ATT (pure attitude hold – active when ATT hold on but not POS or VEL)
-private _attActive = _attHoldActive && !(_attSubMode in ["POS","VEL"]);
+private _attActive = _attHoldActive && !(_attSubMode in ["pos","vel"]);
 CTRL(5113) ctrlSetPosition [_x0 + _modeW * 3, _yMode, _modeW, _modeH];
 CTRL(5113) ctrlSetFontHeight _fontSzS;
 CTRL(5113) ctrlSetTextColor       ([_colInactive, _colActive]   select _attActive);
