@@ -64,6 +64,18 @@ if (isAutoHoverOn _heli) then {
 //Damage - stub, see fn_damageApply
 //[_heli] call bmkhs_fnc_damageApply;
 
+//Systems
+[_heli] call bmkhs_fnc_systemsUpdate;
+
+//Flight Model
+[_heli] call bmkhs_fnc_coreUpdateFlightModel;
+
+//Control visualizer
+[_heli] call bmkhs_fnc_ctrlVisUpdate;
+
+//Repair
+[_heli] call bmkhs_fnc_repair;
+
 //Forces and moments readout. Runs after every contributor has published its row.
 [_heli] call bmkhs_fnc_fmDebugUpdate;
 
