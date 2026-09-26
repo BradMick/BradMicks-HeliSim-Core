@@ -112,32 +112,32 @@ if ((fuel _heli) < ED_FUEL_LOW) then      { _caut pushBack "FUEL LOW" };
 
 // ── Geometry ─────────────────────────────────────────────────────────────────
 private _pad   = _W * 0.030;
-private _dragH = _H * 0.020;          //grab strip, unlabelled
 private _inner = _W - (_pad * 2);
 
-//Three groups: torque (N tapes), tachs (N + 1 tapes), TGT (N tapes).
+//Three groups: torque (N tapes), tachs (N + 1 tapes), TGT (N tapes). Tapes sit tight
+//within a group; the leftover width goes between the GROUPS, evenly.
 private _nTach  = _n + 1;
 private _nTapes = (_n * 2) + _nTach;
-private _gapG   = _inner * 0.045;
-private _tapeW  = ((_inner - (_gapG * 2)) / _nTapes) * 0.68;
-private _gapT   = (((_inner - (_gapG * 2)) - (_tapeW * _nTapes)) / ((_nTapes - 1) max 1)) max 0;
+private _tapeW  = (_inner / _nTapes) * 0.80;
+private _gapT   = _tapeW * 0.16;
+private _grpTq  = (_n * _tapeW) + ((_n - 1) * _gapT);
+private _grpTch = (_nTach * _tapeW) + ((_nTach - 1) * _gapT);
+private _gapG   = ((_inner - (_grpTq * 2) - _grpTch) / 2) max 0;
 
 //Text rows take a fixed share of the panel, so everything left over is tape.
-private _lblH  = _H * 0.038;
-private _numH  = _H * 0.045;
-private _rowH  = _H * 0.050;
+private _lblH  = _H * 0.048;
+private _numH  = _H * 0.056;
+private _rowH  = _H * 0.062;
 
-//One line per active category, so an aircraft with nothing annunciating gives the
-//whole block back to the tapes.
-private _annLines = 0;
-{ if (_x isNotEqualTo []) then { _annLines = _annLines + 1 } } forEach [_warn, _caut, _advs];
+//Always three rows - the block stays put whether or not anything is annunciating.
+private _annLines = 3;
 private _annH  = _rowH * _annLines;
 
-private _yLbl  = _y0 + _dragH + (_H * 0.010);
+private _yLbl  = _y0 + (_H * 0.010);
 private _yEng  = _yLbl + _lblH;
 private _yTape = _yEng + _lblH;
 //Two label rows at the top (group + engine number), one more above the digital rows.
-private _tapeH = _H - (_dragH + (_H * 0.010) + (_lblH * 3) + _numH + (_rowH * 3) + _annH + (_H * 0.030));
+private _tapeH = _H - ((_H * 0.010) + (_lblH * 3) + _numH + (_rowH * 3) + _annH + (_H * 0.030));
 if (_tapeH < 0.01) then { _tapeH = _H * 0.30 };
 private _yNum  = _yTape + _tapeH;
 private _yRows = _yNum + _numH + (_H * 0.010) + _lblH;
@@ -145,8 +145,8 @@ private _yAnn  = _yRows + (_rowH * 3) + (_H * 0.008);
 
 //Left edge of each group, walked across the panel.
 private _xTq   = _x0 + _pad;
-private _xTach = _xTq + (_n * _tapeW) + ((_n - 1) * _gapT) + _gapG;
-private _xTgt  = _xTach + (_nTach * _tapeW) + ((_nTach - 1) * _gapT) + _gapG;
+private _xTach = _xTq + _grpTq + _gapG;
+private _xTgt  = _xTach + _grpTch + _gapG;
 
 private _tapeX = { params ["_base", "_i"]; _base + (_i * (_tapeW + _gapT)) };
 
@@ -189,12 +189,14 @@ private _drawTape = {
 };
 
 //Glyphs scale with the row they sit in, so the text grows with the panel.
+//_over widens the box either side without moving its centre, so a centred numeric
+//wider than its tape is not clipped.
 private _setText = {
-    params ["_idc", "_txt", "_x", "_y", "_w", "_h", ["_col", [0.80, 1.00, 0.80, 1.00]]];
+    params ["_idc", "_txt", "_x", "_y", "_w", "_h", ["_col", [0.80, 1.00, 0.80, 1.00]], ["_over", 0.0]];
     private _c = _display displayCtrl _idc;
     if (isNull _c) exitWith {};
-    _c ctrlSetPosition [_x, _y, _w, _h];
-    _c ctrlSetFontHeight (_h * 0.80);
+    _c ctrlSetPosition [_x - _over, _y, _w + (_over * 2), _h];
+    _c ctrlSetFontHeight (_h * 0.82);
     _c ctrlSetText _txt;
     _c ctrlSetTextColor _col;
     _c ctrlCommit 0;
@@ -217,14 +219,15 @@ for "_i" from 0 to (ED_MAX_ENG - 1) do {
                 case (_tqV >= 1.29): { [1.00, 0.35, 0.35, 1.00] };
                 case (_tqV >= 1.00): { [1.00, 0.85, 0.30, 1.00] };
                 default               { [0.80, 1.00, 0.80, 1.00] };
-            }] call _setText;
+            }, _gapT * 0.5] call _setText;
         [5400 + _i, str (_i + 1), _xT, _yEng, _tapeW, _lblH] call _setText;
 
         //Np tape - engine 0 left of Nr, the rest to its right, so Nr stays centred.
         private _slot = [_i, _i + 1] select (_i >= (_nTach / 2) - 0.5);
         private _xN = [_xTach, _slot] call _tapeX;
         [5340 + _i, 5350 + _i, _xN, _npV, _npFs, 1.05, _npOvsp, 5490 + _i, 5500 + _i] call _drawTape;
-        [5360 + _i, (_npV * 100) toFixed 0, _xN, _yNum, _tapeW, _numH] call _setText;
+        [5360 + _i, (_npV * 100) toFixed 0, _xN, _yNum, _tapeW, _numH,
+            [0.80, 1.00, 0.80, 1.00], _gapT * 0.5] call _setText;
         [5470 + _i, str (_i + 1), _xN, _yEng, _tapeW, _lblH] call _setText;
 
         private _xG = [_xTgt, _i] call _tapeX;
@@ -234,7 +237,7 @@ for "_i" from 0 to (ED_MAX_ENG - 1) do {
                 case (_tgV >= _tgtSe): { [1.00, 0.35, 0.35, 1.00] };
                 case (_tgV >= _tgtDe): { [1.00, 0.85, 0.30, 1.00] };
                 default                 { [0.80, 1.00, 0.80, 1.00] };
-            }] call _setText;
+            }, _gapT * 0.5] call _setText;
         [5540 + _i, str (_i + 1), _xG, _yEng, _tapeW, _lblH] call _setText;
     } else {
         [5310 + _i, 5320 + _i, 5330 + _i, 5340 + _i, 5350 + _i, 5360 + _i, 5370 + _i,
@@ -248,7 +251,8 @@ for "_i" from 0 to (ED_MAX_ENG - 1) do {
 private _nrSlot = floor (_nTach / 2);
 private _xNr    = [_xTach, _nrSlot] call _tapeX;
 [5304, 5305, _xNr, _nr, _npFs, ED_NR_HIGH, _npOvsp, 5530, 5531] call _drawTape;
-[5306, (_nr * 100) toFixed 0, _xNr, _yNum, _tapeW, _numH] call _setText;
+[5306, (_nr * 100) toFixed 0, _xNr, _yNum, _tapeW, _numH,
+    [0.80, 1.00, 0.80, 1.00], _gapT * 0.5] call _setText;
 [5309, "R", _xNr, _yEng, _tapeW, _lblH] call _setText;
 
 // ── Group labels, centred on the tapes they name ─────────────────────────────
@@ -286,22 +290,18 @@ for "_i" from 0 to (_n - 1) do {
 private _line = {
     params ["_list", "_col"];
     if (_list isEqualTo []) exitWith { "" };
-    "<t color='" + _col + "'>" + (_list joinString "   ") + "</t><br/>"
+    "<t color='" + _col + "'>" + (_list joinString "  ") + "</t><br/>"
 };
 
 private _ann = _display displayCtrl 5480;
-if (_annLines == 0) then {
-    _ann ctrlShow false;
-} else {
-    _ann ctrlSetPosition [_x0 + _pad, _yAnn, _inner, _annH];
-    _ann ctrlSetFontHeight (_rowH * 0.70);
-    _ann ctrlSetStructuredText parseText (
-          "<t font='EtelkaMonospacePro' align='left'>"
-        + ([_warn, "#ff4040"] call _line)
-        + ([_caut, "#ffc020"] call _line)
-        + ([_advs, "#40ff40"] call _line)
-        + "</t>"
-    );
-    _ann ctrlCommit 0;
-    _ann ctrlShow true;
-};
+_ann ctrlSetPosition [_x0 + _pad, _yAnn, _inner, _annH];
+_ann ctrlSetFontHeight (_rowH * 0.62);
+_ann ctrlSetStructuredText parseText (
+      "<t font='EtelkaMonospacePro' align='left'>"
+    + ([_warn, "#ff4040"] call _line)
+    + ([_caut, "#ffc020"] call _line)
+    + ([_advs, "#40ff40"] call _line)
+    + "</t>"
+);
+_ann ctrlCommit 0;
+_ann ctrlShow true;

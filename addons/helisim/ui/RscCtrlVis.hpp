@@ -14,7 +14,7 @@ class RscTitles
     {
     idd          = 5100;
     movingEnable = 1;       // Non-blocking: player retains game/vehicle inputs while display is open
-    sizeEnable   = 1;       // Resizable in the Arma layout editor
+    sizeEnable   = 0;       // Move only - size is declared in config, not resized in game
     duration     = 99999;
     fadein       = 0;
     fadeout      = 0;
@@ -34,8 +34,8 @@ class RscTitles
             // (CfgUIGrids) can save/restore it.  Keys: IGUI_grid_bmkhs_ctrlvis_X/Y/W/H
             x = "(profileNamespace getVariable ['IGUI_grid_bmkhs_ctrlvis_X', safeZoneX + safeZoneW * 0.780])";
             y = "(profileNamespace getVariable ['IGUI_grid_bmkhs_ctrlvis_Y', safeZoneY + safeZoneH * 0.500])";
-            w = "(profileNamespace getVariable ['IGUI_grid_bmkhs_ctrlvis_W', safeZoneH * 0.160])";
-            h = "(profileNamespace getVariable ['IGUI_grid_bmkhs_ctrlvis_H', safeZoneH * 0.240])";
+            w = "safeZoneH * 0.160";
+            h = "safeZoneH * 0.240";
         };
 
         // ── Drag / title bar ────────────────────────────────────────────────
@@ -334,8 +334,8 @@ class CfgUIGrids
                         {
                             "safeZoneX + safeZoneW * 0.780",
                             "safeZoneY + safeZoneH * 0.120",
-                            "safeZoneH * 0.480",
-                            "safeZoneH * 0.640"
+                            "safeZoneH * 0.256",
+                            "safeZoneH * 0.320"
                         },
                         "safeZoneH * 0.005",
                         "safeZoneH * 0.005"
@@ -353,8 +353,9 @@ class CfgUIGrids
                 // preview is the image the layout editor renders as the draggable element.
                 // Without this the widget is invisible on the canvas and cannot be interacted with.
                 preview         = "\bmkhs_helisim\data\ui\IGUI_ctrlvis_preview.paa";
-                saveToProfile[] = {0, 1, 2, 3};
-                canResize       = 1;
+                // Move only - size stays in config.
+                saveToProfile[] = {0, 1};
+                canResize       = 0;
             };
             class grid_bmkhs_fmdebug
             {
@@ -369,8 +370,9 @@ class CfgUIGrids
                 displayName     = "HeliSim: Engine Display";
                 description     = "Torque, Np, Nr, TGT, Ng, oil pressure and the active power rating";
                 preview         = "\bmkhs_helisim\data\ui\IGUI_ctrlvis_preview.paa";
-                saveToProfile[] = {0, 1, 2, 3};
-                canResize       = 1;
+                // Move only - size stays in config.
+                saveToProfile[] = {0, 1};
+                canResize       = 0;
             };
         };
     };

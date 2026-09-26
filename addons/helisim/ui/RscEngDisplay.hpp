@@ -46,7 +46,7 @@ class bmkhs_engdisplay
 {
     idd          = 5300;
     movingEnable = 1;
-    sizeEnable   = 1;
+    sizeEnable   = 0;       //Move only - size is declared in config, not resized in game
     duration     = 99999;
     fadein       = 0;
     fadeout      = 0;
@@ -61,25 +61,13 @@ class bmkhs_engdisplay
             colorBackground[] = {0.0, 0.0, 0.0, 0.75};
             colorText[]       = {0, 0, 0, 0};
             text = "";
+            //Panel size, declared here only - the grid saves X/Y. 2.4 wide x 3 tall.
+            //Both coefficients are in safeZoneH units and were set from measuring the
+            //render, not derived - X and Y do not share a scale.
             x = "(profileNamespace getVariable ['IGUI_grid_bmkhs_engdisplay_X', safeZoneX + safeZoneW * 0.780])";
             y = "(profileNamespace getVariable ['IGUI_grid_bmkhs_engdisplay_Y', safeZoneY + safeZoneH * 0.120])";
-            w = "(profileNamespace getVariable ['IGUI_grid_bmkhs_engdisplay_W', safeZoneH * 0.480])";
-            h = "(profileNamespace getVariable ['IGUI_grid_bmkhs_engdisplay_H', safeZoneH * 0.640])";
-        };
-
-        class BMKHS_EngDisplay_DragBar : RscText
-        {
-            idc  = 5302;
-            colorBackground[] = {0.05, 0.20, 0.05, 0.90};
-            colorText[]       = {0.70, 1.00, 0.70, 1.00};
-            text    = "";
-            font    = "PuristaMedium";
-            sizeEx  = 0.028;
-            style   = 2;
-            x = "(profileNamespace getVariable ['IGUI_grid_bmkhs_engdisplay_X', safeZoneX + safeZoneW * 0.780])";
-            y = "(profileNamespace getVariable ['IGUI_grid_bmkhs_engdisplay_Y', safeZoneY + safeZoneH * 0.120])";
-            w = "(profileNamespace getVariable ['IGUI_grid_bmkhs_engdisplay_W', safeZoneH * 0.480])";
-            h = "safeZoneH * 0.030";
+            w = "safeZoneH * 0.232";
+            h = "safeZoneH * 0.400";
         };
 
         //Every control below is positioned per frame by bmkhs_fnc_engDisplayUpdate, so
