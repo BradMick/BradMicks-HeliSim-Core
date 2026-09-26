@@ -73,6 +73,9 @@ if (isAutoHoverOn _heli) then {
 //Control visualizer
 [_heli] call bmkhs_fnc_ctrlVisUpdate;
 
+//Engine display
+[_heli] call bmkhs_fnc_engDisplayUpdate;
+
 //Repair
 [_heli] call bmkhs_fnc_repair;
 
