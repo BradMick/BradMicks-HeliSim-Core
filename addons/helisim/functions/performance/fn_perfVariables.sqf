@@ -18,8 +18,6 @@ Author:
 ---------------------------------------------------------------------------- */
 params ["_heli"];
 
-_heli setVariable ["bmkhs_PA",            0.0];
-_heli setVariable ["bmkhs_FAT",           0.0];
 _heli setVariable ["bmkhs_GWT",           0.0];
 
 _heli setVariable ["bmkhs_maxTQ_CONT",    0.0];

@@ -44,39 +44,31 @@ if (count _bgPos < 4) exitWith {};
 _bgPos params ["_x0", "_y0", "_W", "_H"];
 if (_W < 0.001) exitWith {};
 
-//The new model publishes gt* while it runs beside the old one; after the Phase 3b
-//rename these are simply the real names and the fallback is what reads.
-private _fetch = {
-    params ["_gt", "_old", "_default"];
-    private _v = _heli getVariable [_gt, nil];
-    if (isNil "_v") then { _v = _heli getVariable [_old, _default] };
-    _v
-};
+//The new model's output. It publishes gt* until the Phase 3b rename drops the prefix.
+private _ng  = _heli getVariable "bmkhs_gtEngPctNg";
+private _np  = _heli getVariable "bmkhs_gtEngPctNp";
+private _tq  = _heli getVariable "bmkhs_gtEngPctTq";
+private _tgt = _heli getVariable "bmkhs_gtEngTgt";
+private _oil = _heli getVariable "bmkhs_gtEngOilPsi";
+private _rtg = _heli getVariable "bmkhs_engRatingName";
 
-private _ng  = ["bmkhs_gtEngPctNg",  "bmkhs_engPctNG",  []] call _fetch;
-private _np  = ["bmkhs_gtEngPctNp",  "bmkhs_engPctNP",  []] call _fetch;
-private _tq  = ["bmkhs_gtEngPctTq",  "bmkhs_engPctTQ",  []] call _fetch;
-private _tgt = ["bmkhs_gtEngTgt",    "bmkhs_engTGT",    []] call _fetch;
-private _oil = ["bmkhs_gtEngOilPsi", "bmkhs_engOilPSI", []] call _fetch;
-private _rtg = _heli getVariable ["bmkhs_engRatingName", []];
-
-private _n = _heli getVariable ["bmkhs_numEngines", count _tq];
+private _n = _heli getVariable "bmkhs_numEngines";
 _n = (_n min ED_MAX_ENG) max 1;
 
-private _nr = _heli getVariable ["bmkhs_rtrRPM", 0.0];
+private _nr = _heli getVariable "bmkhs_rtrRPM";
 
-//Scale ends and band boundaries. Phase 2 moves these onto the declared PowerRatings;
-//until then they come from the config the old model already reads.
-private _tgtDe  = _heli getVariable ["bmkhs_engMaxTGT_DE", 867];
-private _tgtSe  = _heli getVariable ["bmkhs_engMaxTGT_SE", 896];
-private _npOvsp = _heli getVariable ["bmkhs_engOvrspdNP",  1.196];
-private _cfg    = configOf _heli >> "BMKHS_HeliSim";
-private _tqMax  = getNumber (_cfg >> "engMaxTQ");
-if (_tqMax <= 0) then { _tqMax = 1.5 };
+//Band boundaries from the declared ratings - first tier ends green, last ends amber.
+private _ratings = ((_heli getVariable "bmkhs_engines") # 0) get "ratings";
+private _rBase   = _ratings # 0;
+private _rTop    = _ratings # ((count _ratings) - 1);
+
+private _tgtAmb = _rBase get "maxTgt";
+private _tgtRed = _rTop  get "maxTgt";
+private _npOvsp = _heli getVariable "bmkhs_engOvrspdNP";
 
 //Full scale sits above the top limit so the red band has somewhere to be drawn.
-private _tqFs  = _tqMax;
-private _tgtFs = _tgtSe * 1.08;
+private _tqFs  = getNumber ((configOf _heli >> "BMKHS_HeliSim") >> "engMaxTQ");
+private _tgtFs = _tgtRed * 1.08;
 private _npFs  = _npOvsp * 1.05;
 
 // ── Annunciators - gathered before the layout, which sizes their block ───────
@@ -84,8 +76,8 @@ private _warn = [];
 private _caut = [];
 private _advs = [];
 
-private _state = _heli getVariable ["bmkhs_engState", []];
-private _ovsp  = _heli getVariable ["bmkhs_engineOverspeed", []];
+private _state = _heli getVariable "bmkhs_gtEngState";
+private _ovsp  = _heli getVariable "bmkhs_engineOverspeed";
 
 for "_i" from 0 to (_n - 1) do {
     private _e  = str (_i + 1);
@@ -95,7 +87,7 @@ for "_i" from 0 to (_n - 1) do {
         _warn pushBack ("ENG" + _e + " OUT");
     };
     if ([_ovsp, _i, false] call BIS_fnc_param) then { _warn pushBack ("ENG" + _e + " OVSP") };
-    if (([_tgt, _i, 0.0] call BIS_fnc_param) > _tgtSe) then { _warn pushBack ("ENG" + _e + " TGT") };
+    if (([_tgt, _i, 0.0] call BIS_fnc_param) > _tgtRed) then { _warn pushBack ("ENG" + _e + " TGT") };
 
     if (([_heli, "engines", _i] call bmkhs_fnc_damageGet) > SYS_ENG_DMG_THRESH) then {
         _caut pushBack ("ENG" + _e + " CHIPS");
@@ -247,11 +239,11 @@ for "_i" from 0 to (ED_MAX_ENG - 1) do {
         [5470 + _i, str (_i + 1), _xN, _yEng, _tapeW, _lblH] call _setText;
 
         private _xG = [_xTgt, _i] call _tapeX;
-        [5370 + _i, 5380 + _i, _xG, _tgV, _tgtFs, _tgtDe, _tgtSe, 5510 + _i, 5520 + _i] call _drawTape;
+        [5370 + _i, 5380 + _i, _xG, _tgV, _tgtFs, _tgtAmb, _tgtRed, 5510 + _i, 5520 + _i] call _drawTape;
         [5390 + _i, _tgV toFixed 0, _xG, _yNum, _tapeW, _numH,
             switch (true) do {
-                case (_tgV >= _tgtSe): { [1.00, 0.35, 0.35, 1.00] };
-                case (_tgV >= _tgtDe): { [1.00, 0.85, 0.30, 1.00] };
+                case (_tgV >= _tgtRed): { [1.00, 0.35, 0.35, 1.00] };
+                case (_tgV >= _tgtAmb): { [1.00, 0.85, 0.30, 1.00] };
                 default                 { [0.80, 1.00, 0.80, 1.00] };
             }, _gapT * 0.5] call _setText;
         [5540 + _i, str (_i + 1), _xG, _yEng, _tapeW, _lblH] call _setText;

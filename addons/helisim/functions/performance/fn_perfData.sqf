@@ -167,8 +167,8 @@ _heli setVariable ["bmkhs_TAS_vsse",   _TASTable # 2];
 
 _heli setVariable ["bmkhs_TAS_rngTAS", _TASTable # 3];
 _heli setVariable ["bmkhs_TAS_rngTQ",  _TASTable # 4];
-_heli setVariable ["bmkhs_TAS_rngFF",  ([getArray (_config >> "engFFTable"), _TASTable # 4] call bmkhs_fnc_mathLinearInterp select 1) * 2 * 7936.64];
+_heli setVariable ["bmkhs_TAS_rngFF",  ([getArray (_config >> "engFFTable"), _TASTable # 4] call bmkhs_fnc_mathLinearInterp select 1) * (_heli getVariable "bmkhs_numEngines") * 7936.64];
 
 _heli setVariable ["bmkhs_TAS_endTAS", _TASTable # 5];
 _heli setVariable ["bmkhs_TAS_endTQ",  _TASTable # 6];
-_heli setVariable ["bmkhs_TAS_endFF",  ([getArray (_config >> "engFFTable"), _TASTable # 6] call bmkhs_fnc_mathLinearInterp select 1) * 2 * 7936.64];
+_heli setVariable ["bmkhs_TAS_endFF",  ([getArray (_config >> "engFFTable"), _TASTable # 6] call bmkhs_fnc_mathLinearInterp select 1) * (_heli getVariable "bmkhs_numEngines") * 7936.64];

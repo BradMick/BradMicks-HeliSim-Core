@@ -25,7 +25,7 @@ bmkhs_movingAverageSize = 10;
 //Systems gate - all or nothing
 _heli setVariable ["bmkhs_useSystems",          getNumber (_config >> "useSystems")          > 0];
 
-//Damage map and airfoils first - everything downstream resolves names against them.
+[_heli] call bmkhs_fnc_environmentVariables;
 [_heli, _config] call bmkhs_fnc_damageVariables;
 [_heli, _config] call bmkhs_fnc_airfoilVariables;
 [_heli, _config] call bmkhs_fnc_stateVariables;

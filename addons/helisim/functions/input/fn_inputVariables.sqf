@@ -47,10 +47,7 @@ _heli setVariable ["bmkhs_deltaTime_avg",       [bmkhs_movingAverageSize] call b
 _heli setVariable ["bmkhs_gndSpeed",            0.0];
 _heli setVariable ["bmkhs_vel2D",               0.0];
 _heli setVariable ["bmkhs_vel3D",               0.0];
-_heli setVariable ["bmkhs_velWindWorldSpace",   [0.0,0.0,0.0]];
 _heli setVariable ["bmkhs_velWindModelSpace",   [0.0,0.0,0.0]];
-_heli setVariable ["bmkhs_windDirFrom",         0];
-_heli setVariable ["bmkhs_windSpeedKts",        0];
 _heli setVariable ["bmkhs_velModelSpace",       [0.0,0.0,0.0]];
 _heli setVariable ["bmkhs_velModelSpaceNoWind", [0.0,0.0,0.0]];
 _heli setVariable ["bmkhs_velModelSpaceX_avg",  [bmkhs_movingAverageSize] call bmkhs_fnc_smoothAverageInit];
