@@ -334,8 +334,8 @@ class CfgUIGrids
                         {
                             "safeZoneX + safeZoneW * 0.780",
                             "safeZoneY + safeZoneH * 0.120",
-                            "safeZoneH * 0.240",
-                            "safeZoneH * 0.400"
+                            "safeZoneH * 0.480",
+                            "safeZoneH * 0.640"
                         },
                         "safeZoneH * 0.005",
                         "safeZoneH * 0.005"

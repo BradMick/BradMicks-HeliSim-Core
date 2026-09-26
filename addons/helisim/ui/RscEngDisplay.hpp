@@ -63,8 +63,8 @@ class bmkhs_engdisplay
             text = "";
             x = "(profileNamespace getVariable ['IGUI_grid_bmkhs_engdisplay_X', safeZoneX + safeZoneW * 0.780])";
             y = "(profileNamespace getVariable ['IGUI_grid_bmkhs_engdisplay_Y', safeZoneY + safeZoneH * 0.120])";
-            w = "(profileNamespace getVariable ['IGUI_grid_bmkhs_engdisplay_W', safeZoneH * 0.240])";
-            h = "(profileNamespace getVariable ['IGUI_grid_bmkhs_engdisplay_H', safeZoneH * 0.400])";
+            w = "(profileNamespace getVariable ['IGUI_grid_bmkhs_engdisplay_W', safeZoneH * 0.480])";
+            h = "(profileNamespace getVariable ['IGUI_grid_bmkhs_engdisplay_H', safeZoneH * 0.640])";
         };
 
         class BMKHS_EngDisplay_DragBar : RscText
@@ -78,7 +78,7 @@ class bmkhs_engdisplay
             style   = 2;
             x = "(profileNamespace getVariable ['IGUI_grid_bmkhs_engdisplay_X', safeZoneX + safeZoneW * 0.780])";
             y = "(profileNamespace getVariable ['IGUI_grid_bmkhs_engdisplay_Y', safeZoneY + safeZoneH * 0.120])";
-            w = "(profileNamespace getVariable ['IGUI_grid_bmkhs_engdisplay_W', safeZoneH * 0.240])";
+            w = "(profileNamespace getVariable ['IGUI_grid_bmkhs_engdisplay_W', safeZoneH * 0.480])";
             h = "safeZoneH * 0.030";
         };
 

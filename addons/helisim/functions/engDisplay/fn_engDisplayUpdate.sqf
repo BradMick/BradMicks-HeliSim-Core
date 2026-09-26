@@ -79,6 +79,37 @@ private _tqFs  = _tqMax;
 private _tgtFs = _tgtSe * 1.08;
 private _npFs  = _npOvsp * 1.05;
 
+// ── Annunciators - gathered before the layout, which sizes their block ───────
+private _warn = [];
+private _caut = [];
+private _advs = [];
+
+private _state = _heli getVariable ["bmkhs_engState", []];
+private _ovsp  = _heli getVariable ["bmkhs_engineOverspeed", []];
+
+for "_i" from 0 to (_n - 1) do {
+    private _e  = str (_i + 1);
+    private _st = [_state, _i, "OFF"] call BIS_fnc_param;
+
+    if (([_ng, _i, 0.0] call BIS_fnc_param) < ED_ENG_OUT_NG && {_st == "ON"}) then {
+        _warn pushBack ("ENG" + _e + " OUT");
+    };
+    if ([_ovsp, _i, false] call BIS_fnc_param) then { _warn pushBack ("ENG" + _e + " OVSP") };
+    if (([_tgt, _i, 0.0] call BIS_fnc_param) > _tgtSe) then { _warn pushBack ("ENG" + _e + " TGT") };
+
+    if (([_heli, "engines", _i] call bmkhs_fnc_damageGet) > SYS_ENG_DMG_THRESH) then {
+        _caut pushBack ("ENG" + _e + " CHIPS");
+    };
+    if (_st == "STARTING") then { _advs pushBack ("ENG" + _e + " START") };
+    if ((_heli getVariable [format ["bmkhs_eng%1StartSwVal", _i + 1], 0]) < 0) then {
+        _advs pushBack ("ENG " + _e + " ORIDE");
+    };
+};
+
+if (_nr > 0.01 && {_nr < ED_NR_LOW}) then { _warn pushBack "LOW RTR" };
+if (_nr > ED_NR_HIGH) then                { _warn pushBack "HIGH RTR" };
+if ((fuel _heli) < ED_FUEL_LOW) then      { _caut pushBack "FUEL LOW" };
+
 // ── Geometry ─────────────────────────────────────────────────────────────────
 private _pad   = _W * 0.030;
 private _dragH = _H * 0.020;          //grab strip, unlabelled
@@ -92,10 +123,15 @@ private _tapeW  = ((_inner - (_gapG * 2)) / _nTapes) * 0.68;
 private _gapT   = (((_inner - (_gapG * 2)) - (_tapeW * _nTapes)) / ((_nTapes - 1) max 1)) max 0;
 
 //Text rows take a fixed share of the panel, so everything left over is tape.
-private _lblH  = _H * 0.040;
-private _numH  = _H * 0.042;
-private _rowH  = _H * 0.040;
-private _annH  = _H * 0.110;
+private _lblH  = _H * 0.038;
+private _numH  = _H * 0.045;
+private _rowH  = _H * 0.050;
+
+//One line per active category, so an aircraft with nothing annunciating gives the
+//whole block back to the tapes.
+private _annLines = 0;
+{ if (_x isNotEqualTo []) then { _annLines = _annLines + 1 } } forEach [_warn, _caut, _advs];
+private _annH  = _rowH * _annLines;
 
 private _yLbl  = _y0 + _dragH + (_H * 0.010);
 private _yEng  = _yLbl + _lblH;
@@ -247,36 +283,6 @@ for "_i" from 0 to (_n - 1) do {
 };
 
 // ── Annunciators ─────────────────────────────────────────────────────────────
-private _warn = [];
-private _caut = [];
-private _advs = [];
-
-private _state = _heli getVariable ["bmkhs_engState", []];
-private _ovsp  = _heli getVariable ["bmkhs_engineOverspeed", []];
-
-for "_i" from 0 to (_n - 1) do {
-    private _e  = str (_i + 1);
-    private _st = [_state, _i, "OFF"] call BIS_fnc_param;
-
-    if (([_ng, _i, 0.0] call BIS_fnc_param) < ED_ENG_OUT_NG && {_st == "ON"}) then {
-        _warn pushBack ("ENG" + _e + " OUT");
-    };
-    if ([_ovsp, _i, false] call BIS_fnc_param) then { _warn pushBack ("ENG" + _e + " OVSP") };
-    if (([_tgt, _i, 0.0] call BIS_fnc_param) > _tgtSe) then { _warn pushBack ("ENG" + _e + " TGT") };
-
-    if (([_heli, "engines", _i] call bmkhs_fnc_damageGet) > SYS_ENG_DMG_THRESH) then {
-        _caut pushBack ("ENG" + _e + " CHIPS");
-    };
-    if (_st == "STARTING") then { _advs pushBack ("ENG" + _e + " START") };
-    if ((_heli getVariable [format ["bmkhs_eng%1StartSwVal", _i + 1], 0]) < 0) then {
-        _advs pushBack ("ENG " + _e + " ORIDE");
-    };
-};
-
-if (_nr > 0.01 && {_nr < ED_NR_LOW}) then { _warn pushBack "LOW RTR" };
-if (_nr > ED_NR_HIGH) then                { _warn pushBack "HIGH RTR" };
-if ((fuel _heli) < ED_FUEL_LOW) then      { _caut pushBack "FUEL LOW" };
-
 private _line = {
     params ["_list", "_col"];
     if (_list isEqualTo []) exitWith { "" };
@@ -284,14 +290,18 @@ private _line = {
 };
 
 private _ann = _display displayCtrl 5480;
-_ann ctrlSetPosition [_x0 + _pad, _yAnn, _inner, _annH];
-_ann ctrlSetFontHeight (_rowH * 0.75);
-_ann ctrlSetStructuredText parseText (
-      "<t font='EtelkaMonospacePro' align='left'>"
-    + ([_warn, "#ff4040"] call _line)
-    + ([_caut, "#ffc020"] call _line)
-    + ([_advs, "#40ff40"] call _line)
-    + "</t>"
-);
-_ann ctrlCommit 0;
-_ann ctrlShow true;
+if (_annLines == 0) then {
+    _ann ctrlShow false;
+} else {
+    _ann ctrlSetPosition [_x0 + _pad, _yAnn, _inner, _annH];
+    _ann ctrlSetFontHeight (_rowH * 0.70);
+    _ann ctrlSetStructuredText parseText (
+          "<t font='EtelkaMonospacePro' align='left'>"
+        + ([_warn, "#ff4040"] call _line)
+        + ([_caut, "#ffc020"] call _line)
+        + ([_advs, "#40ff40"] call _line)
+        + "</t>"
+    );
+    _ann ctrlCommit 0;
+    _ann ctrlShow true;
+};
