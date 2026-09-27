@@ -66,14 +66,11 @@ private _cranking  = _starterTq > 0.0;
 private _spooling  = !_running && {!_cranking};
 
 ([_heli, _index, _engine, _ng, _tgt, _lever, _fat, _deltaTime] call bmkhs_fnc_engineGovernor)
-    params ["_fuelCmd", "_engineLoadShareTq"];
+    params ["_fuelCmd", "_engineLoadShareTq", "_fuelSched"];
 
-//The free turbine's share, taken back out of the spool balance - gas taken by the power
-//turbine is gas that never reaches the compressor turbine.
 private _refTq = _engine get "refTq";
-private _shaft = [0.0, (_engineLoadShareTq / _refTq) / (_engine get "ptEfficiency")] select _running;
 
-([_engine, _ng, _fuelCmd, _starterTq, _shaft, _dens, _running, _spooling, _deltaTime]
+([_engine, _ng, _fuelCmd, _starterTq, _dens, _running, _spooling, _deltaTime]
     call bmkhs_fnc_gasTurbineColdSection) params ["_ngNew", "_gasPower", "_absorbed", "_airGas"];
 
 _tgt = [_engine, _tgt, _ngNew, _fuelCmd, _residualHeat, _dens, _fat, _velY, _running, _deltaTime]
@@ -83,8 +80,8 @@ _tgt = [_engine, _tgt, _ngNew, _fuelCmd, _residualHeat, _dens, _fat, _velY, _run
 private _xmsnRpm = _heli getVariable "bmkhs_xmsnOutputRpm";
 private _nrFrac  = _xmsnRpm / ((_engine get "npFly") * (_engine get "designRpm"));
 
-([_engine, _gasPower, _absorbed, _airGas, _np, _nrFrac, _deltaTime] call bmkhs_fnc_turboShaftPowerTurbine)
-    params ["_tqOut", "_npNew", "_clutch"];
+([_engine, _gasPower, _airGas, _absorbed, _fuelSched, _np, _nrFrac, _deltaTime]
+    call bmkhs_fnc_turboShaftPowerTurbine) params ["_tqOut", "_npNew", "_clutch"];
 
 //State follows Ng, so a start that hangs never reads ON and a flameout drops out of it.
 private _state = switch (true) do {
@@ -99,13 +96,13 @@ if (bmkhs_sysDebug && {_index == 0}) then {
     if (time > _last + 0.25) then {
         _heli setVariable ["bmkhs_gtDiagLast", time];
         diag_log text format [
-            "GTDIAG t=%1 lvr=%2 sw=%3 fuel=%4 run=%5 crank=%6 spool=%7 ng=%8->%9 np=%10->%11 clutch=%12 nrFrac=%13 gas=%14 abs=%15 shaft=%16 share=%17 tq=%18 Nr=%19 tgt=%20 state=%21 dt=%22 trip=%23 rtrMdl=%24",
+            "GTDIAG t=%1 lvr=%2 sw=%3 fuel=%4 run=%5 crank=%6 spool=%7 ng=%8->%9 np=%10->%11 clutch=%12 nrFrac=%13 gas=%14 abs=%15 air=%16 share=%17 tq=%18 Nr=%19 tgt=%20 state=%21 dt=%22 trip=%23 rtrMdl=%24",
             time toFixed 2, _lever, _sw, _fuelCmd toFixed 4,
             _running, _cranking, _spooling,
             _ng toFixed 4, _ngNew toFixed 4,
             _np toFixed 4, _npNew toFixed 4, _clutch, _nrFrac toFixed 4,
             _gasPower toFixed 4, _absorbed toFixed 4,
-            _shaft toFixed 4, _engineLoadShareTq toFixed 1,
+            _airGas toFixed 4, _engineLoadShareTq toFixed 1,
             _tqOut toFixed 1,
             _xmsnRpm toFixed 0,
             _tgt toFixed 0, _state, _deltaTime toFixed 4,

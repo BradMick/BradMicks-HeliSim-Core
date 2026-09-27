@@ -40,7 +40,7 @@ private _sectionFields = [
                      , "compDragFloor", "lightOffNg", "selfSustNg", "idleNg"]]
    , ["HotSection",   ["massFlowExp", "tgtK", "thermalMassCoef", "coolingCoef", "stillAirFlow"
                      , "ramAirCoef", "maxTgt", "startTgt", "startMinTgt", "residualHeatGain"]]
-   , ["PowerTurbine", ["ptEfficiency", "ptIdleExtract", "ptInertia", "ptDrag", "ptDragFloor"]]
+   , ["PowerTurbine", ["ptEfficiency", "ptInertia", "ptDrag", "ptDragFloor"]]
    , ["Governor",     ["fuelIdle", "fuelFly", "startFuelBase", "ffwdGain"]]
 ];
 private _textFields = ["name", "engineType", "damageRole"];

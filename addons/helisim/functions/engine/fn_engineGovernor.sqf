@@ -16,8 +16,8 @@ Parameters:
     _deltaTime - Frame time [Number]
 
 Returns:
-    [_fuelCmd, _engineLoadShareTq] - commanded fuel normalised, and this engine's share of
-    rotor demand in Nm [Array]
+    [_fuelCmd, _engineLoadShareTq, _fuelSched] - commanded fuel normalised, this engine's share
+    of rotor demand in Nm, and the orifice the lever has set [Array]
 
 Author:
     BradMick
@@ -90,12 +90,11 @@ if (bmkhs_sysDebug && {_index == 0}) then {
     if (time > _last + 0.25) then {
         _heli setVariable ["bmkhs_govDiagLast", time];
         diag_log text format [
-            "GOVDIAG lvr=%1 sched=%2 idleNg=%3 tgtAuth=%4 ngAuth=%5 powered=%6 cmd=%7 rotorTq=%8 share=%9",
-            _lever, _fuelSched toFixed 4, _idleNg toFixed 4,
-            _tgtAuth toFixed 4, _ngAuth toFixed 4, _govPowered,
+            "GOVDIAG lvr=%1 sched=%2 idleNg=%3 powered=%4 cmd=%5 rotorTq=%6 share=%7",
+            _lever, _fuelSched toFixed 4, _idleNg toFixed 4, _govPowered,
             _fuelCmd toFixed 4, _rotorTq toFixed 1, _engineLoadShareTq toFixed 1
         ];
     };
 };
 
-[_fuelCmd, _engineLoadShareTq]
+[_fuelCmd, _engineLoadShareTq, _fuelSched]

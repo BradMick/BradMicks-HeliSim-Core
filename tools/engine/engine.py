@@ -3,53 +3,35 @@
 Run it:  python tools/engine/engine.py
 
 Prints the derived values, the loaded equilibrium, a cold start with its torque trace, the
-shutdown marks, motoring, both hot-start branches, and the stationary-rotor case - once with
-the power turbine's demand cap and once without, so a change to that term is a diff.
+shutdown marks, motoring, both hot-start branches, and a real rotor spun up at IDLE and FLY.
 
-    cap=False   tq = surplus                what the SQF does. All of it goes to the shaft.
-    cap=True    tq = min(shaft, surplus)     the original. Deadlocks a stationary rotor:
-                                             no Nr -> no drag -> no demand -> no torque.
-
-Nothing else differs between the two runs. If this file and the SQF ever disagree on
-BEHAVIOUR, this file is right; on VALUES, the config schema in the plan is authoritative.
+If this file and the SQF ever disagree on BEHAVIOUR, this file is right; on VALUES, the
+aircraft config is authoritative.
 """
 
 ISA_RHO = 1.225
+#GT_LEVER_TRAVEL_SEC in engine.hpp - the lever's full stroke.
+LEVER_TRAVEL_SEC = 12.0
 
 
 class Engine:
-    #The power turbine's demand cap, kept only so a change to that term is a diff rather than
-    #an argument. False is what the SQF now does: the turbine passes its surplus to the shaft
-    #and the transmission finds equilibrium. True was the original, and it deadlocks a
-    #stationary rotor - see the arma_start() driver. Per instance, never a module global.
-    cap = False
-
-    speedTerm = True
-    ptIdleExtract = 0.05
     #Np is state - the free turbine's own inertia, normalised like compressorInertia.
     ptInertia = 0.6
     #Drag on a released turbine, as ptDrag * np^2 plus a windmilling-only floor.
     ptDrag = 0.60
     ptDragFloor = 0.05
-    #The 701C suppresses torque spikes below this Np - below it the gauge reads the demanded
-    #torque, above it the power/omega spike is what the sensor sees.
-    spikeNp = 0.39
 
-    designRpm, npFly, powerKw, maxFuelFlow = 20900.0, 1.01, 1066.0, 0.12
+    designRpm, npFly, powerKw = 20900.0, 1.01, 1066.0
     compressorLoad, massFlowExp, tgtK, compressorInertia = 1.7, 1.772, 288.6, 5.0
     compDragMult, compDragFloor = 3.0, 0.10           # COASTING ONLY
     thermalMassCoef, coolingCoef, stillAirFlow = 0.30, 0.70, 0.0012
     ramAirCoef = 0.00065
     #Cold air the compressor pushes over the turbine, lit or not.
     airCoef = 0.1219
-    idleTq, flyTq, ptEfficiency = 0.055, 0.18, 0.92   # idleTq/flyTq: RIG ONLY - they
-    # derive fuelIdle/fuelFly here. The shipped config declares those directly.
+    ptEfficiency = 0.92
     idleNg = 0.679
     lightOffNg, selfSustNg = 0.15, 0.52
-    startTgt, startMinTgt = 851.0, 80.0
     residualHeatGain, startFuelBase = 0.003, 0.22
-    maxTgt, maxNg = 867.0, 1.022
-    ngLimitBase, ngLimitSlope = 1.01436, 0.0019091
     starterTorque = 0.30
 
     # plan aliases
@@ -58,16 +40,18 @@ class Engine:
     cooling = coolingCoef
     soak = stillAirFlow
 
-    def __init__(self, fat=15.0, rho=ISA_RHO, cap=False, speedTerm=True):
-        self.fat, self.rho, self.cap, self.speedTerm = fat, rho, cap, speedTerm
-        self.fuelIdle = self._detentFuel(0.679, self.idleTq)
-        self.fuelFly = self._detentFuel(0.834, self.flyTq)
+    def __init__(self, fat=15.0, rho=ISA_RHO):
+        self.fat, self.rho = fat, rho
+        #As the config declares them. fuelFly is WIDE OPEN, not a detent equilibrium.
+        self.fuelIdle = 0.784
+        self.fuelFly = 3.136
         self.refTq = (self.powerKw * 1000.0) / (self.designRpm * self.npFly * 0.10472)
         self.ng, self.tgt, self.tq = 0.0, fat, 0.0
         #Np is state, normalised - 1.0 is governed.
         self.np = 0.0
         self.locked = False
         self.hotFac = 1.0
+        self.sched = 0.0        #the orifice, as the lever has it
         self.lever, self.starting, self.override = 'OFF', False, False
 
     def _detentFuel(self, ng, tq):
@@ -82,7 +66,7 @@ class Engine:
             self.hotFac = 1.0 + self.hotStartCarry * self.tgt
         self.lever = pos
 
-    def step(self, dt, loadTq=0.0, velY=0.0, nrFrac=None):
+    def step(self, dt, velY=0.0, nrFrac=None):
         """nrFrac: rotor speed as a fraction of governed Np, for the freewheel. None means no
         drivetrain - the turbine spins alone."""
         dens = self.rho / ISA_RHO
@@ -90,7 +74,14 @@ class Engine:
         cranking = (self.starting or self.override) and self.ng < self.selfSustNg
         spooling = not lit and not cranking
 
-        floor = {'FLY': self.fuelFly, 'IDLE': self.fuelIdle, 'OFF': 0.0}[self.lever]
+        #The orifice. It travels to its detent over LEVER_TRAVEL_SEC and snaps back, as
+        #fn_engineGovernor does - the schedule builds over the push rather than stepping.
+        target = {'FLY': self.fuelFly, 'IDLE': self.fuelIdle, 'OFF': 0.0}[self.lever]
+        if target > self.sched:
+            self.sched = min(target, self.sched + (self.fuelFly / LEVER_TRAVEL_SEC) * dt)
+        else:
+            self.sched = target
+        floor = self.sched
         if self.ng < self.idleNg:
             floor *= min(1.0, self.startFuelBase
                          + (1 - self.startFuelBase) * self.ng / self.idleNg)
@@ -104,16 +95,12 @@ class Engine:
 
         #Heat is what accelerates the spool - the compressor turbine runs on combustion.
         fuelGas = fuel * dens if lit else 0.0
-        #What reaches the POWER turbine: that heat plus the cold air the compressor pushes.
-        gas = fuelGas + mflowNow * self.airCoef
-        #The air already does part of the extraction, so the spool is only charged for
-        #the remainder - which is what keeps the detents settling at their declared Ng.
-        shaft = (loadTq / self.refTq) / self.ptEfficiency if lit else 0.0
-        shaft = max(0.0, shaft - mflowNow * self.airCoef)
         drag = self.compressorLoad * (self.compDragMult if spooling else 1.0)
         absorbed = drag * self.ng**2 + (self.compDragFloor if spooling else 0.0)
+        #Heat against the compressor, and nothing else. The free turbine is FREE - rotor load
+        #reaches it and stops there, so it cannot drag the gas generator down.
         self.ng = max(0.0, min(self.ng
-                     + ((fuelGas + st - absorbed - shaft) / self.compressorInertia) * dt, 1.1))
+                     + ((fuelGas + st - absorbed) / self.compressorInertia) * dt, 1.1))
 
         mflow = max((self.ng ** self.massFlowExp) * dens, 0.02)
         fac = 1.0 + (self.hotFac - 1.0) * max(0.0, 1.0 - self.ng / self.idleNg)
@@ -122,13 +109,11 @@ class Engine:
                 else self.cooling * (self.ng + self.soak + max(0.0, velY) * self.ramAirCoef))
         self.tgt += (hot - self.tgt) * rate * dt
 
-        #The share the free turbine gets - what the compressor leaves, floored so gas moving
-        #over the turbine always turns it.
-        #The compressor turbine takes its cut from the HEAT; the cold air the compressor
-        #pushes passes straight through to the power turbine.
-        ptGas = max(0.0, fuelGas - absorbed) + mflowNow * self.airCoef
-        if fuelGas > 0.0:
-            ptGas = max(ptGas, fuelGas * self.ptIdleExtract)
+        #Less the compressor turbine's share, scheduled off the orifice. Motoring, the starter
+        #turns the compressor, so nothing is taken.
+        x = (self.sched - self.fuelIdle) / (self.fuelFly - self.fuelIdle)
+        ptShare = (1.0 - max(0.0, min(1.0, x))) if fuelGas > 0.0 else 0.0
+        ptGas = max(0.0, fuelGas + mflowNow * self.airCoef - ptShare * absorbed)
         self.tq = ptGas * self.refTq * self.ptEfficiency
 
         #The sprag clutch - it grips on SPEED, not torque, so a momentary torque dip cannot
@@ -155,12 +140,8 @@ class Engine:
 DT = 1 / 60.0
 
 
-def _load(e):
-    return e.idleTq * e.refTq * min(1.0, e.ng / e.idleNg)
-
-
-def cold_start(tgt0=15.0, secs=40, cap=False):
-    e = Engine(cap=cap); e.tgt = tgt0; e.starting = True
+def cold_start(tgt0=15.0, secs=40):
+    e = Engine(); e.tgt = tgt0; e.starting = True
     t = 0.0; tLight = tCut = None; peak = tgt0; tPeak = 0.0
     trace = []
     while t < secs:
@@ -170,7 +151,7 @@ def cold_start(tgt0=15.0, secs=40, cap=False):
             tLight = t
         if e.starting and e.ng >= e.selfSustNg and tCut is None:
             tCut = t; e.starting = False
-        e.step(DT, loadTq=_load(e))
+        e.step(DT)
         if e.tgt > peak: peak, tPeak = e.tgt, t
         t += DT
         trace.append((t, e.ng, e.tgt, e.tq / e.refTq))
@@ -178,8 +159,8 @@ def cold_start(tgt0=15.0, secs=40, cap=False):
                 tq=e.tq / e.refTq, trace=trace)
 
 
-def shutdown(secs=3700, cap=False):
-    e = Engine(cap=cap); e.ng, e.tgt, e.lever = 0.679, 465.0, 'OFF'
+def shutdown(secs=3700):
+    e = Engine(); e.ng, e.tgt, e.lever = 0.679, 465.0, 'OFF'
     t = 0.0; stop = None; marks = {}
     while t < secs:
         e.step(DT)
@@ -190,8 +171,8 @@ def shutdown(secs=3700, cap=False):
     return dict(stop=stop, marks=marks)
 
 
-def motoring(tgt0=163.0, secs=30, cap=False):
-    e = Engine(cap=cap); e.ng, e.tgt, e.lever, e.override = 0.0, tgt0, 'OFF', True
+def motoring(tgt0=163.0, secs=30):
+    e = Engine(); e.ng, e.tgt, e.lever, e.override = 0.0, tgt0, 'OFF', True
     t = 0.0; m = {}
     while t < secs:
         e.step(DT); t += DT
@@ -200,8 +181,8 @@ def motoring(tgt0=163.0, secs=30, cap=False):
     return dict(below100=m.get(100), below80=m.get(80), ng=e.ng)
 
 
-def hot_start_abort(tgt0=163.0, abortAt=700.0, ovrDelay=2.0, secs=60, cap=False):
-    e = Engine(cap=cap); e.tgt = tgt0; e.starting = True
+def hot_start_abort(tgt0=163.0, abortAt=700.0, ovrDelay=2.0, secs=60):
+    e = Engine(); e.tgt = tgt0; e.starting = True
     t = 0.0; peak = tgt0; tAb = None; t540 = None
     while t < secs:
         if e.lever == 'OFF' and e.ng > 0.02 and tAb is None:
@@ -210,7 +191,7 @@ def hot_start_abort(tgt0=163.0, abortAt=700.0, ovrDelay=2.0, secs=60, cap=False)
             tAb = t; e.lever, e.starting = 'OFF', False
         if tAb is not None and t >= tAb + ovrDelay:
             e.override = True
-        e.step(DT, loadTq=_load(e))
+        e.step(DT)
         peak = max(peak, e.tgt)
         if tAb and t540 is None and e.tgt < 540: t540 = t - tAb
         t += DT
@@ -228,28 +209,24 @@ def equilibrium():
 
 
 #Acceptance numbers from the plan, for automatic comparison rather than eyeballing.
-EXPECTED = dict(refTq=482.2, idleNg=0.6790, fuelIdle=0.844, fuelFly=1.378,
-                light=2.6, cutout=5.5, peakLo=646.0, peakHi=661.0,
-                stop=9.5, residual=163.0, below80=6.6, motorNg=0.420)
+EXPECTED = dict(light=2.6, cutout=5.5, peakLo=646.0, peakHi=661.0,
+                stop=9.5, below80=6.6, motorNg=0.420)
 
 
-def report(cap):
-    e = Engine(cap=cap)
-    label = 'WITH CAP - the original, deadlocks' if cap else 'WITHOUT CAP - as shipped'
-    print('=' * 70)
-    print('%s   (cap = %s)' % (label, cap))
+def report():
+    e = Engine()
     print('=' * 70)
     print('derived: refTq %.1f  idleNg %.4f  fuelIdle %.3f  fuelFly %.3f'
           % (e.refTq, e.idleNg, e.fuelIdle, e.fuelFly))
 
-    print('\n-- loaded equilibrium (algebraic: cap cannot affect it) --')
+    print('\n-- loaded equilibrium (algebraic) --')
     print('     %TQ     Ng    TGT   declared   err')
     for tq, ng, tgt, dec in equilibrium():
         err = '' if dec is None else '%+d' % round(tgt - dec)
         print('   %5.1f  %.3f   %4.0f   %8s  %4s'
               % (tq * 100, ng, tgt, dec if dec else '-', err))
 
-    cs = cold_start(cap=cap)
+    cs = cold_start()
     print('\n-- cold start, lever to IDLE at first Ng rise, FAT 15 --')
     print('   light-off  %.1fs        (expect %.1f)' % (cs['light'], EXPECTED['light']))
     print('   cutout     %.1fs        (expect %.1f)' % (cs['cutout'], EXPECTED['cutout']))
@@ -257,13 +234,13 @@ def report(cap):
           % (cs['peak'], cs['tPeak'], EXPECTED['peakLo'], EXPECTED['peakHi']))
     print('   settled    ng %.3f  tgt %.0fC  tq %.1f%%' % (cs['ng'], cs['tgt'], cs['tq'] * 100))
 
-    print('\n   torque through the start (what the cap changes):')
+    print('\n   torque through the start:')
     print('        t     Ng    TGT    %TQ')
     for mark in (1.0, 2.0, 2.6, 3.0, 4.0, 5.0, 5.5, 7.0, 10.0, 15.0, 20.0, 24.0, 30.0):
         row = min(cs['trace'], key=lambda r: abs(r[0] - mark))
         print('   %6.1f  %.3f   %4.0f  %5.1f' % (row[0], row[1], row[2], row[3] * 100))
 
-    sd = shutdown(cap=cap)
+    sd = shutdown()
     print('\n-- shutdown, lever OFF from stabilised idle --')
     print('   spool stops %.1fs      (expect %.1f)' % (sd['stop'], EXPECTED['stop']))
     for s in (2, 5, 9.5, 30, 300, 1200, 3600):
@@ -271,40 +248,21 @@ def report(cap):
             ng, tgt = sd['marks'][s]
             print('   %7ss  ng %.3f  tgt %.0fC' % (s, ng, tgt))
 
-    mo = motoring(cap=cap)
+    mo = motoring()
     print('\n-- motoring from the 163C residual, start sw to ORIDE --')
     print('   <100C %.1fs  <80C %.1fs (expect %.1f)  steady ng %.3f (expect %.3f)'
           % (mo['below100'], mo['below80'], EXPECTED['below80'], mo['ng'], EXPECTED['motorNg']))
 
     print('\n-- hot start --')
-    hs = cold_start(163.0, cap=cap)
+    hs = cold_start(163.0)
     print('   uncaught peak %.0fC   (over the 851 start limit: %s)'
           % (hs['peak'], 'YES' if hs['peak'] > 851 else 'NO - WRONG'))
-    ha = hot_start_abort(cap=cap)
+    ha = hot_start_abort()
     print('   aborted at %.1fs  peak %.0fC  <540 in %.1fs  final %.0fC'
           % (ha['abortAt'], ha['peak'], ha['t540'], ha['tgt']))
     print()
 
 
-def arma_start(cap=False, secs=30):
-    """The Arma case the rig could not previously show.
-
-    In Arma the load is the ROTOR's own drag via bmkhs_reqEngTorque, which is ~0 until Nr
-    turns - not the rig's Ng-ramped _load(). With the cap, torque is min(shaft, surplus), so
-    zero demand means zero output and the rotor can never start turning: the deadlock.
-    """
-    e = Engine(cap=cap); e.starting = True
-    t = 0.0; first = None
-    while t < secs:
-        if e.lever == 'OFF' and e.ng > 0.02:
-            e.setLever('IDLE')
-        if e.starting and e.ng >= e.selfSustNg:
-            e.starting = False
-        e.step(DT, loadTq=0.0)          # stationary rotor: no drag, no demand
-        t += DT
-        if first is None and e.tq > 0.0:
-            first = t
-    return dict(firstTq=first, ng=e.ng, tgt=e.tgt, tq=e.tq / e.refTq)
 
 
 #xmsnOutputRpm is the Np SHAFT speed, not Nr. Nr = that / gearRatio, so 20900 -> 289 rpm.
@@ -417,7 +375,7 @@ def rotor_start(secs=60, lever='IDLE', coll=0.0, jExtra=0.0, shutdownAt=None):
 
         nrFrac = rpm / wDesign
         rotorTq = main.step(rpm / main.gearRatio, coll, DT)
-        e.step(DT, loadTq=rotorTq, velY=0.0, nrFrac=nrFrac)
+        e.step(DT, nrFrac=nrFrac)
 
         #The transmission. Locked, the turbine's torque reaches the rotor and the pair share
         #one inertia; free, the rotor coasts on its own drag alone and the engine is gone.
@@ -470,20 +428,5 @@ def rotor_report():
 
 
 if __name__ == '__main__':
-    for flag in (True, False):
-        report(flag)
+    report()
     rotor_report()
-
-    print('=' * 70)
-    print('THE ARMA CASE - stationary rotor, loadTq = 0 (reqEngTorque at Nr = 0)')
-    print('=' * 70)
-    for flag in (True, False):
-        r = arma_start(cap=flag)
-        print('   cap=%-5s  first torque at %-6s  settled ng %.3f  tgt %.0fC  tq %.1f%%'
-              % (flag,
-                 ('%.1fs' % r['firstTq']) if r['firstTq'] else 'NEVER',
-                 r['ng'], r['tgt'], r['tq'] * 100))
-    print()
-    print('   With the cap and a stationary rotor the engine produces NO torque, ever,')
-    print('   so Nr never rises, so the rotor never produces drag. That is the deadlock')
-    print('   seen in the aircraft as torque = -0.')

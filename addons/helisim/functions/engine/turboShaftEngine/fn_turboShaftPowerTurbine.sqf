@@ -2,9 +2,8 @@
 Function: bmkhs_fnc_turboShaftPowerTurbine
 
 Description:
-    The free turbine. It takes a share of the gas generator's output - what the
-    compressor leaves, floored so gas moving over the turbine always turns it -
-    and that torque accelerates its own speed. Np is state, not the rotor's.
+    The free turbine. Everything the hot section puts out blows over it, and that
+    torque accelerates its own speed. Np is state, not the rotor's.
 
     The freewheel grips on speed alone: the turbine drives the rotor and is never
     driven by it, so a shutdown and an autorotation decouple through the same
@@ -13,8 +12,9 @@ Description:
 Parameters:
     _engine    - That engine's config [HashMap]
     _fuelGas   - Heat released by combustion [Number]
-    _absorbed  - What the compressor took [Number]
     _airGas    - Cold air the compressor is pushing through [Number]
+    _absorbed  - What the compressor takes to turn [Number]
+    _fuelSched - The orifice, as the lever has it [Number]
     _np        - Np at the top of the frame, normalised [Number]
     _nrFrac    - Rotor speed as a fraction of governed Np [Number]
     _deltaTime - Frame time [Number]
@@ -28,16 +28,15 @@ Author:
 ---------------------------------------------------------------------------- */
 #include "\bmkhs_helisim\functions\core\core.hpp"
 
-params ["_engine", "_fuelGas", "_absorbed", "_airGas", "_np", "_nrFrac", "_deltaTime"];
+params ["_engine", "_fuelGas", "_airGas", "_absorbed", "_fuelSched", "_np", "_nrFrac", "_deltaTime"];
 
 private _refTq = _engine get "refTq";
 
-//The compressor turbine takes its cut from the HEAT; the cold air the compressor pushes goes
-//straight through, which is what turns the rotor while motoring.
-private _ptGas = ((_fuelGas - _absorbed) max 0.0) + _airGas;
-if (_fuelGas > 0.0) then {
-    _ptGas = _ptGas max (_fuelGas * (_engine get "ptIdleExtract"));
-};
+//Less the compressor turbine's share, scheduled off the orifice. Motoring, the starter turns
+//the compressor, so nothing is taken.
+private _ptShare = [0.0, linearConversion [_engine get "fuelIdle", _engine get "fuelFly", _fuelSched, 1.0, 0.0, true]]
+                   select (_fuelGas > 0.0);
+private _ptGas   = (_fuelGas + _airGas - (_ptShare * _absorbed)) max 0.0;
 
 private _shaftTq = _ptGas * _refTq * (_engine get "ptEfficiency");
 
