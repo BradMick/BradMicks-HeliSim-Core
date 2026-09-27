@@ -16,7 +16,7 @@ Parameters:
     _dens      - Air density as a fraction of a standard day [Number]
     _fat       - Free air temperature, deg C [Number]
     _velY      - Forward speed, m/s [Number]
-    _lit       - Is it burning [Boolean]
+    _running   - Burning, as opposed to cranked [Boolean]
     _deltaTime - Frame time [Number]
 
 Returns:
@@ -27,7 +27,7 @@ Author:
 ---------------------------------------------------------------------------- */
 #include "\bmkhs_helisim\functions\core\core.hpp"
 
-params ["_engine", "_tgt", "_ng", "_fuelCmd", "_residualHeat", "_dens", "_fat", "_velY", "_lit", "_deltaTime"];
+params ["_engine", "_tgt", "_ng", "_fuelCmd", "_residualHeat", "_dens", "_fat", "_velY", "_running", "_deltaTime"];
 
 //The POST-step Ng: the combustor sees what the compressor is delivering now. Floored so a
 //stopped spool cannot divide by zero.
@@ -36,7 +36,7 @@ private _massFlow = ((_ng ^ (_engine get "massFlowExp")) * _dens) max 0.02;
 //Fades as Ng comes up, because the spool rising IS the hot section purging. A cold start
 //latches ~1.0 and this path is inert.
 private _currentHeat = 1.0 + ((_residualHeat - 1.0) * ((1.0 - (_ng / (_engine get "idleNg"))) max 0.0));
-private _tgtHot      = [_fat, _fat + (_currentHeat * (_engine get "tgtK") * _fuelCmd / _massFlow)] select _lit;
+private _tgtHot      = [_fat, _fat + (_currentHeat * (_engine get "tgtK") * _fuelCmd / _massFlow)] select _running;
 
 //coolingCoef is the coefficient; the bracket is the airflow available to carry the heat
 //away. Ng is the windmill, stillAirFlow is the floor with the spool stopped, then ram.

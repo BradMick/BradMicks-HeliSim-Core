@@ -45,6 +45,8 @@ private _numFields = [
    , "fuelFly"
    , "ffwdGain"
    , "ptEfficiency"
+   , "stallTqMult"
+   , "ptIdleExtract"
    , "lightOffNg"
    , "selfSustNg"
    , "startTgt"
@@ -207,5 +209,7 @@ _heli setVariable ["bmkhs_gtEngState",            _engines apply {"OFF"}];
 //Latched on the OFF -> IDLE/FLY transition; 1.0 is a purged hot section.
 _heli setVariable ["bmkhs_gtEngResidualHeat",     _engines apply {1.0}];
 _heli setVariable ["bmkhs_gtEngPrevLever",        _engines apply {"OFF"}];
+//The lever's tracked position, as a fuel schedule. Travels up, snaps down.
+_heli setVariable ["bmkhs_gtEngLeverSched",       +_zeros];
 _heli setVariable ["bmkhs_engRatingIdx",          _engines apply {0}];
 _heli setVariable ["bmkhs_engRatingName",         _engines apply {((_x get "ratings") # 0) get "displayName"}];

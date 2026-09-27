@@ -2,16 +2,8 @@
 Function: bmkhs_fnc_engineGovernor
 
 Description:
-    The ECU. Commands fuel flow; everything downstream responds to it.
-
-    The power lever sets a minimum fuel SCHEDULE and the governor trims around
-    that floor rather than replacing it - at governed speed with the collective
-    down it commands nothing, so without a floor the engine cannot light.
-
-    THE LIMITER IS PHYSICAL, NOT A RATING. Nothing clamps torque; torque is
-    where the engine tops out once fuel stops going up, and it tops out lower on
-    a hot, high day because thin air reaches the TGT limit at less fuel. The
-    named tiers are for annunciation and damage, which is a later phase.
+    The ECU. Commands fuel flow from the lever's schedule and the physical
+    limiter. The Np trim and collective feed-forward are removed pending rework.
 
 Parameters:
     _heli      - The helicopter [Object]
@@ -24,7 +16,7 @@ Parameters:
     _deltaTime - Frame time [Number]
 
 Returns:
-    [_fuelCmd, _myShare] - commanded fuel normalised, and this engine's share of
+    [_fuelCmd, _engineLoadShareTq] - commanded fuel normalised, and this engine's share of
     rotor demand in Nm [Array]
 
 Author:
@@ -36,48 +28,49 @@ params ["_heli", "_index", "_engine", "_ng", "_tgt", "_lever", "_fat", "_deltaTi
 
 private _idleNg = _engine get "idleNg";
 
-//Each detent's floor CARRIES ITS OWN TORQUE - idle and fly are loaded points. The free
-//turbine's share is taken out of the spool balance, so adding the load here double-counts
-//it and the spool settles above its declared Ng.
-private _fuelFloor = switch (_lever) do {
+//Each detent's schedule carries its own torque - idle and fly are loaded points.
+private _target = switch (_lever) do {
     case "FLY":  { _engine get "fuelFly" };
     case "IDLE": { _engine get "fuelIdle" };
     default      { 0.0 };
 };
 
+//The lever travels to fly over GT_LEVER_TRAVEL_SEC and snaps back, so the schedule builds
+//over the push rather than stepping with the detent.
+private _fuelSched = _heli getVariable "bmkhs_gtEngLeverSched" select _index;
+if (_target > _fuelSched) then {
+    _fuelSched = (_fuelSched + (((_engine get "fuelFly") / GT_LEVER_TRAVEL_SEC) * _deltaTime)) min _target;
+} else {
+    _fuelSched = _target;
+};
+[_heli, "bmkhs_gtEngLeverSched", _index, _fuelSched] call bmkhs_fnc_utilSetArrayVariable;
+
 //Below idle Ng fuel is metered, which is what makes TGT peak above idle during a start and
 //fall back as the compressor catches up. Above it this is a no-op.
+private _fuelCmd = _fuelSched;
 if (_ng < _idleNg) then {
     private _base = _engine get "startFuelBase";
-    _fuelFloor = _fuelFloor * ((_base + ((1.0 - _base) * _ng / _idleNg)) min 1.0);
+    _fuelCmd = _fuelCmd * ((_base + ((1.0 - _base) * _ng / _idleNg)) min 1.0);
 };
 
-private _fuelCmd = _fuelFloor;
-
-//reqEngTorque is indexed by ROTOR, so it is summed. Shared by capacity.
+//reqEngTorque is indexed by ROTOR, so it is summed. Shared by capacity, and only among
+//engines at FLY - one at idle drives nothing and takes no share of the load.
 private _rotorTq = 0.0;
 { _rotorTq = _rotorTq + _x; } forEach (_heli getVariable "bmkhs_reqEngTorque");
 
-private _fleetRefTq = 0.0;
-{ _fleetRefTq = _fleetRefTq + (_x get "refTq"); } forEach (_heli getVariable "bmkhs_engines");
+private _lvrState      = _heli getVariable "bmkhs_engPowerLeverState";
+private _totalEngineTq = 0.0;
+{
+    if ((_lvrState select _forEachIndex) == "FLY") then { _totalEngineTq = _totalEngineTq + (_x get "refTq") };
+} forEach (_heli getVariable "bmkhs_engines");
 
-private _myShare = if (_fleetRefTq > 0.0) then { _rotorTq * ((_engine get "refTq") / _fleetRefTq) } else { 0.0 };
-
-//Trim on a NORMALISED Np fraction, never raw RPM - pidRun returns its gains times whatever
-//it is fed, and an RPM-scaled result cannot be added to a 0-1 fuel command.
-private _npFrac  = (_heli getVariable "bmkhs_xmsnOutputRpm") / ((_engine get "npFly") * (_engine get "designRpm"));
-private _pid     = _heli getVariable "bmkhs_pid_engine" select _index;
-private _govTrim = [_pid, _deltaTime, 1.0, _npFrac] call bmkhs_fnc_pidRun;
-
-//Anticipates the load, so Nr does not droop before the governor has an error to react to.
-private _ffwd = (_heli getVariable "bmkhs_collectiveOutput") * (_engine get "ffwdGain");
-
-_fuelCmd = _fuelCmd + _ffwd + _govTrim;
+private _engineLoadShareTq = if (_lever == "FLY" && {_totalEngineTq > 0.0}) then {
+    _rotorTq * ((_engine get "refTq") / _totalEngineTq)
+} else { 0.0 };
 
 //The two things the engine is built not to do: melt the hot section, or run the compressor
-//tips through Mach. Each closes over a margin rather than switching at the line, so the
-//limiter does not chatter once it is sitting on one. The floor is never limited away - a
-//limited engine still idles.
+//tips through Mach. Each closes over a margin so the limiter does not chatter once sitting
+//on one.
 private _tgtAuth = (((_engine get "maxTgt") - _tgt) / GT_TGT_LIMIT_BAND) min 1.0 max 0.0;
 
 //Flat physical speed limit, or the sloped Mach limit where cold air brings it down.
@@ -85,7 +78,7 @@ private _ngLimit = (_engine get "maxNg")
                  min ((_engine get "ngLimitBase") + ((_engine get "ngLimitSlope") * _fat));
 private _ngAuth  = ((_ngLimit - _ng) / GT_NG_LIMIT_BAND) min 1.0 max 0.0;
 
-_fuelCmd = _fuelFloor + ((_fuelCmd - _fuelFloor) * (_tgtAuth min _ngAuth)) max 0.0;
+_fuelCmd = _fuelCmd * (_tgtAuth min _ngAuth);
 
 //Lose the ECU and nothing is metering fuel - the engine surges to maximum. Not a shutdown.
 private _govPowered = true;
@@ -100,4 +93,18 @@ private _govPowered = true;
 
 if (!_govPowered) then { _fuelCmd = 1.0; };
 
-[_fuelCmd, _myShare]
+//TEMPORARY - remove when the zero torque output is found.
+if (bmkhs_sysDebug && {_index == 0}) then {
+    private _last = _heli getVariable ["bmkhs_govDiagLast", 0];
+    if (time > _last + 0.25) then {
+        _heli setVariable ["bmkhs_govDiagLast", time];
+        diag_log text format [
+            "GOVDIAG lvr=%1 sched=%2 idleNg=%3 tgtAuth=%4 ngAuth=%5 powered=%6 cmd=%7 rotorTq=%8 share=%9",
+            _lever, _fuelSched toFixed 4, _idleNg toFixed 4,
+            _tgtAuth toFixed 4, _ngAuth toFixed 4, _govPowered,
+            _fuelCmd toFixed 4, _rotorTq toFixed 1, _engineLoadShareTq toFixed 1
+        ];
+    };
+};
+
+[_fuelCmd, _engineLoadShareTq]

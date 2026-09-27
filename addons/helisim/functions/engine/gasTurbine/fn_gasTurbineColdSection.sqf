@@ -13,7 +13,7 @@ Parameters:
     _starterTq - Starter torque on the spool [Number]
     _shaft     - The free turbine's share of the gas [Number]
     _dens      - Air density as a fraction of a standard day [Number]
-    _lit       - Is it burning [Boolean]
+    _running   - Burning, as opposed to cranked [Boolean]
     _coasting  - Running down, unfired and uncranked [Boolean]
     _deltaTime - Frame time [Number]
 
@@ -24,9 +24,9 @@ Returns:
 Author:
     BradMick
 ---------------------------------------------------------------------------- */
-params ["_engine", "_ng", "_fuelCmd", "_starterTq", "_shaft", "_dens", "_lit", "_coasting", "_deltaTime"];
+params ["_engine", "_ng", "_fuelCmd", "_starterTq", "_shaft", "_dens", "_running", "_coasting", "_deltaTime"];
 
-private _gasPower = [0.0, _fuelCmd * _dens] select _lit;
+private _gasPower = [0.0, _fuelCmd * _dens] select _running;
 
 //A compressor pumping against no combustion absorbs far more than a fired one, and that -
 //not bearing friction - is what stops the spool. COASTING, not merely unfired: a cold spool

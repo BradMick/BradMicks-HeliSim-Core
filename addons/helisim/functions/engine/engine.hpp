@@ -11,4 +11,7 @@
 //pressure tracks Ng rather than torque.
 #define GT_OIL_PSI_SCALE    0.90
 
+//Seconds for the power lever to travel idle to fly. Coming back to idle is instant.
+#define GT_LEVER_TRAVEL_SEC 12.0
+
 #endif

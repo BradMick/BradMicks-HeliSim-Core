@@ -22,6 +22,7 @@ Author:
     BradMick
 ---------------------------------------------------------------------------- */
 #include "\bmkhs_helisim\functions\core\core.hpp"
+#include "\bmkhs_helisim\functions\engine\engine.hpp"
 
 params ["_heli", "_index", "_engine"];
 
@@ -48,40 +49,59 @@ if (_prevLever != _lever) then {
     [_heli, "bmkhs_gtEngPrevLever", _index, _lever] call bmkhs_fnc_utilSetArrayVariable;
 };
 
-//_lit REQUIRES the lever check. Without it an engine at OFF still counts as lit, fuel keeps
-//burning after shutdown, and the spool takes twice as long to stop - which loses the
-//residual heat and every hot start that depends on it.
+//The lever check is required - without it fuel keeps burning after shutdown.
 private _fuelAvail = _heli getVariable [format ["bmkhs_eng%1FuelAvail", _index + 1], true];
-private _lit       = _ng > (_engine get "lightOffNg") && {_lever != "OFF"} && {_fuelAvail};
+private _running   = _ng > (_engine get "lightOffNg") && {_lever != "OFF"} && {_fuelAvail};
 
 private _starterTq = [_heli, _index, _engine, _ng] call bmkhs_fnc_gasTurbineStarter;
 private _cranking  = _starterTq > 0.0;
-private _coasting  = !_lit && {!_cranking};
+private _coasting  = !_running && {!_cranking};
 
 ([_heli, _index, _engine, _ng, _tgt, _lever, _fat, _deltaTime] call bmkhs_fnc_engineGovernor)
-    params ["_fuelCmd", "_myShare"];
+    params ["_fuelCmd", "_engineLoadShareTq"];
 
 //The free turbine's share, taken back out of the spool balance - gas taken by the power
 //turbine is gas that never reaches the compressor turbine.
 private _refTq = _engine get "refTq";
-private _shaft = [0.0, (_myShare / _refTq) / (_engine get "ptEfficiency")] select _lit;
+private _shaft = [0.0, (_engineLoadShareTq / _refTq) / (_engine get "ptEfficiency")] select _running;
 
-([_engine, _ng, _fuelCmd, _starterTq, _shaft, _dens, _lit, _coasting, _deltaTime]
+([_engine, _ng, _fuelCmd, _starterTq, _shaft, _dens, _running, _coasting, _deltaTime]
     call bmkhs_fnc_gasTurbineColdSection) params ["_ngNew", "_gasPower", "_absorbed"];
 
-_tgt = [_engine, _tgt, _ngNew, _fuelCmd, _residualHeat, _dens, _fat, _velY, _lit, _deltaTime]
+_tgt = [_engine, _tgt, _ngNew, _fuelCmd, _residualHeat, _dens, _fat, _velY, _running, _deltaTime]
         call bmkhs_fnc_gasTurbineHotSection;
 
-private _tqOut = [_engine, _shaft, _gasPower, _absorbed] call bmkhs_fnc_turboShaftPowerTurbine;
+private _xmsnRpm = _heli getVariable "bmkhs_xmsnOutputRpm";
+private _npFrac  = _xmsnRpm / ((_engine get "npFly") * (_engine get "designRpm"));
+
+([_engine, _gasPower, _absorbed, _npFrac] call bmkhs_fnc_turboShaftPowerTurbine)
+    params ["_tqOut", "_gaugeTq"];
 
 //State follows Ng, so a start that hangs never reads ON and a flameout drops out of it.
 private _state = switch (true) do {
-    case (_ngNew >= (_engine get "selfSustNg") && _lit): { "ON" };
-    case (_cranking || {_lit}):                          { "STARTING" };
-    default                                              { "OFF" };
+    case (_ngNew >= (_engine get "selfSustNg") && _running): { "ON" };
+    case (_cranking || {_running}):                          { "STARTING" };
+    default                                                  { "OFF" };
 };
 
-private _xmsnRpm = _heli getVariable "bmkhs_xmsnOutputRpm";
+//TEMPORARY - remove when the zero torque output is found.
+if (bmkhs_sysDebug && {_index == 0}) then {
+    private _last = _heli getVariable ["bmkhs_gtDiagLast", 0];
+    if (time > _last + 0.25) then {
+        _heli setVariable ["bmkhs_gtDiagLast", time];
+        diag_log text format [
+            "GTDIAG t=%1 lvr=%2 sw=%3 fuel=%4 run=%5 crank=%6 coast=%7 ng=%8->%9 gas=%10 abs=%11 shaft=%12 share=%13 tq=%14 Nr=%15 tgt=%16 state=%17 dt=%18",
+            time toFixed 2, _lever, _sw, _fuelCmd toFixed 4,
+            _running, _cranking, _coasting,
+            _ng toFixed 4, _ngNew toFixed 4,
+            _gasPower toFixed 4, _absorbed toFixed 4,
+            _shaft toFixed 4, _engineLoadShareTq toFixed 1,
+            _tqOut toFixed 1,
+            (_heli getVariable "bmkhs_xmsnOutputRpm") toFixed 0,
+            _tgt toFixed 0, _state, _deltaTime toFixed 4
+        ];
+    };
+};
 
 [_heli, "bmkhs_gtEngPctNg",    _index, _ngNew] call bmkhs_fnc_utilSetArrayVariable;
 [_heli, "bmkhs_gtEngTgt",      _index, _tgt] call bmkhs_fnc_utilSetArrayVariable;
@@ -90,7 +110,7 @@ private _xmsnRpm = _heli getVariable "bmkhs_xmsnOutputRpm";
 
 //A damaged drivetrain makes the needle wander, as the old model already does on publish.
 [_heli, "bmkhs_gtEngPctTq", _index,
-    (_tqOut / _refTq) + ([_heli, _index] call bmkhs_fnc_systemTorqueJitter)] call bmkhs_fnc_utilSetArrayVariable;
+    (_gaugeTq / _refTq) + ([_heli, _index] call bmkhs_fnc_systemTorqueJitter)] call bmkhs_fnc_utilSetArrayVariable;
 
 [_heli, "bmkhs_gtEngPctNp", _index, _xmsnRpm / (_engine get "designRpm")] call bmkhs_fnc_utilSetArrayVariable;
 [_heli, "bmkhs_gtEngFf",    _index, _fuelCmd * (_engine get "maxFuelFlow")] call bmkhs_fnc_utilSetArrayVariable;

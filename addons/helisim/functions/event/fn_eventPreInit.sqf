@@ -209,6 +209,15 @@
     0
 ] call CBA_fnc_addSetting;
 
+[
+    "bmkhs_engineModel",
+    "LIST",
+    ["Engine Model", "Selects which engine model drives the drivetrain. Legacy is the shipped model. Gas Turbine is the physical gas generator - fuel drives the spool, the free turbine extracts shaft torque, and TGT is state. Both models run and publish; this chooses whose torque the transmission integrates."],
+    [BMKHS_SETTINGS_CATEGORY, "Flight model"],
+    [[0, 1], ["Legacy", "Gas Turbine [WIP]"], 0],
+    0
+] call CBA_fnc_addSetting;
+
 //Flight control indicator
 [
     "bmkhs_ctrlVisColor",
