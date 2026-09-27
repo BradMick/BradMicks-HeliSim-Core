@@ -24,23 +24,30 @@ class Engine:
     #stationary rotor - see the arma_start() driver. Per instance, never a module global.
     cap = False
 
-    #torque = power / omega in the power turbine, bounded by stall. False is what the SQF
-    #does today: no speed term at all, so torque is only right at governed Np.
     speedTerm = True
-    stallTqMult = 2.5
     ptIdleExtract = 0.05
+    #Np is state - the free turbine's own inertia, normalised like compressorInertia.
+    ptInertia = 0.6
+    #Drag on a released turbine, as ptDrag * np^2 plus a windmilling-only floor.
+    ptDrag = 0.60
+    ptDragFloor = 0.05
     #The 701C suppresses torque spikes below this Np - below it the gauge reads the demanded
     #torque, above it the power/omega spike is what the sensor sees.
     spikeNp = 0.39
 
     designRpm, npFly, powerKw, maxFuelFlow = 20900.0, 1.01, 1066.0, 0.12
-    compressorLoad, massFlowExp, tgtK, spoolInertia = 1.7, 1.7, 276.0, 5.0
-    unfiredDragMult, unfiredFriction = 3.0, 0.10      # COASTING ONLY
+    compressorLoad, massFlowExp, tgtK, compressorInertia = 1.7, 1.772, 288.6, 5.0
+    compDragMult, compDragFloor = 3.0, 0.10           # COASTING ONLY
     thermalMassCoef, coolingCoef, stillAirFlow = 0.30, 0.70, 0.0012
-    idleTq, flyTq, ptEfficiency = 0.055, 0.18, 0.92
+    ramAirCoef = 0.00065
+    #Cold air the compressor pushes over the turbine, lit or not.
+    airCoef = 0.1219
+    idleTq, flyTq, ptEfficiency = 0.055, 0.18, 0.92   # idleTq/flyTq: RIG ONLY - they
+    # derive fuelIdle/fuelFly here. The shipped config declares those directly.
+    idleNg = 0.679
     lightOffNg, selfSustNg = 0.15, 0.52
     startTgt, startMinTgt = 851.0, 80.0
-    residualHeatGain, startFuelBase = 0.003, 0.42
+    residualHeatGain, startFuelBase = 0.003, 0.22
     maxTgt, maxNg = 867.0, 1.022
     ngLimitBase, ngLimitSlope = 1.01436, 0.0019091
     starterTorque = 0.30
@@ -53,27 +60,35 @@ class Engine:
 
     def __init__(self, fat=15.0, rho=ISA_RHO, cap=False, speedTerm=True):
         self.fat, self.rho, self.cap, self.speedTerm = fat, rho, cap, speedTerm
-        self.fuelIdle = self.compressorLoad * 0.679**2 + self.idleTq / self.ptEfficiency
-        self.fuelFly = self.compressorLoad * 0.834**2 + self.flyTq / self.ptEfficiency
-        self.idleNg = ((self.fuelIdle - self.idleTq / self.ptEfficiency)
-                       / self.compressorLoad) ** 0.5
+        self.fuelIdle = self._detentFuel(0.679, self.idleTq)
+        self.fuelFly = self._detentFuel(0.834, self.flyTq)
         self.refTq = (self.powerKw * 1000.0) / (self.designRpm * self.npFly * 0.10472)
         self.ng, self.tgt, self.tq = 0.0, fat, 0.0
+        #Np is state, normalised - 1.0 is governed.
+        self.np = 0.0
+        self.locked = False
         self.hotFac = 1.0
         self.lever, self.starting, self.override = 'OFF', False, False
+
+    def _detentFuel(self, ng, tq):
+        """Fuel that holds this detent: compressor drag plus what the power turbine takes,
+        less the cold air already doing part of that work."""
+        return (self.compressorLoad * ng ** 2
+                + tq / self.ptEfficiency
+                - ng ** self.massFlowExp * self.airCoef)
 
     def setLever(self, pos):
         if self.lever == 'OFF' and pos != 'OFF':
             self.hotFac = 1.0 + self.hotStartCarry * self.tgt
         self.lever = pos
 
-    def step(self, dt, loadTq=0.0, velY=0.0, npFrac=1.0):
-        """npFrac: rotor speed as a fraction of governed. 1.0 reproduces the old behaviour,
-        which is what every acceptance number was produced at."""
+    def step(self, dt, loadTq=0.0, velY=0.0, nrFrac=None):
+        """nrFrac: rotor speed as a fraction of governed Np, for the freewheel. None means no
+        drivetrain - the turbine spins alone."""
         dens = self.rho / ISA_RHO
         lit = self.ng > self.lightOffNg and self.lever != 'OFF'
         cranking = (self.starting or self.override) and self.ng < self.selfSustNg
-        coasting = not lit and not cranking
+        spooling = not lit and not cranking
 
         floor = {'FLY': self.fuelFly, 'IDLE': self.fuelIdle, 'OFF': 0.0}[self.lever]
         if self.ng < self.idleNg:
@@ -83,28 +98,57 @@ class Engine:
 
         st = self.starterTorque if cranking else 0.0
 
-        gas = fuel * dens if lit else 0.0
+        #Air the compressor is moving RIGHT NOW, before the spool steps. No floor - a
+        #stopped compressor moves no air.
+        mflowNow = (self.ng ** self.massFlowExp) * dens
+
+        #Heat is what accelerates the spool - the compressor turbine runs on combustion.
+        fuelGas = fuel * dens if lit else 0.0
+        #What reaches the POWER turbine: that heat plus the cold air the compressor pushes.
+        gas = fuelGas + mflowNow * self.airCoef
+        #The air already does part of the extraction, so the spool is only charged for
+        #the remainder - which is what keeps the detents settling at their declared Ng.
         shaft = (loadTq / self.refTq) / self.ptEfficiency if lit else 0.0
-        drag = self.compressorLoad * (self.unfiredDragMult if coasting else 1.0)
-        absorbed = drag * self.ng**2 + (self.unfiredFriction if coasting else 0.0)
+        shaft = max(0.0, shaft - mflowNow * self.airCoef)
+        drag = self.compressorLoad * (self.compDragMult if spooling else 1.0)
+        absorbed = drag * self.ng**2 + (self.compDragFloor if spooling else 0.0)
         self.ng = max(0.0, min(self.ng
-                     + ((gas + st - absorbed - shaft) / self.spoolInertia) * dt, 1.1))
+                     + ((fuelGas + st - absorbed - shaft) / self.compressorInertia) * dt, 1.1))
 
         mflow = max((self.ng ** self.massFlowExp) * dens, 0.02)
         fac = 1.0 + (self.hotFac - 1.0) * max(0.0, 1.0 - self.ng / self.idleNg)
         hot = self.fat + fac * self.tgtK * fuel / mflow if lit else self.fat
         rate = (self.thermalMass if hot > self.tgt
-                else self.cooling * (self.ng + self.soak + velY / 128.611))
+                else self.cooling * (self.ng + self.soak + max(0.0, velY) * self.ramAirCoef))
         self.tgt += (hot - self.tgt) * rate * dt
 
-        #The share of gas output the free turbine gets: what the compressor leaves, floored so
-        #gas moving over the turbine always turns it, motoring included.
-        gasOutput = gas * self.refTq
-        share = max(self.ptIdleExtract, (gas - absorbed) / gas) if gas > 0.0 else 0.0
+        #The share the free turbine gets - what the compressor leaves, floored so gas moving
+        #over the turbine always turns it.
+        #The compressor turbine takes its cut from the HEAT; the cold air the compressor
+        #pushes passes straight through to the power turbine.
+        ptGas = max(0.0, fuelGas - absorbed) + mflowNow * self.airCoef
+        if fuelGas > 0.0:
+            ptGas = max(ptGas, fuelGas * self.ptIdleExtract)
+        self.tq = ptGas * self.refTq * self.ptEfficiency
 
-        #Scaled by how fast it is turning, up to ptEfficiency at governed speed.
-        self.tq = gasOutput * share * self.ptEfficiency
-        self.gaugeTq = min(self.tq / max(npFrac, 1e-6), self.stallTqMult * self.refTq)
+        #The sprag clutch - it grips on SPEED, not torque, so a momentary torque dip cannot
+        #release a clutch that is still being outrun.
+        npDrag = (self.ptDrag * self.np * self.np
+                  + (self.ptDragFloor if self.tq <= 0.0 else 0.0))
+        npDot = ((self.tq / self.refTq) - npDrag) / self.ptInertia
+        npFree = max(0.0, self.np + npDot * dt)
+
+        if nrFrac is None:
+            #No drivetrain - the bench case every acceptance number was produced at.
+            self.locked = False
+            self.np = npFree
+        else:
+            self.locked = npFree >= nrFrac
+            #Locked, the pair are one shaft and the caller integrates them together.
+            self.np = nrFrac if self.locked else npFree
+
+        #The gauge reads the shaft directly - Np is state now, so nothing has to be inferred.
+        self.gaugeTq = self.tq
         return self.ng, self.tgt, self.tq / self.refTq, fuel
 
 
@@ -177,7 +221,7 @@ def equilibrium():
     e = Engine(); out = []
     for tq, ng, dec in [(0.055, 0.679, 460), (0.18, 0.834, 532), (0.84, 0.930, None),
                         (1.00, 0.951, 810), (1.29, 1.010, 867)]:
-        fuel = e.compressorLoad * ng ** 2 + tq / e.ptEfficiency
+        fuel = e._detentFuel(ng, tq)
         tgt = 15 + e.tgtK * fuel / (ng ** e.massFlowExp)
         out.append((tq, ng, tgt, dec))
     return out
@@ -344,12 +388,13 @@ def ah64_main():
     return SimpleRotor(4, 72.291, 7.315, 0.533, 72.108, AH64_MAIN_DRAG, 0.10)
 
 
-def rotor_start(secs=60, lever='IDLE', coll=0.0, jExtra=0.0):
-    """THE GAP THIS RIG HAD: a start that spins a real rotor up. The rotor is the ported
-    fn_simpleRotor drag path; Nr is integrated exactly as fn_transmissionUpdate does.
+def rotor_start(secs=60, lever='IDLE', coll=0.0, jExtra=0.0, shutdownAt=None):
+    """A start that spins a real rotor up. The rotor is the ported fn_simpleRotor drag path;
+    Nr is integrated exactly as fn_transmissionUpdate does, and the freewheel decides each
+    frame whether the turbine and the rotor are one shaft or two.
 
-    jExtra: driveline inertia referred to the engine shaft, which the aircraft does not
-    model - power turbine, shafts, gearboxes. Blades alone give J_eng ~1.0."""
+    shutdownAt: seconds at which to pull the lever to OFF, for the decouple case.
+    jExtra: driveline inertia referred to the engine shaft, which the aircraft does not model."""
     e = Engine(); e.starting = True
     main = ah64_main()
     wDesign = e.designRpm * e.npFly
@@ -358,41 +403,70 @@ def rotor_start(secs=60, lever='IDLE', coll=0.0, jExtra=0.0):
     t = 0.0
     trace = []
     peakShaft = peakGauge = 0.0
+    tUnlock = None
     while t < secs:
-        if e.lever == 'OFF' and e.ng > 0.02:
+        if e.lever == 'OFF' and e.ng > 0.02 and shutdownAt is None:
             e.setLever(lever)
+        if shutdownAt is not None:
+            if e.lever == 'OFF' and e.ng > 0.02 and t < shutdownAt:
+                e.setLever(lever)
+            if t >= shutdownAt and e.lever != 'OFF':
+                e.lever, e.starting = 'OFF', False
         if e.starting and e.ng >= e.selfSustNg:
             e.starting = False
-        npFrac = rpm / wDesign
+
+        nrFrac = rpm / wDesign
         rotorTq = main.step(rpm / main.gearRatio, coll, DT)
-        e.step(DT, loadTq=rotorTq, velY=0.0, npFrac=max(npFrac, 1e-9))
-        rpm = max(0.0, rpm + ((e.tq - rotorTq) / jEng) * DT * (60.0 / TWO_PI))
+        e.step(DT, loadTq=rotorTq, velY=0.0, nrFrac=nrFrac)
+
+        #The transmission. Locked, the turbine's torque reaches the rotor and the pair share
+        #one inertia; free, the rotor coasts on its own drag alone and the engine is gone.
+        driveTq = e.tq if e.locked else 0.0
+        rpm = max(0.0, rpm + ((driveTq - rotorTq) / jEng) * DT * (60.0 / TWO_PI))
+        if tUnlock is None and not e.locked and t > 1.0 and rpm > 0.0:
+            tUnlock = t
+
         peakShaft = max(peakShaft, e.tq / e.refTq)
         peakGauge = max(peakGauge, e.gaugeTq / e.refTq)
         t += DT
-        trace.append((t, e.ng, e.tgt, e.tq, e.gaugeTq / e.refTq, rpm, npFrac,
-                      rpm / main.gearRatio, rotorTq))
-    return dict(trace=trace, ng=e.ng, tgt=e.tgt, rpm=rpm, jEng=jEng,
-                peakShaft=peakShaft, peakGauge=peakGauge, nr=rpm / main.gearRatio)
+        trace.append((t, e.ng, e.tgt, e.tq / e.refTq, e.gaugeTq / e.refTq, e.np,
+                      rpm / main.gearRatio, rotorTq, e.locked))
+    return dict(trace=trace, ng=e.ng, tgt=e.tgt, rpm=rpm, jEng=jEng, np=e.np,
+                peakShaft=peakShaft, peakGauge=peakGauge, nr=rpm / main.gearRatio,
+                locked=e.locked, tUnlock=tUnlock)
 
 
 def rotor_report():
     print('=' * 78)
-    print('ROTOR SPIN-UP - a real rotor, integrated as fn_transmissionUpdate does')
+    print('ROTOR SPIN-UP - a real rotor, and Np as state through the freewheel')
     print('=' * 78)
-    print('   J_eng = %.3f kg m^2   (moi %.1f / gr %.3f^2)'
-          % (ROTOR_MOI / GEAR_RATIO ** 2, ROTOR_MOI, GEAR_RATIO))
-    for st in (False, True):
-        r = rotor_start(speedTerm=st)
-        print('\n   speedTerm=%-5s  peak %%TQ %.0f   settled ng %.3f  tgt %.0f  Np %.0f%% (Nr %.0f rpm)'
-              % (st, r['peakTq'] * 100, r['ng'], r['tgt'],
-                 100 * r['rpm'] / (Engine().designRpm * Engine().npFly),
-                 r['rpm'] / GEAR_RATIO))
-        print('        t     Ng    TGT    %TQ    Np%%   Nr rpm')
-        for mark in (2, 3, 4, 5, 6, 8, 10, 15, 20, 30, 44):
+    print('   J_eng = %.3f kg m^2   (moi %.1f / gr %.3f^2)   ptInertia %.2f'
+          % (ROTOR_MOI / GEAR_RATIO ** 2, ROTOR_MOI, GEAR_RATIO, Engine.ptInertia))
+
+    for lever in ('IDLE', 'FLY'):
+        r = rotor_start(lever=lever)
+        print('\n   lever %s: settled ng %.3f  tgt %.0fC  Np %.1f%%  Nr %.0f rpm  clutch %s'
+              % (lever, r['ng'], r['tgt'], r['np'] * 100, r['nr'],
+                 'LOCKED' if r['locked'] else 'free'))
+        print('        t     Ng    TGT    %TQ   gauge    Np%%   Nr rpm  clutch')
+        for mark in (2, 3, 4, 5, 6, 8, 10, 15, 20, 30, 44, 59):
             row = min(r['trace'], key=lambda x: abs(x[0] - mark))
-            print('   %6.1f  %.3f   %4.0f  %5.0f  %4.0f  %6.0f'
-                  % (row[0], row[1], row[2], row[3] * 100, row[5] * 100, row[4] / GEAR_RATIO))
+            print('   %6.1f  %.3f   %4.0f  %5.0f  %6.0f  %5.0f  %6.0f  %s'
+                  % (row[0], row[1], row[2], row[3] * 100, row[4] * 100,
+                     row[5] * 100, row[6], 'lock' if row[8] else 'FREE'))
+
+    #The case that motivated 3c: at shutdown Np used to track a spooling rotor because it WAS
+    #the rotor. Now the clutch opens and the two separate.
+    r = rotor_start(secs=90, lever='FLY', shutdownAt=45.0)
+    print('\n   THE DECOUPLE - lever to OFF at 45s, from a spun-up rotor')
+    print('   clutch first opens at %s' % (('%.1fs' % r['tUnlock']) if r['tUnlock'] else 'never'))
+    print('        t     Ng     Np%%   Nr rpm   NrFrac%%  clutch')
+    wDesign = Engine().designRpm * Engine().npFly
+    for mark in (44, 45, 46, 48, 50, 55, 60, 70, 89):
+        row = min(r['trace'], key=lambda x: abs(x[0] - mark))
+        print('   %6.1f  %.3f  %5.1f  %6.0f   %6.1f   %s'
+              % (row[0], row[1], row[5] * 100, row[6],
+                 100 * row[6] * GEAR_RATIO / wDesign, 'lock' if row[8] else 'FREE'))
 
 
 if __name__ == '__main__':

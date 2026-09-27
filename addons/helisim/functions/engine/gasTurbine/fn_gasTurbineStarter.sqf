@@ -31,6 +31,8 @@ private _override = _sw < 0;
 
 if (_ng >= (_engine get "selfSustNg")) exitWith { 0.0 };
 if (!_starting && {!_override}) exitWith { 0.0 };
+//A tripped engine is locked out - the starter will not turn it until a repair resets it.
+if ((_heli getVariable "bmkhs_gtEngOverspeed") select _index) exitWith { 0.0 };
 
 //No gate means always supplied; every gate declared has to be on.
 private _supplied = true;

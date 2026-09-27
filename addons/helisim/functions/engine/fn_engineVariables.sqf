@@ -24,42 +24,25 @@ Author:
 ---------------------------------------------------------------------------- */
 params ["_heli", "_config"];
 
-//Fields read straight off the engine's class. The key a reader asks for IS the config
-//property name, so grepping a knob finds the config, this list and every use of it.
+//Fields grouped by the assembly that owns them, matching the config's own nesting. The key a
+//reader asks for IS the config property name, so grepping a knob finds config, list and use.
+//Every field lands in ONE flat hashmap - the grouping is the config's, not the reader's.
 private _numFields = [
      "designRpm"
    , "npFly"
    , "maxFuelFlow"
-   , "spoolInertia"
-   , "compressorLoad"
-   , "massFlowExp"
-   , "tgtK"
-   , "unfiredDragMult"
-   , "unfiredFriction"
-   , "thermalMassCoef"
-   , "coolingCoef"
-   , "stillAirFlow"
-   , "idleTq"
-   , "flyTq"
-   , "fuelIdle"
-   , "fuelFly"
-   , "ffwdGain"
-   , "ptEfficiency"
-   , "stallTqMult"
-   , "ptIdleExtract"
-   , "lightOffNg"
-   , "selfSustNg"
-   , "startTgt"
-   , "startMinTgt"
-   , "residualHeatGain"
-   , "startFuelBase"
-     //The physical ceiling: the flat speed limit, and the sloped Mach limit on temperature.
-   , "maxTgt"
+     //Hard shutdowns - fly weights and the electrical trip.
    , "maxNg"
-   , "ngLimitBase"
-   , "ngLimitSlope"
+   , "maxNp"
 ];
-private _arrFields  = ["pid"];
+private _sectionFields = [
+     ["ColdSection",  ["compressorInertia", "compressorLoad", "airCoef", "compDragMult"
+                     , "compDragFloor", "lightOffNg", "selfSustNg", "idleNg"]]
+   , ["HotSection",   ["massFlowExp", "tgtK", "thermalMassCoef", "coolingCoef", "stillAirFlow"
+                     , "ramAirCoef", "maxTgt", "startTgt", "startMinTgt", "residualHeatGain"]]
+   , ["PowerTurbine", ["ptEfficiency", "ptIdleExtract", "ptInertia", "ptDrag", "ptDragFloor"]]
+   , ["Governor",     ["fuelIdle", "fuelFly", "startFuelBase", "ffwdGain"]]
+];
 private _textFields = ["name", "engineType", "damageRole"];
 
 //Hitpoints declare the count when the airframe has them; numEngines is what an aircraft
@@ -77,8 +60,15 @@ for "_i" from 1 to _numEngines do {
     private _engine = createHashMap;
 
     { _engine set [_x, getNumber (_e >> _x)]; } forEach _numFields;
-    { _engine set [_x, getArray  (_e >> _x)]; } forEach _arrFields;
     { _engine set [_x, getText   (_e >> _x)]; } forEach _textFields;
+
+    {
+        _x params ["_section", "_fields"];
+        private _sect = _e >> _section;
+        { _engine set [_x, getNumber (_sect >> _x)]; } forEach _fields;
+    } forEach _sectionFields;
+
+    _engine set ["pid", getArray (_e >> "Governor" >> "pid")];
 
     _engine set ["damageRoleIndex", getNumber (_e >> "damageRoleIndex")];
 
@@ -112,10 +102,6 @@ for "_i" from 1 to _numEngines do {
     //refTq is derived, never declared: Q = P / w from the base tier's power at governed Np.
     _engine set ["refTq", (((_ratings # 0) get "powerKw") * 1000)
                         / ((_engine get "designRpm") * (_engine get "npFly") * 0.10472)];
-
-    //idleNg is recovered from the idle fuel floor - the start schedule needs it as a divisor.
-    _engine set ["idleNg", (((_engine get "fuelIdle") - ((_engine get "idleTq") / (_engine get "ptEfficiency")))
-                            / (_engine get "compressorLoad")) ^ 0.5];
 
     _engines pushBack _engine;
 };
@@ -198,7 +184,13 @@ _heli setVariable ["bmkhs_engOutputTq",           +_zeros];
 
 //New model - published beside the old one until Phase 3b drops the gt prefix.
 _heli setVariable ["bmkhs_gtEngPctNg",            +_zeros];
+//Np is state with its own torque balance, not read off the rotor.
+_heli setVariable ["bmkhs_gtEngNp",               +_zeros];
 _heli setVariable ["bmkhs_gtEngPctNp",            +_zeros];
+//The freewheel - true while the turbine is driving the rotor.
+_heli setVariable ["bmkhs_gtEngClutch",           _engines apply {false}];
+//Latched by either hard trip, cleared by a repair.
+_heli setVariable ["bmkhs_gtEngOverspeed",        _engines apply {false}, true];
 _heli setVariable ["bmkhs_gtEngPctTq",            +_zeros];
 //TGT is state, so it starts at ambient.
 _heli setVariable ["bmkhs_gtEngTgt",              _engines apply {_heli getVariable "bmkhs_FAT"}];

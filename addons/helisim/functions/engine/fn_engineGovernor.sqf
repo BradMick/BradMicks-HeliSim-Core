@@ -68,17 +68,8 @@ private _engineLoadShareTq = if (_lever == "FLY" && {_totalEngineTq > 0.0}) then
     _rotorTq * ((_engine get "refTq") / _totalEngineTq)
 } else { 0.0 };
 
-//The two things the engine is built not to do: melt the hot section, or run the compressor
-//tips through Mach. Each closes over a margin so the limiter does not chatter once sitting
-//on one.
-private _tgtAuth = (((_engine get "maxTgt") - _tgt) / GT_TGT_LIMIT_BAND) min 1.0 max 0.0;
-
-//Flat physical speed limit, or the sloped Mach limit where cold air brings it down.
-private _ngLimit = (_engine get "maxNg")
-                 min ((_engine get "ngLimitBase") + ((_engine get "ngLimitSlope") * _fat));
-private _ngAuth  = ((_ngLimit - _ng) / GT_NG_LIMIT_BAND) min 1.0 max 0.0;
-
-_fuelCmd = _fuelCmd * (_tgtAuth min _ngAuth);
+//Nothing restricts fuel here. The lever sets a physical orifice, and an unregulated engine
+//runs away until a hard shutdown trips. The governor is what will meter it.
 
 //Lose the ECU and nothing is metering fuel - the engine surges to maximum. Not a shutdown.
 private _govPowered = true;
