@@ -13,9 +13,8 @@ Parameters:
     _engine    - That engine's config [HashMap]
     _fuelGas   - Heat released by combustion [Number]
     _airGas    - Cold air the compressor is pushing through [Number]
-    _absorbed  - What the compressor takes to turn [Number]
-    _fuelSched - The orifice, as the lever has it [Number]
-    _np        - Np at the top of the frame, normalised [Number]
+    _compWork  - What the compressor turbine takes out of the gas [Number]
+    _np      - Np at the top of the frame, normalised [Number]
     _nrFrac    - Rotor speed as a fraction of governed Np [Number]
     _deltaTime - Frame time [Number]
 
@@ -28,15 +27,12 @@ Author:
 ---------------------------------------------------------------------------- */
 #include "\bmkhs_helisim\functions\core\core.hpp"
 
-params ["_engine", "_fuelGas", "_airGas", "_absorbed", "_fuelSched", "_np", "_nrFrac", "_deltaTime"];
+params ["_engine", "_fuelGas", "_airGas", "_compWork", "_np", "_nrFrac", "_deltaTime"];
 
 private _refTq = _engine get "refTq";
 
-//Less the compressor turbine's share, scheduled off the orifice. Motoring, the starter turns
-//the compressor, so nothing is taken.
-private _ptShare = [0.0, linearConversion [_engine get "fuelIdle", _engine get "fuelFly", _fuelSched, 1.0, 0.0, true]]
-                   select (_fuelGas > 0.0);
-private _ptGas   = (_fuelGas + _airGas - (_ptShare * _absorbed)) max 0.0;
+//Less what the compressor turbine takes. Motoring, the starter turns the compressor, so nothing is taken.
+private _ptGas = (_fuelGas + _airGas - ([0.0, _compWork] select (_fuelGas > 0.0))) max 0.0;
 
 private _shaftTq = _ptGas * _refTq * (_engine get "ptEfficiency");
 
@@ -47,7 +43,9 @@ private _npDrag = ((_engine get "ptDrag") * _np * _np)
 private _npDot  = ((_shaftTq / _refTq) - _npDrag) / (_engine get "ptInertia");
 private _npFree = (_np + (_npDot * _deltaTime)) max 0.0;
 
-private _clutch = _npFree >= _nrFrac;
+//Running, the turbine is driven and stays engaged; not running, its drag lets it go.
+private _npDriven = _np + (((_shaftTq / _refTq) / (_engine get "ptInertia")) * _deltaTime);
+private _clutch   = ([_npFree, _npDriven] select (_fuelGas > 0.0)) >= _nrFrac;
 //Engaged, the pair are one shaft and the transmission integrates them together.
 _np = [_npFree, _nrFrac] select _clutch;
 

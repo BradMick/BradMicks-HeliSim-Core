@@ -2,29 +2,30 @@
 Function: bmkhs_fnc_engineGovernor
 
 Description:
-    The ECU. Commands fuel flow from the lever's schedule and the physical
-    limiter. The Np trim and collective feed-forward are removed pending rework.
+    The ECU and the fuel control. At FLY it trims the orifice below the lever's
+    to hold Np, anticipating the collective.
 
 Parameters:
     _heli      - The helicopter [Object]
     _index     - Which engine [Number]
     _engine    - That engine's config [HashMap]
     _ng        - Spool speed at the top of the frame [Number]
+    _np        - Np at the top of the frame, normalised [Number]
     _tgt       - TGT at the top of the frame, deg C [Number]
     _lever     - Power lever position, OFF / IDLE / FLY [String]
     _fat       - Free air temperature, deg C [Number]
     _deltaTime - Frame time [Number]
 
 Returns:
-    [_fuelCmd, _engineLoadShareTq, _fuelSched] - commanded fuel normalised, this engine's share
-    of rotor demand in Nm, and the orifice the lever has set [Array]
+    [_fuelCmd, _engineLoadShareTq, _orifice] - commanded fuel normalised, this engine's share
+    of rotor demand in Nm, and the orifice as the governor has set it [Array]
 
 Author:
     BradMick
 ---------------------------------------------------------------------------- */
 #include "\bmkhs_helisim\functions\engine\engine.hpp"
 
-params ["_heli", "_index", "_engine", "_ng", "_tgt", "_lever", "_fat", "_deltaTime"];
+params ["_heli", "_index", "_engine", "_ng", "_np", "_tgt", "_lever", "_fat", "_deltaTime"];
 
 private _idleNg = _engine get "idleNg";
 
@@ -45,9 +46,31 @@ if (_target > _fuelSched) then {
 };
 [_heli, "bmkhs_gtEngLeverSched", _index, _fuelSched] call bmkhs_fnc_utilSetArrayVariable;
 
+//Lose the ECU and nothing is metering fuel - the engine surges to maximum. Not a shutdown.
+private _govPowered = true;
+{
+    private _ok = if (_x isEqualType []) then {
+        ([_heli, _x select 0] call bmkhs_fnc_systemCircuit) >= (_x select 1)
+    } else {
+        _heli getVariable [_x, false]
+    };
+    if (!_ok) exitWith { _govPowered = false };
+} forEach (_engine get "governorGates");
+
+//The torque motor trims the orifice below the lever's to hold Np; it never opens it past.
+private _pid     = _heli getVariable "bmkhs_gtPidEngine" select _index;
+private _orifice = _fuelSched;
+if (_lever == "FLY" && {_govPowered}) then {
+    private _govFuel = ([_pid, _deltaTime, 1.0, _np] call bmkhs_fnc_pidRun)
+                     + ((_heli getVariable "bmkhs_collectiveOutput") * (_engine get "ffwdGain"));
+    _orifice = _fuelSched min (_govFuel max 0.0);
+} else {
+    [_pid] call bmkhs_fnc_pidReset;
+};
+
 //Below idle Ng fuel is metered, which is what makes TGT peak above idle during a start and
 //fall back as the compressor catches up. Above it this is a no-op.
-private _fuelCmd = _fuelSched;
+private _fuelCmd = _orifice;
 if (_ng < _idleNg) then {
     private _base = _engine get "startFuelBase";
     _fuelCmd = _fuelCmd * ((_base + ((1.0 - _base) * _ng / _idleNg)) min 1.0);
@@ -68,33 +91,18 @@ private _engineLoadShareTq = if (_lever == "FLY" && {_totalEngineTq > 0.0}) then
     _rotorTq * ((_engine get "refTq") / _totalEngineTq)
 } else { 0.0 };
 
-//Nothing restricts fuel here. The lever sets a physical orifice, and an unregulated engine
-//runs away until a hard shutdown trips. The governor is what will meter it.
-
-//Lose the ECU and nothing is metering fuel - the engine surges to maximum. Not a shutdown.
-private _govPowered = true;
-{
-    private _ok = if (_x isEqualType []) then {
-        ([_heli, _x select 0] call bmkhs_fnc_systemCircuit) >= (_x select 1)
-    } else {
-        _heli getVariable [_x, false]
-    };
-    if (!_ok) exitWith { _govPowered = false };
-} forEach (_engine get "governorGates");
-
-if (!_govPowered) then { _fuelCmd = 1.0; };
-
 //TEMPORARY - remove when the zero torque output is found.
-if (bmkhs_sysDebug && {_index == 0}) then {
-    private _last = _heli getVariable ["bmkhs_govDiagLast", 0];
+if (bmkhs_sysDebug) then {
+    private _key  = format ["bmkhs_govDiagLast%1", _index];
+    private _last = _heli getVariable [_key, 0];
     if (time > _last + 0.25) then {
-        _heli setVariable ["bmkhs_govDiagLast", time];
+        _heli setVariable [_key, time];
         diag_log text format [
-            "GOVDIAG lvr=%1 sched=%2 idleNg=%3 powered=%4 cmd=%5 rotorTq=%6 share=%7",
-            _lever, _fuelSched toFixed 4, _idleNg toFixed 4, _govPowered,
-            _fuelCmd toFixed 4, _rotorTq toFixed 1, _engineLoadShareTq toFixed 1
+            "GOVDIAG eng=%9 lvr=%1 sched=%2 orifice=%3 np=%4 powered=%5 cmd=%6 rotorTq=%7 share=%8",
+            _lever, _fuelSched toFixed 4, _orifice toFixed 4, _np toFixed 4, _govPowered,
+            _fuelCmd toFixed 4, _rotorTq toFixed 1, _engineLoadShareTq toFixed 1, _index + 1
         ];
     };
 };
 
-[_fuelCmd, _engineLoadShareTq, _fuelSched]
+[_fuelCmd, _engineLoadShareTq, _orifice]

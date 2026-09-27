@@ -1,432 +1,1182 @@
-"""The HeliSim gas turbine, outside Arma. The spec the SQF is written from.
+"""The HeliSim engine, drivetrain and simple rotors, outside Arma. A 1:1 port of Core.
 
 Run it:  python tools/engine/engine.py
 
-Prints the derived values, the loaded equilibrium, a cold start with its torque trace, the
-shutdown marks, motoring, both hot-start branches, and a real rotor spun up at IDLE and FLY.
+Every function below is named after the SQF function it ports and carries its inputs, outputs
+and expressions line for line. The frame runs in fn_coreUpdate's order: environment ->
+engineController -> transmissionUpdate -> simpleRotorUpdate. Values are read from the AH-64D's
+own config files, so there is no third copy of any number.
 
-If this file and the SQF ever disagree on BEHAVIOUR, this file is right; on VALUES, the
-aircraft config is authoritative.
+Not ported, because nothing on the new engine's path reads it: the legacy engine torque
+models (fn_engine2 / fn_engineBET), systems circuits (gates are scenario inputs), damage,
+torque jitter and the rotor's lift/force path. fn_engine is ported ONLY for the engState
+transitions the new starter reads.
+
+If this file and the SQF ever disagree, the SQF is right and this file is the bug.
 """
+import copy
+import math
+import random
+import re
 
-ISA_RHO = 1.225
-#GT_LEVER_TRAVEL_SEC in engine.hpp - the lever's full stroke.
-LEVER_TRAVEL_SEC = 12.0
+AH64_CONFIG = r'E:\AH-64D\addons\fza_ah64_helisim\config\bmkhs_config'
+
+#core.hpp
+ISA_STD_DAY_AIR_DENSITY = 1.225
+VEL_VNE = 128.611
+VEL_VRS = 24.384
+VEL_ETL = 12.347
+METERS_TO_FEET = 3.28084
+GRAVITY = 9.806
+MOLAR_MASS_OF_AIR = 0.0289644
+UNIVERSAL_GAS_CONSTANT = 8.31432
+DEG_C_TO_KELVIN = 273.15
+SEA_LEVEL_PRESSURE = 29.92
+STANDARD_TEMP = 15
+IN_MG_TO_HPA = 33.8639
+#engine.hpp
+GT_OIL_PSI_SCALE = 0.90
+GT_LEVER_TRAVEL_SEC = 12.0
+#rotor.hpp
+MAIN, TAIL = 0, 1
+CCW, CW = 0, 1
+#Legacy start timing used by fn_engine's state transitions.
+ENG_SIM_TIME_KEY = 'engSimTime'
 
 
-class Engine:
-    #Np is state - the free turbine's own inertia, normalised like compressorInertia.
-    ptInertia = 0.6
-    #Drag on a released turbine, as ptDrag * np^2 plus a windmilling-only floor.
-    ptDrag = 0.60
-    ptDragFloor = 0.05
+# ---------------------------------------------------------------------------------------------
+# Config - the .hpp files, parsed
+# ---------------------------------------------------------------------------------------------
 
-    designRpm, npFly, powerKw = 20900.0, 1.01, 1066.0
-    compressorLoad, massFlowExp, tgtK, compressorInertia = 1.7, 1.772, 288.6, 5.0
-    compDragMult, compDragFloor = 3.0, 0.10           # COASTING ONLY
-    thermalMassCoef, coolingCoef, stillAirFlow = 0.30, 0.70, 0.0012
-    ramAirCoef = 0.00065
-    #Cold air the compressor pushes over the turbine, lit or not.
-    airCoef = 0.1219
-    ptEfficiency = 0.92
-    idleNg = 0.679
-    lightOffNg, selfSustNg = 0.15, 0.52
-    residualHeatGain, startFuelBase = 0.003, 0.22
-    starterTorque = 0.30
+_TOK = re.compile(r'"[^"]*"|-?\d+\.\d*|-?\d*\.\d+|-?\d+|[A-Za-z_][A-Za-z0-9_]*|[{}\[\]=;:,]')
 
-    # plan aliases
-    hotStartCarry = residualHeatGain
-    thermalMass = thermalMassCoef
-    cooling = coolingCoef
-    soak = stillAirFlow
 
-    def __init__(self, fat=15.0, rho=ISA_RHO):
-        self.fat, self.rho = fat, rho
-        #As the config declares them. fuelFly is WIDE OPEN, not a detent equilibrium.
-        self.fuelIdle = 0.784
-        self.fuelFly = 3.136
-        self.refTq = (self.powerKw * 1000.0) / (self.designRpm * self.npFly * 0.10472)
-        self.ng, self.tgt, self.tq = 0.0, fat, 0.0
-        #Np is state, normalised - 1.0 is governed.
-        self.np = 0.0
-        self.locked = False
-        self.hotFac = 1.0
-        self.sched = 0.0        #the orifice, as the lever has it
-        self.lever, self.starting, self.override = 'OFF', False, False
+def _parse_value(toks, i):
+    t = toks[i]
+    if t == '{':
+        arr = []
+        i += 1
+        while toks[i] != '}':
+            v, i = _parse_value(toks, i)
+            arr.append(v)
+            if toks[i] == ',':
+                i += 1
+        return arr, i + 1
+    if t.startswith('"'):
+        return t[1:-1], i + 1
+    try:
+        return float(t), i + 1
+    except ValueError:
+        return t, i + 1
 
-    def _detentFuel(self, ng, tq):
-        """Fuel that holds this detent: compressor drag plus what the power turbine takes,
-        less the cold air already doing part of that work."""
-        return (self.compressorLoad * ng ** 2
-                + tq / self.ptEfficiency
-                - ng ** self.massFlowExp * self.airCoef)
 
-    def setLever(self, pos):
-        if self.lever == 'OFF' and pos != 'OFF':
-            self.hotFac = 1.0 + self.hotStartCarry * self.tgt
-        self.lever = pos
-
-    def step(self, dt, velY=0.0, nrFrac=None):
-        """nrFrac: rotor speed as a fraction of governed Np, for the freewheel. None means no
-        drivetrain - the turbine spins alone."""
-        dens = self.rho / ISA_RHO
-        lit = self.ng > self.lightOffNg and self.lever != 'OFF'
-        cranking = (self.starting or self.override) and self.ng < self.selfSustNg
-        spooling = not lit and not cranking
-
-        #The orifice. It travels to its detent over LEVER_TRAVEL_SEC and snaps back, as
-        #fn_engineGovernor does - the schedule builds over the push rather than stepping.
-        target = {'FLY': self.fuelFly, 'IDLE': self.fuelIdle, 'OFF': 0.0}[self.lever]
-        if target > self.sched:
-            self.sched = min(target, self.sched + (self.fuelFly / LEVER_TRAVEL_SEC) * dt)
+def _parse_body(toks, i, scope):
+    while i < len(toks) and toks[i] != '}':
+        if toks[i] == 'class':
+            name, i = toks[i + 1], i + 2
+            parent = None
+            if toks[i] == ':':
+                parent, i = toks[i + 1], i + 2
+            body = copy.deepcopy(scope[parent]) if parent else {}
+            i = _parse_body(toks, i + 1, body) + 1
+            if i < len(toks) and toks[i] == ';':
+                i += 1
+            scope[name] = body
         else:
-            self.sched = target
-        floor = self.sched
-        if self.ng < self.idleNg:
-            floor *= min(1.0, self.startFuelBase
-                         + (1 - self.startFuelBase) * self.ng / self.idleNg)
-        fuel = floor
-
-        st = self.starterTorque if cranking else 0.0
-
-        #Air the compressor is moving RIGHT NOW, before the spool steps. No floor - a
-        #stopped compressor moves no air.
-        mflowNow = (self.ng ** self.massFlowExp) * dens
-
-        #Heat is what accelerates the spool - the compressor turbine runs on combustion.
-        fuelGas = fuel * dens if lit else 0.0
-        drag = self.compressorLoad * (self.compDragMult if spooling else 1.0)
-        absorbed = drag * self.ng**2 + (self.compDragFloor if spooling else 0.0)
-        #Heat against the compressor, and nothing else. The free turbine is FREE - rotor load
-        #reaches it and stops there, so it cannot drag the gas generator down.
-        self.ng = max(0.0, min(self.ng
-                     + ((fuelGas + st - absorbed) / self.compressorInertia) * dt, 1.1))
-
-        mflow = max((self.ng ** self.massFlowExp) * dens, 0.02)
-        fac = 1.0 + (self.hotFac - 1.0) * max(0.0, 1.0 - self.ng / self.idleNg)
-        hot = self.fat + fac * self.tgtK * fuel / mflow if lit else self.fat
-        rate = (self.thermalMass if hot > self.tgt
-                else self.cooling * (self.ng + self.soak + max(0.0, velY) * self.ramAirCoef))
-        self.tgt += (hot - self.tgt) * rate * dt
-
-        #Less the compressor turbine's share, scheduled off the orifice. Motoring, the starter
-        #turns the compressor, so nothing is taken.
-        x = (self.sched - self.fuelIdle) / (self.fuelFly - self.fuelIdle)
-        ptShare = (1.0 - max(0.0, min(1.0, x))) if fuelGas > 0.0 else 0.0
-        ptGas = max(0.0, fuelGas + mflowNow * self.airCoef - ptShare * absorbed)
-        self.tq = ptGas * self.refTq * self.ptEfficiency
-
-        #The sprag clutch - it grips on SPEED, not torque, so a momentary torque dip cannot
-        #release a clutch that is still being outrun.
-        npDrag = (self.ptDrag * self.np * self.np
-                  + (self.ptDragFloor if self.tq <= 0.0 else 0.0))
-        npDot = ((self.tq / self.refTq) - npDrag) / self.ptInertia
-        npFree = max(0.0, self.np + npDot * dt)
-
-        if nrFrac is None:
-            #No drivetrain - the bench case every acceptance number was produced at.
-            self.locked = False
-            self.np = npFree
-        else:
-            self.locked = npFree >= nrFrac
-            #Locked, the pair are one shaft and the caller integrates them together.
-            self.np = nrFrac if self.locked else npFree
-
-        #The gauge reads the shaft directly - Np is state now, so nothing has to be inferred.
-        self.gaugeTq = self.tq
-        return self.ng, self.tgt, self.tq / self.refTq, fuel
+            key, i = toks[i], i + 1
+            if toks[i] == '[':
+                i += 2
+            i += 1
+            val, i = _parse_value(toks, i)
+            if i < len(toks) and toks[i] == ';':
+                i += 1
+            scope[key] = val
+    return i
 
 
-DT = 1 / 60.0
+def parse_hpp(path):
+    text = re.sub(r'//[^\n]*', '', open(path, encoding='utf-8', errors='ignore').read())
+    scope = {}
+    _parse_body(_TOK.findall(text), 0, scope)
+    return scope
 
 
-def cold_start(tgt0=15.0, secs=40):
-    e = Engine(); e.tgt = tgt0; e.starting = True
-    t = 0.0; tLight = tCut = None; peak = tgt0; tPeak = 0.0
-    trace = []
-    while t < secs:
-        if e.lever == 'OFF' and e.ng > 0.02:
-            e.setLever('IDLE')
-        if e.ng > e.lightOffNg and e.lever != 'OFF' and tLight is None:
-            tLight = t
-        if e.starting and e.ng >= e.selfSustNg and tCut is None:
-            tCut = t; e.starting = False
-        e.step(DT)
-        if e.tgt > peak: peak, tPeak = e.tgt, t
-        t += DT
-        trace.append((t, e.ng, e.tgt, e.tq / e.refTq))
-    return dict(light=tLight, cutout=tCut, peak=peak, tPeak=tPeak, ng=e.ng, tgt=e.tgt,
-                tq=e.tq / e.refTq, trace=trace)
+def load_config():
+    cfg = {}
+    for f in ('helisim_engine.hpp', 'helisim_simpleRotor.hpp'):
+        cfg.update(parse_hpp(AH64_CONFIG + '\\' + f))
+    return cfg
 
 
-def shutdown(secs=3700):
-    e = Engine(); e.ng, e.tgt, e.lever = 0.679, 465.0, 'OFF'
-    t = 0.0; stop = None; marks = {}
-    while t < secs:
-        e.step(DT)
-        if e.ng <= 0 and stop is None: stop = t
-        t += DT
-        for s in (2, 5, 9.5, 30, 300, 1200, 3600):
-            if abs(t - s) < DT / 2: marks[s] = (e.ng, e.tgt)
-    return dict(stop=stop, marks=marks)
+# ---------------------------------------------------------------------------------------------
+# Utilities - BIS / Core helpers
+# ---------------------------------------------------------------------------------------------
+
+def clamp(v, lo, hi):
+    return lo if v < lo else hi if v > hi else v
 
 
-def motoring(tgt0=163.0, secs=30):
-    e = Engine(); e.ng, e.tgt, e.lever, e.override = 0.0, tgt0, 'OFF', True
-    t = 0.0; m = {}
-    while t < secs:
-        e.step(DT); t += DT
-        for lim in (100, 80):
-            if lim not in m and e.tgt < lim: m[lim] = t
-    return dict(below100=m.get(100), below80=m.get(80), ng=e.ng)
+def lerp(a, b, t):
+    """BIS_fnc_lerp."""
+    return a + (b - a) * t
 
 
-def hot_start_abort(tgt0=163.0, abortAt=700.0, ovrDelay=2.0, secs=60):
-    e = Engine(); e.tgt = tgt0; e.starting = True
-    t = 0.0; peak = tgt0; tAb = None; t540 = None
-    while t < secs:
-        if e.lever == 'OFF' and e.ng > 0.02 and tAb is None:
-            e.setLever('IDLE')
-        if tAb is None and e.tgt > abortAt:
-            tAb = t; e.lever, e.starting = 'OFF', False
-        if tAb is not None and t >= tAb + ovrDelay:
-            e.override = True
-        e.step(DT)
-        peak = max(peak, e.tgt)
-        if tAb and t540 is None and e.tgt < 540: t540 = t - tAb
-        t += DT
-    return dict(abortAt=tAb, peak=peak, t540=t540, tgt=e.tgt)
+def linear_conversion(lo, hi, v, a, b, clip):
+    out = a + (v - lo) * (b - a) / (hi - lo)
+    return clamp(out, min(a, b), max(a, b)) if clip else out
 
 
-def equilibrium():
-    e = Engine(); out = []
-    for tq, ng, dec in [(0.055, 0.679, 460), (0.18, 0.834, 532), (0.84, 0.930, None),
-                        (1.00, 0.951, 810), (1.29, 1.010, 867)]:
-        fuel = e._detentFuel(ng, tq)
-        tgt = 15 + e.tgtK * fuel / (ng ** e.massFlowExp)
-        out.append((tq, ng, tgt, dec))
+def sqf_round(x):
+    return math.floor(x + 0.5)
+
+
+def math_linear_interp(arr, key):
+    """fn_mathLinearInterp."""
+    upper = next((i for i, r in enumerate(arr) if r[0] > key), -1)
+    if upper == 0:
+        return arr[0]
+    if upper == -1:
+        return arr[-1]
+    lo, hi = arr[upper - 1], arr[upper]
+    return [key] + [lo[i] + (hi[i] - lo[i]) / (hi[0] - lo[0]) * (key - lo[0])
+                    for i in range(1, len(lo))]
+
+
+def math_build_interp_grid(arr):
+    """fn_mathBuildInterpGrid - validation omitted, the config is known good."""
+    return [arr[0][1:], arr[1:]]
+
+
+def math_linear_interp_2d(grid, rowKey, colKey):
+    """fn_mathLinearInterp2D."""
+    colKeys, rows = grid
+    row = math_linear_interp(rows, rowKey)
+    return math_linear_interp([[k, row[i + 1]] for i, k in enumerate(colKeys)], colKey)[1]
+
+
+def pid_create(kp, ki, kd, kiClamp):
+    return {'kp': kp, 'ki': ki, 'kd': kd, 'ki_clamp': kiClamp, 'prevError': 0.0, 'integral': 0.0}
+
+
+def pid_run(pid, dt, desired, actual):
+    """fn_pidRun."""
+    error = desired - actual
+    integral = clamp(pid['integral'] + error * dt, -pid['ki_clamp'], pid['ki_clamp'])
+    raw = 0.0 if dt == 0 else (error - pid['prevError']) / dt
+    dCoef = pid.get('dCoef', 0.3)
+    prev = pid.get('derivFilt', raw)
+    derivative = prev + dCoef * (raw - prev)
+    out = pid['kp'] * error + pid['ki'] * integral + pid['kd'] * derivative
+    pid['prevError'], pid['integral'], pid['derivFilt'] = error, integral, derivative
     return out
 
 
-#Acceptance numbers from the plan, for automatic comparison rather than eyeballing.
-EXPECTED = dict(light=2.6, cutout=5.5, peakLo=646.0, peakHi=661.0,
-                stop=9.5, below80=6.6, motorNg=0.420)
+def pid_reset(pid):
+    """fn_pidReset."""
+    pid['prevError'], pid['integral'], pid['derivFilt'] = 0.0, 0.0, 0.0
+
+
+# ---------------------------------------------------------------------------------------------
+# Init - fn_environmentVariables, fn_engineVariables, fn_simpleRotorVariables
+# ---------------------------------------------------------------------------------------------
+
+NUM_FIELDS = ['designRpm', 'npFly', 'maxFuelFlow', 'maxNg', 'maxNp']
+SECTION_FIELDS = [
+    ('ColdSection', ['compressorInertia', 'compressorLoad', 'airCoef', 'compRunMult', 'compRunExp',
+                     'compDragMult', 'compDragFloor', 'lightOffNg', 'selfSustNg', 'idleNg']),
+    ('HotSection', ['massFlowExp', 'tgtK', 'thermalMassCoef', 'coolingCoef', 'stillAirFlow',
+                    'ramAirCoef', 'maxTgt', 'startTgt', 'startMinTgt', 'residualHeatGain']),
+    ('PowerTurbine', ['ptEfficiency', 'ptInertia', 'ptDrag', 'ptDragFloor']),
+    ('Governor', ['fuelIdle', 'fuelFly', 'startFuelBase', 'ffwdGain']),
+]
+ROTOR_NUM_FIELDS = ['numBlades', 'mastLength', 'gearRatio', 'torqueTau', 'bladeRadius',
+                    'bladeChord', 'bladeMass', 'reacTqScalar', 'autoTorque']
+
+
+def engine_variables(H, cfg, overrides=None):
+    engines = []
+    for i in range(1, 3):
+        e = cfg['Engines']['Engine%02d' % i]
+        eng = {k: e[k] for k in NUM_FIELDS}
+        eng['name'] = e['name']
+        for section, fields in SECTION_FIELDS:
+            for f in fields:
+                eng[f] = e[section][f]
+        eng['pid'] = e['Governor']['pid']
+        eng['starterTorque'] = e['Starter']['torque']
+        eng['starterGates'] = e['Starter']['gate']
+        eng['governorGates'] = e['Governor']['gate']
+        ratings = list(e['PowerRatings'].values())
+        eng['refTq'] = (ratings[0]['powerKw'] * 1000) / (eng['designRpm'] * eng['npFly'] * 0.10472)
+        eng.update(overrides or {})
+        engines.append(eng)
+    H['bmkhs_engines'] = engines
+    H['bmkhs_engPowerLeverState'] = ['OFF', 'OFF']
+    H['bmkhs_engState'] = ['OFF', 'OFF']
+    #fn_engine's own spool, read only for the engState transitions.
+    H['bmkhs_engPctNG'] = [0.0, 0.0]
+    H['bmkhs_gtPidEngine'] = [pid_create(*eng['pid']) for eng in engines]
+    z = [0.0, 0.0]
+    for k in ('bmkhs_gtEngPctNg', 'bmkhs_gtEngNp', 'bmkhs_gtEngPctNp', 'bmkhs_gtEngPctTq',
+              'bmkhs_gtEngOilPsi', 'bmkhs_gtEngFf', 'bmkhs_gtEngOutputTq', 'bmkhs_gtEngLeverSched'):
+        H[k] = list(z)
+    H['bmkhs_gtEngClutch'] = [False, False]
+    H['bmkhs_gtEngOverspeed'] = [False, False]
+    H['bmkhs_gtEngTgt'] = [H['bmkhs_FAT'], H['bmkhs_FAT']]
+    H['bmkhs_gtEngState'] = ['OFF', 'OFF']
+    H['bmkhs_gtEngResidualHeat'] = [1.0, 1.0]
+    H['bmkhs_gtEngPrevLever'] = ['OFF', 'OFF']
+
+
+def simple_rotor_variables(H, cfg):
+    rotors = []
+    for i in range(1, int(cfg['numSimpleRotors']) + 1):
+        r = cfg['SimpleRotors']['SimpleRotor%02d' % i]
+        rot = {k: r[k] for k in ROTOR_NUM_FIELDS}
+        rot['type'] = TAIL if r['type'].lower() == 'tail' else MAIN
+        rot['dir'] = CW if r['direction'].lower() == 'cw' else CCW
+        rot['dragCoefTable'] = math_build_interp_grid(r['dragCoefTable'])
+        rot['liftCoefTable'] = math_build_interp_grid(r['liftCoefTable'])
+        rotors.append(rot)
+    H['bmkhs_simpleRotors'] = rotors
+    H['bmkhs_reqEngTorque'] = [0.0, 0.0]
+    H['bmkhs_rtrMoi'] = [0.0, 0.0]
+
+
+# ---------------------------------------------------------------------------------------------
+# fn_environment - ISA_STD base
+# ---------------------------------------------------------------------------------------------
+
+def environment(H):
+    baroAlt = H['baroAltM'] * METERS_TO_FEET
+    baseAlt, baseFAT = 0, 15.0
+    altitude = sqf_round((baseAlt + baroAlt) / 10) * 10
+    altimeter = 29.92
+    temperature = baseFAT - sqf_round((baroAlt / 1000) * 2)
+    refPressure = altimeter * IN_MG_TO_HPA
+    exp_ = (-GRAVITY * MOLAR_MASS_OF_AIR * (altitude - 0)
+            / (UNIVERSAL_GAS_CONSTANT * (temperature + DEG_C_TO_KELVIN)))
+    pressure = ((refPressure / 0.01) * math.exp(exp_)) * 0.01
+    H['bmkhs_PA'] = altitude
+    H['bmkhs_FAT'] = temperature
+    H['bmkhs_rho'] = (pressure / 0.01) / (287.05 * (temperature + DEG_C_TO_KELVIN))
+
+
+# ---------------------------------------------------------------------------------------------
+# Engine - fn_engineGovernor, gasTurbine/*, turboShaftEngine/*
+# ---------------------------------------------------------------------------------------------
+
+def engine_governor(H, i, eng, ng, np_, tgt, lever, fat, dt):
+    idleNg = eng['idleNg']
+    target = {'FLY': eng['fuelFly'], 'IDLE': eng['fuelIdle']}.get(lever, 0.0)
+
+    sched = H['bmkhs_gtEngLeverSched'][i]
+    if target > sched:
+        sched = min(sched + (eng['fuelFly'] / GT_LEVER_TRAVEL_SEC) * dt, target)
+    else:
+        sched = target
+    H['bmkhs_gtEngLeverSched'][i] = sched
+
+    govPowered = H['governorPowered'][i] if eng['governorGates'] else True
+
+    pid = H['bmkhs_gtPidEngine'][i]
+    orifice = sched
+    if lever == 'FLY' and govPowered:
+        govFuel = pid_run(pid, dt, 1.0, np_) + H['bmkhs_collectiveOutput'] * eng['ffwdGain']
+        orifice = min(sched, max(govFuel, 0.0))
+    else:
+        pid_reset(pid)
+
+    fuelCmd = orifice
+    if ng < idleNg:
+        base = eng['startFuelBase']
+        fuelCmd = fuelCmd * min(base + (1.0 - base) * ng / idleNg, 1.0)
+
+    rotorTq = sum(H['bmkhs_reqEngTorque'])
+    lvrState = H['bmkhs_engPowerLeverState']
+    totalEngineTq = sum(e['refTq'] for k, e in enumerate(H['bmkhs_engines']) if lvrState[k] == 'FLY')
+    share = rotorTq * (eng['refTq'] / totalEngineTq) if lever == 'FLY' and totalEngineTq > 0 else 0.0
+    return fuelCmd, share, orifice
+
+
+def gas_turbine_starter(H, i, eng, ng):
+    sw = H['startSw'][i]
+    starting = sw > 0 or H['bmkhs_engState'][i] == 'STARTING'
+    override = sw < 0
+    if ng >= eng['selfSustNg']:
+        return 0.0
+    if not starting and not override:
+        return 0.0
+    if H['bmkhs_gtEngOverspeed'][i]:
+        return 0.0
+    supplied = H['starterSupplied'][i] if eng['starterGates'] else True
+    return eng['starterTorque'] if supplied else 0.0
+
+
+def gas_turbine_cold_section(eng, ng, fuelCmd, starterTq, dens, running, spooling, dt):
+    fuelGas = fuelCmd * dens if running else 0.0
+    airGas = ((ng ** eng['massFlowExp']) * dens) * eng['airCoef']
+    compLoad = eng['compressorLoad']
+    if running:
+        absorbed = compLoad * eng['compRunMult'] * (ng ** eng['compRunExp'])
+    else:
+        absorbed = (compLoad * (eng['compDragMult'] if spooling else 1.0) * ng * ng
+                    + (eng['compDragFloor'] if spooling else 0.0))
+    compWork = compLoad * ng * ng
+    ngDot = (fuelGas + starterTq - absorbed) / eng['compressorInertia']
+    ng = clamp(ng + ngDot * dt, 0.0, 1.1)
+    return ng, fuelGas, compWork, airGas
+
+
+def gas_turbine_hot_section(eng, tgt, ng, fuelCmd, residualHeat, dens, fat, velY, running, dt):
+    massFlow = max((ng ** eng['massFlowExp']) * dens, 0.02)
+    currentHeat = 1.0 + (residualHeat - 1.0) * max(1.0 - ng / eng['idleNg'], 0.0)
+    tgtHot = fat + currentHeat * eng['tgtK'] * fuelCmd / massFlow if running else fat
+    ram = max(velY, 0.0) * eng['ramAirCoef']
+    coolRate = eng['coolingCoef'] * (ng + eng['stillAirFlow'] + ram)
+    rate = eng['thermalMassCoef'] if tgtHot > tgt else coolRate
+    return tgt + (tgtHot - tgt) * rate * dt
+
+
+def turbo_shaft_power_turbine(eng, fuelGas, airGas, compWork, np_, nrFrac, dt):
+    refTq = eng['refTq']
+    ptGas = max(fuelGas + airGas - (compWork if fuelGas > 0.0 else 0.0), 0.0)
+    shaftTq = ptGas * refTq * eng['ptEfficiency']
+    npDrag = eng['ptDrag'] * np_ * np_ + (eng['ptDragFloor'] if shaftTq <= 0.0 else 0.0)
+    npDot = ((shaftTq / refTq) - npDrag) / eng['ptInertia']
+    npFree = max(np_ + npDot * dt, 0.0)
+    npDriven = np_ + ((shaftTq / refTq) / eng['ptInertia']) * dt
+    clutch = (npDriven if fuelGas > 0.0 else npFree) >= nrFrac
+    return shaftTq, (nrFrac if clutch else npFree), clutch
+
+
+def turbo_shaft_engine(H, i, eng):
+    dt = H['bmkhs_deltaTime']
+    fat = H['bmkhs_FAT']
+    dens = H['bmkhs_rho'] / ISA_STD_DAY_AIR_DENSITY
+    velY = H['bmkhs_velModelSpace'][1]
+
+    ng = H['bmkhs_gtEngPctNg'][i]
+    np_ = H['bmkhs_gtEngNp'][i]
+    tgt = H['bmkhs_gtEngTgt'][i]
+    residualHeat = H['bmkhs_gtEngResidualHeat'][i]
+    lever = H['bmkhs_engPowerLeverState'][i]
+
+    prevLever = H['bmkhs_gtEngPrevLever'][i]
+    if prevLever == 'OFF' and lever != 'OFF':
+        residualHeat = 1.0 + eng['residualHeatGain'] * tgt
+        H['bmkhs_gtEngResidualHeat'][i] = residualHeat
+    if prevLever != lever:
+        H['bmkhs_gtEngPrevLever'][i] = lever
+
+    tripped = H['bmkhs_gtEngOverspeed'][i]
+    if not tripped and (ng >= eng['maxNg'] or np_ >= eng['maxNp']):
+        tripped = True
+        H['bmkhs_gtEngOverspeed'][i] = True
+
+    fuelAvail = H['fuelAvail'][i]
+    running = ng > eng['lightOffNg'] and lever != 'OFF' and fuelAvail and not tripped
+
+    starterTq = gas_turbine_starter(H, i, eng, ng)
+    cranking = starterTq > 0.0
+    spooling = not running and not cranking
+
+    fuelCmd, share, orifice = engine_governor(H, i, eng, ng, np_, tgt, lever, fat, dt)
+    refTq = eng['refTq']
+
+    ngNew, gasPower, compWork, airGas = gas_turbine_cold_section(
+        eng, ng, fuelCmd, starterTq, dens, running, spooling, dt)
+    tgt = gas_turbine_hot_section(eng, tgt, ngNew, fuelCmd, residualHeat, dens, fat, velY, running, dt)
+
+    xmsnRpm = H['bmkhs_xmsnOutputRpm']
+    nrFrac = xmsnRpm / (eng['npFly'] * eng['designRpm'])
+
+    tqOut, npNew, clutch = turbo_shaft_power_turbine(
+        eng, gasPower, airGas, compWork, np_, nrFrac, dt)
+
+    if ngNew >= eng['selfSustNg'] and running:
+        state = 'ON'
+    elif cranking or running:
+        state = 'STARTING'
+    else:
+        state = 'OFF'
+
+    H['bmkhs_gtEngPctNg'][i] = ngNew
+    H['bmkhs_gtEngTgt'][i] = tgt
+    H['bmkhs_gtEngOutputTq'][i] = tqOut
+    H['bmkhs_gtEngState'][i] = state
+    H['bmkhs_gtEngPctTq'][i] = tqOut / refTq
+    H['bmkhs_gtEngNp'][i] = npNew
+    H['bmkhs_gtEngClutch'][i] = clutch
+    H['bmkhs_gtEngPctNp'][i] = npNew * eng['npFly']
+    H['bmkhs_gtEngFf'][i] = fuelCmd * eng['maxFuelFlow']
+    H['bmkhs_gtEngOilPsi'][i] = max(ngNew * GT_OIL_PSI_SCALE, 0.0)
+    #Rig-only diagnostics, what GTDIAG / GOVDIAG print.
+    H['diag'][i] = dict(fuel=fuelCmd, orifice=orifice, starterTq=starterTq, running=running,
+                        tripped=tripped, share=share)
+
+
+def legacy_engine_state(H, i, cfg):
+    """fn_engine - ONLY the engState transitions, which the new starter reads."""
+    dt = H['bmkhs_deltaTime']
+    st = H['bmkhs_engState'][i]
+    lever = H['bmkhs_engPowerLeverState'][i]
+    ng = H['bmkhs_engPctNG'][i]
+    simTime = cfg[ENG_SIM_TIME_KEY]
+    throttle = 0.0 if lever in ('OFF', 'IDLE') else 1.0
+    baseNG = cfg['engIdleNG'] + (cfg['engFlyNG'] - cfg['engIdleNG']) * throttle
+    if st == 'OFF':
+        ng = lerp(ng, 0.0, dt)
+    elif st == 'STARTING':
+        if lever == 'OFF':
+            ng = lerp(ng, cfg['engStartNG'], (1.0 / (simTime / 2.0)) * dt)
+        else:
+            ng = lerp(ng, baseNG, (1.0 / simTime) * dt)
+        if ng > cfg['engRunNG']:
+            H['bmkhs_engState'][i] = 'ON'
+    elif st == 'ON':
+        #fn_engine.sqf:106 writes "ON" here, so the state does not change.
+        setNG = baseNG + (cfg['engMaxNG'] - baseNG) * throttle * H['bmkhs_collectiveOutput']
+        ng = lerp(ng, setNG, dt)
+    H['bmkhs_engPctNG'][i] = ng
+
+
+def engine_controller(H, cfg):
+    """fn_engineController, useSystems path, engine half."""
+    engState = list(H['bmkhs_engState'])
+    for e in (0, 1):
+        st = engState[e]
+        sw = H['startSw'][e]
+        lvr = H['pwrLvr'][e]
+        if sw > 0 and st == 'OFF':
+            H['bmkhs_engState'][e] = 'STARTING'
+        if sw < 0 and st == 'STARTING':
+            H['bmkhs_engState'][e] = 'OFF'
+        want = 'FLY' if lvr >= 1.0 else 'IDLE' if lvr > 0.0 else 'OFF'
+        if want != H['bmkhs_engPowerLeverState'][e]:
+            H['bmkhs_engPowerLeverState'][e] = want
+            if want == 'OFF' and st == 'ON':
+                H['bmkhs_engState'][e] = 'OFF'
+    if not H['pneuAvail']:
+        for e in (0, 1):
+            if engState[e] == 'STARTING':
+                H['bmkhs_engState'][e] = 'OFF'
+    for e in (0, 1):
+        legacy_engine_state(H, e, cfg)
+    for e, eng in enumerate(H['bmkhs_engines']):
+        turbo_shaft_engine(H, e, eng)
+    for e in (0, 1):
+        if not H['fuelAvail'][e]:
+            H['bmkhs_engState'][e] = 'OFF'
+
+
+# ---------------------------------------------------------------------------------------------
+# fn_transmissionUpdate
+# ---------------------------------------------------------------------------------------------
+
+def transmission_update(H):
+    rotors = H['bmkhs_simpleRotors']
+    jEng = 0.0
+    for k, moi in enumerate(H['bmkhs_rtrMoi']):
+        gr = rotors[k]['gearRatio']
+        if gr > 0.0:
+            jEng += moi / (gr * gr)
+    outputRpm = H['bmkhs_xmsnOutputRpm']
+    totTq = sum(H['bmkhs_reqEngTorque'])
+    engInputTq = sum(tq for k, tq in enumerate(H['bmkhs_gtEngOutputTq']) if H['bmkhs_gtEngClutch'][k])
+    dt = H['bmkhs_deltaTime']
+    alpha = 0.0 if jEng == 0.0 else (engInputTq - totTq) / jEng
+    deltaRpm = alpha * dt * (60.0 / (2.0 * math.pi))
+    outputRpm = 0.0 if outputRpm < 0.0 else outputRpm + deltaRpm
+    H['bmkhs_xmsnOutputRpm'] = outputRpm
+    H['bmkhs_xmsnDeltaRpm'] = deltaRpm
+    H['xmsnEngInTq'] = engInputTq
+
+
+# ---------------------------------------------------------------------------------------------
+# fn_simpleRotor (torque path), fn_simpleRotorTorque, fn_simpleRotorUpdate
+# ---------------------------------------------------------------------------------------------
+
+def simple_rotor(H, idx, rotor):
+    dt = H['bmkhs_deltaTime']
+    rho = H['bmkhs_rho']
+    if rotor['type'] == MAIN:
+        collOutput = clamp(H['bmkhs_collectiveOutput'], 0.0, 1.0)
+    else:
+        collOutput = clamp(H['pedal'], -1.0, 1.0)
+    velXY = min(H['hubVelXY'], VEL_VNE)
+    velZ = H['hubVelZ']
+
+    rpm = H['bmkhs_xmsnOutputRpm'] / rotor['gearRatio']
+    omega = 0.0 if rpm == 0.0 else (2.0 * math.pi) * (rpm / 60.0)
+    bladeArea = rotor['bladeRadius'] * rotor['bladeChord']
+    bladeRad75 = rotor['bladeRadius'] * 0.75
+    bladeVel75 = omega * bladeRad75
+
+    rotorTorque = 0.0
+    bladeScalar = rotor['numBlades'] / 4
+    dragCoef = math_linear_interp_2d(rotor['dragCoefTable'], collOutput, velXY)
+    for _ in range(4):
+        bladeDrag = dragCoef * 0.5 * rho * bladeArea * (bladeVel75 * bladeVel75) * bladeScalar
+        rotorTorque += bladeDrag * bladeRad75
+        if rotor['type'] == MAIN:
+            upflow = max(-velZ, 0.0)
+            rotorTorque -= rotor['autoTorque'] * upflow * (1.0 - collOutput) * bladeScalar
+
+    simple_rotor_torque(H, idx, rotorTorque, rotor['gearRatio'], rotor['numBlades'],
+                        rotor['bladeMass'] if 'bladeMass' in rotor else 0.0,
+                        rotor['bladeRadius'], rotor['torqueTau'], dt)
+
+
+def simple_rotor_torque(H, idx, rotorTorque, gearRatio, numBlades, bladeMass, bladeRadius, torqueTau, dt):
+    H['bmkhs_rtrMoi'][idx] = numBlades * ((1.0 / 3.0) * bladeMass * (bladeRadius * bladeRadius))
+    req = rotorTorque / gearRatio if gearRatio > 0.0 else 0.0
+    smoothed = H['bmkhs_reqEngTorque'][idx]
+    alpha = 1.0 - math.exp(-dt / torqueTau)
+    H['bmkhs_reqEngTorque'][idx] = smoothed + (req - smoothed) * alpha
+
+
+def simple_rotor_thrust(H, rotor):
+    """fn_simpleRotor's blade lift summed over the four positions - level flight out of ground
+    effect (viScalar and gndEffScalar 1.0), no cyclic delta."""
+    rho = H['bmkhs_rho']
+    collOutput = clamp(H['bmkhs_collectiveOutput'], 0.0, 1.0)
+    velXY = min(H['hubVelXY'], VEL_VNE)
+    rpm = H['bmkhs_xmsnOutputRpm'] / rotor['gearRatio']
+    omega = 0.0 if rpm == 0.0 else (2.0 * math.pi) * (rpm / 60.0)
+    bladeVel75 = omega * rotor['bladeRadius'] * 0.75
+    velZ = H['hubVelZ']
+    viScalarDenom = linear_conversion(-7.62, -19.30, velZ, VEL_VRS, VEL_VRS * 0.1, True)
+    viScalar = 0.0 if (velZ < -VEL_VRS and velXY < VEL_ETL) else 1 - (velZ / viScalarDenom)
+    liftCoef = math_linear_interp_2d(rotor['liftCoefTable'], collOutput, velXY)
+    bladeLift = liftCoef * 0.5 * rho * (rotor['bladeRadius'] * rotor['bladeChord']) * (bladeVel75 * bladeVel75)
+    return 4 * bladeLift * (rotor['numBlades'] / 4) * viScalar
+
+
+def simple_rotor_update(H):
+    for idx, rotor in enumerate(H['bmkhs_simpleRotors']):
+        simple_rotor(H, idx, rotor)
+
+
+# ---------------------------------------------------------------------------------------------
+# The aircraft, and one frame in fn_coreUpdate's order
+# ---------------------------------------------------------------------------------------------
+
+CFG = load_config()
+
+
+#Engine config overrides every Heli() picks up - how a fit tries values without editing the .hpp.
+OVERRIDES = {}
+
+
+class Heli:
+    def __init__(self, overrides=None, baroAltM=0.0):
+        H = self.H = {}
+        H['baroAltM'] = baroAltM
+        environment(H)
+        engine_variables(H, CFG, dict(OVERRIDES, **(overrides or {})))
+        simple_rotor_variables(H, CFG)
+        H['bmkhs_xmsnOutputRpm'] = 0.0
+        H['bmkhs_xmsnDeltaRpm'] = 0.0
+        H['bmkhs_collectiveOutput'] = 0.0
+        H['bmkhs_velModelSpace'] = [0.0, 0.0, 0.0]
+        H['hubVelXY'] = H['hubVelZ'] = 0.0
+        H['pedal'] = 0.0
+        H['startSw'] = [0, 0]
+        H['pwrLvr'] = [0.0, 0.0]
+        H['pneuAvail'] = True
+        H['starterSupplied'] = [True, True]
+        H['governorPowered'] = [True, True]
+        H['fuelAvail'] = [True, True]
+        H['diag'] = [{}, {}]
+        self.t = 0.0
+
+    def frame(self, dt, coll=None, pedal=None, velXY=None, velZ=None, baroAltM=None):
+        H = self.H
+        H['bmkhs_deltaTime'] = dt
+        if baroAltM is not None:
+            H['baroAltM'] = baroAltM
+        environment(H)
+        if coll is not None:
+            H['bmkhs_collectiveOutput'] = coll
+        if pedal is not None:
+            H['pedal'] = pedal
+        if velXY is not None:
+            H['hubVelXY'] = velXY
+            H['bmkhs_velModelSpace'][1] = velXY
+        if velZ is not None:
+            H['hubVelZ'] = velZ
+            H['bmkhs_velModelSpace'][2] = velZ
+        engine_controller(H, CFG)
+        transmission_update(H)
+        simple_rotor_update(H)
+        self.t += dt
+
+    #Readouts, engine i.
+    def ng(self, i=0): return self.H['bmkhs_gtEngPctNg'][i]
+    def np(self, i=0): return self.H['bmkhs_gtEngNp'][i]
+    def tgt(self, i=0): return self.H['bmkhs_gtEngTgt'][i]
+    def tq(self, i=0): return self.H['bmkhs_gtEngPctTq'][i]
+    def clutch(self, i=0): return self.H['bmkhs_gtEngClutch'][i]
+    def tripped(self, i=0): return self.H['bmkhs_gtEngOverspeed'][i]
+
+    def nrFrac(self):
+        e = self.H['bmkhs_engines'][0]
+        return self.H['bmkhs_xmsnOutputRpm'] / (e['npFly'] * e['designRpm'])
+
+    def demand(self):
+        """Rotor demand per engine, as a fraction of refTq."""
+        return sum(self.H['bmkhs_reqEngTorque']) / 2.0 / self.H['bmkhs_engines'][0]['refTq']
+
+
+# ---------------------------------------------------------------------------------------------
+# Scenarios
+# ---------------------------------------------------------------------------------------------
+
+DT = 1 / 60.0
+#Arma's frame runs ~30 ms in the RPTs and drops to 50.
+FRAME_DTS = (0.016, 0.032, 0.050)
+ARMA_DT = 0.032
+JITTER = 0.4
+#A normal collective input, 0 -> target over this long. Claude's assumption, not a published rate.
+NORMAL_PULL_SEC = 2.0
+
+IDLE, FLY = 0.5, 1.0
+
+
+def dt_stream(dt, jitter, seed=1):
+    rng = random.Random(seed)
+    while True:
+        yield dt * (1.0 + rng.uniform(-jitter, jitter))
+
+
+def start_to(a, engines, lever, until, dt=DT, jitter=0.0, **kw):
+    """START pressed on each engine at t=0 (it springs back), lever to its detent at the first
+    sign of Ng rise, run to `until`."""
+    H = a.H
+    for i in engines:
+        H['startSw'][i] = 1
+    dts = dt_stream(dt, jitter)
+    first = True
+    while a.t < until:
+        for i in engines:
+            if H['pwrLvr'][i] == 0.0 and a.ng(i) > 0.02:
+                H['pwrLvr'][i] = IDLE if lever == 'IDLE' else IDLE
+        a.frame(next(dts), **kw)
+        if first:
+            for i in engines:
+                H['startSw'][i] = 0
+            first = False
+
+
+def run_until(a, until, dt=DT, jitter=0.0, each=None, **kw):
+    dts = dt_stream(dt, jitter, seed=int(a.t * 1000) + 7)
+    while a.t < until:
+        a.frame(next(dts), **(each(a) if each else kw))
+
+
+# ---- the acceptance bench ------------------------------------------------------------------
+
+EXPECTED = dict(light=2.6, cutout=5.5, peakLo=646.0, peakHi=661.0, stop=9.5, below80=6.6,
+                motorNg=0.420, hoverTq=0.94, hoverNr=1.01)
+
+
+def cold_start(tgt0=None, secs=40.0):
+    a = Heli()
+    if tgt0 is not None:
+        a.H['bmkhs_gtEngTgt'][0] = tgt0
+    H = a.H
+    H['startSw'][0] = 1
+    tLight = tCut = None
+    peak, tPeak = a.tgt(), 0.0
+    trace = []
+    wasCranking = False
+    while a.t < secs:
+        if H['pwrLvr'][0] == 0.0 and a.ng() > 0.02:
+            H['pwrLvr'][0] = IDLE
+        a.frame(DT)
+        H['startSw'][0] = 0
+        d = H['diag'][0]
+        if tLight is None and d['running']:
+            tLight = a.t
+        if d['starterTq'] > 0:
+            wasCranking = True
+        elif wasCranking and tCut is None:
+            tCut = a.t
+        if a.tgt() > peak:
+            peak, tPeak = a.tgt(), a.t
+        trace.append((a.t, a.ng(), a.tgt(), a.tq()))
+    return dict(light=tLight, cutout=tCut, peak=peak, tPeak=tPeak, ng=a.ng(), tgt=a.tgt(),
+                tq=a.tq(), trace=trace, heli=a)
+
+
+def shutdown(marksAt=(2, 5, 9.5, 30, 300, 1200, 3600)):
+    a = cold_start(secs=60.0)['heli']
+    t0 = a.t
+    a.H['pwrLvr'][0] = 0.0
+    marks, stop = {}, None
+    for s in marksAt:
+        while a.t - t0 < s:
+            a.frame(DT)
+            if stop is None and a.ng() <= 0.001:
+                stop = a.t - t0
+        marks[s] = (a.ng(), a.tgt())
+    return dict(stop=stop, marks=marks)
+
+
+def motoring(tgt0=163.0, secs=30.0):
+    a = Heli()
+    a.H['bmkhs_gtEngTgt'][0] = tgt0
+    a.H['startSw'][0] = -1
+    m = {}
+    while a.t < secs:
+        a.frame(DT)
+        for lim in (100, 80):
+            if lim not in m and a.tgt() < lim:
+                m[lim] = a.t
+    return dict(below100=m.get(100), below80=m.get(80), ng=a.ng())
+
+
+def hot_start_abort(tgt0=163.0, abortAt=700.0, ovrDelay=2.0, secs=60.0):
+    a = Heli()
+    H = a.H
+    H['bmkhs_gtEngTgt'][0] = tgt0
+    H['startSw'][0] = 1
+    peak, tAb, t540 = tgt0, None, None
+    first = True
+    while a.t < secs:
+        if tAb is None and H['pwrLvr'][0] == 0.0 and a.ng() > 0.02:
+            H['pwrLvr'][0] = IDLE
+        if tAb is None and a.tgt() > abortAt:
+            tAb = a.t
+            H['pwrLvr'][0] = 0.0
+        if tAb is not None and a.t >= tAb + ovrDelay:
+            H['startSw'][0] = -1
+        a.frame(DT)
+        if first:
+            H['startSw'][0] = 0
+            first = False
+        peak = max(peak, a.tgt())
+        if tAb is not None and t540 is None and a.tgt() < 540:
+            t540 = a.t - tAb
+    return dict(abortAt=tAb, peak=peak, t540=t540, tgt=a.tgt())
+
+
+#What fit_bench scores, and how much of each counts as one unit of error.
+FIT_PARAMS = ('starterTorque', 'startFuelBase', 'compDragMult', 'compDragFloor')
+
+
+def bench_errors():
+    """Every bench acceptance number the fit can move, as (name, got, want, unit)."""
+    cs = cold_start(secs=30.0)
+    sd = shutdown(marksAt=(2, 5, 30))
+    mo = motoring()
+    peak = cs['peak']
+    peakWant = min(max(peak, EXPECTED['peakLo']), EXPECTED['peakHi'])
+    return [('light-off s', cs['light'], EXPECTED['light'], 0.1),
+            ('cutout s', cs['cutout'] or 99, EXPECTED['cutout'], 0.1),
+            ('start peak C', peak, peakWant, 5.0),
+            ('stop s', sd['stop'] or 99, EXPECTED['stop'], 0.1),
+            ('Ng @2s', sd['marks'][2][0], 0.262, 0.01),
+            ('Ng @5s', sd['marks'][5][0], 0.106, 0.01),
+            ('TGT @2s', sd['marks'][2][1], 267.0, 5.0),
+            ('TGT @5s', sd['marks'][5][1], 191.0, 5.0),
+            ('residual @30s', sd['marks'][30][1], 163.0, 5.0),
+            ('motor <100 s', mo['below100'] or 99, 5.3, 0.1),
+            ('motor <80 s', mo['below80'] or 99, EXPECTED['below80'], 0.1),
+            ('motor Ng', mo['ng'], EXPECTED['motorNg'], 0.01)]
+
+
+def _cost(x):
+    OVERRIDES.update(dict(zip(FIT_PARAMS, x)))
+    if min(x) <= 0.0:
+        return 1e9
+    return sum(((got - want) / unit) ** 2 for _, got, want, unit in bench_errors())
+
+
+def fit_bench(x0, step=0.15, iters=120):
+    """Nelder-Mead on FIT_PARAMS against the bench acceptance numbers."""
+    n = len(x0)
+    simplex = [list(x0)] + [[v * (1 + step) if i == j else v for j, v in enumerate(x0)] for i in range(n)]
+    costs = [_cost(p) for p in simplex]
+    for _ in range(iters):
+        order = sorted(range(n + 1), key=lambda k: costs[k])
+        simplex, costs = [simplex[k] for k in order], [costs[k] for k in order]
+        cen = [sum(p[j] for p in simplex[:-1]) / n for j in range(n)]
+        refl = [cen[j] + (cen[j] - simplex[-1][j]) for j in range(n)]
+        cr = _cost(refl)
+        if cr < costs[0]:
+            exp = [cen[j] + 2 * (cen[j] - simplex[-1][j]) for j in range(n)]
+            ce = _cost(exp)
+            simplex[-1], costs[-1] = (exp, ce) if ce < cr else (refl, cr)
+        elif cr < costs[-2]:
+            simplex[-1], costs[-1] = refl, cr
+        else:
+            con = [cen[j] + 0.5 * (simplex[-1][j] - cen[j]) for j in range(n)]
+            cc = _cost(con)
+            if cc < costs[-1]:
+                simplex[-1], costs[-1] = con, cc
+            else:
+                for k in range(1, n + 1):
+                    simplex[k] = [simplex[0][j] + 0.5 * (simplex[k][j] - simplex[0][j]) for j in range(n)]
+                    costs[k] = _cost(simplex[k])
+    best = min(range(n + 1), key=lambda k: costs[k])
+    OVERRIDES.update(dict(zip(FIT_PARAMS, simplex[best])))
+    return dict(zip(FIT_PARAMS, simplex[best])), costs[best]
+
+
+def equilibrium():
+    """The table as the SPEC writes it - algebraic, not flown. loaded_report flies it."""
+    e = Heli().H['bmkhs_engines'][0]
+    out = []
+    for tq, ng, dec in [(0.055, 0.679, 460), (0.18, 0.834, 532), (0.84, 0.930, None),
+                        (1.00, 0.951, 810), (1.29, 1.010, 867)]:
+        fuel = e['compressorLoad'] * ng ** 2 + tq / e['ptEfficiency'] - ng ** e['massFlowExp'] * e['airCoef']
+        out.append((tq, ng, 15 + e['tgtK'] * fuel / ng ** e['massFlowExp'], dec))
+    return out
 
 
 def report():
-    e = Engine()
-    print('=' * 70)
-    print('derived: refTq %.1f  idleNg %.4f  fuelIdle %.3f  fuelFly %.3f'
-          % (e.refTq, e.idleNg, e.fuelIdle, e.fuelFly))
+    a = Heli()
+    e = a.H['bmkhs_engines'][0]
+    print('=' * 78)
+    print('derived: refTq %.1f  idleNg %.4f  fuelIdle %.3f  fuelFly %.3f   rho %.4f  FAT %.0f'
+          % (e['refTq'], e['idleNg'], e['fuelIdle'], e['fuelFly'], a.H['bmkhs_rho'], a.H['bmkhs_FAT']))
 
-    print('\n-- loaded equilibrium (algebraic) --')
+    print('\n-- equilibrium table, ALGEBRAIC (the spec, not flown) --')
     print('     %TQ     Ng    TGT   declared   err')
     for tq, ng, tgt, dec in equilibrium():
         err = '' if dec is None else '%+d' % round(tgt - dec)
-        print('   %5.1f  %.3f   %4.0f   %8s  %4s'
-              % (tq * 100, ng, tgt, dec if dec else '-', err))
+        print('   %5.1f  %.3f   %4.0f  %8s  %4s' % (tq * 100, ng, tgt, dec if dec else '-', err))
 
     cs = cold_start()
-    print('\n-- cold start, lever to IDLE at first Ng rise, FAT 15 --')
+    print('\n-- cold start, engine 1, rotor attached, lever to IDLE at first Ng rise --')
     print('   light-off  %.1fs        (expect %.1f)' % (cs['light'], EXPECTED['light']))
     print('   cutout     %.1fs        (expect %.1f)' % (cs['cutout'], EXPECTED['cutout']))
     print('   peak TGT   %.0fC at %.1fs (expect %.0f-%.0f)'
           % (cs['peak'], cs['tPeak'], EXPECTED['peakLo'], EXPECTED['peakHi']))
     print('   settled    ng %.3f  tgt %.0fC  tq %.1f%%' % (cs['ng'], cs['tgt'], cs['tq'] * 100))
-
-    print('\n   torque through the start:')
     print('        t     Ng    TGT    %TQ')
-    for mark in (1.0, 2.0, 2.6, 3.0, 4.0, 5.0, 5.5, 7.0, 10.0, 15.0, 20.0, 24.0, 30.0):
-        row = min(cs['trace'], key=lambda r: abs(r[0] - mark))
-        print('   %6.1f  %.3f   %4.0f  %5.1f' % (row[0], row[1], row[2], row[3] * 100))
+    for mark in (2.0, 2.6, 3.0, 4.0, 5.0, 5.5, 7.0, 10.0, 15.0, 20.0, 24.0, 30.0):
+        r = min(cs['trace'], key=lambda x: abs(x[0] - mark))
+        print('   %6.1f  %.3f   %4.0f  %5.1f' % (r[0], r[1], r[2], r[3] * 100))
 
     sd = shutdown()
-    print('\n-- shutdown, lever OFF from stabilised idle --')
-    print('   spool stops %.1fs      (expect %.1f)' % (sd['stop'], EXPECTED['stop']))
-    for s in (2, 5, 9.5, 30, 300, 1200, 3600):
-        if s in sd['marks']:
-            ng, tgt = sd['marks'][s]
-            print('   %7ss  ng %.3f  tgt %.0fC' % (s, ng, tgt))
+    print('\n-- shutdown, lever OFF from settled idle --')
+    print('   spool stops %.1fs      (expect %.1f)' % (sd['stop'] or -1, EXPECTED['stop']))
+    for s, (ng, tgt) in sd['marks'].items():
+        print('   %7ss  ng %.3f  tgt %.0fC' % (s, ng, tgt))
 
     mo = motoring()
     print('\n-- motoring from the 163C residual, start sw to ORIDE --')
     print('   <100C %.1fs  <80C %.1fs (expect %.1f)  steady ng %.3f (expect %.3f)'
           % (mo['below100'], mo['below80'], EXPECTED['below80'], mo['ng'], EXPECTED['motorNg']))
 
-    print('\n-- hot start --')
     hs = cold_start(163.0)
+    ha = hot_start_abort()
+    print('\n-- hot start --')
     print('   uncaught peak %.0fC   (over the 851 start limit: %s)'
           % (hs['peak'], 'YES' if hs['peak'] > 851 else 'NO - WRONG'))
-    ha = hot_start_abort()
     print('   aborted at %.1fs  peak %.0fC  <540 in %.1fs  final %.0fC'
           % (ha['abortAt'], ha['peak'], ha['t540'], ha['tgt']))
-    print()
 
 
+# ---- flight: both engines, governed ---------------------------------------------------------
+
+def twin_to_fly(dt=ARMA_DT, jitter=JITTER, flyAt=30.0, until=40.0, **kw):
+    """Both engines started together, IDLE, levers to FLY at flyAt."""
+    a = Heli()
+    start_to(a, (0, 1), 'IDLE', flyAt, dt, jitter, **kw)
+    a.H['pwrLvr'] = [FLY, FLY]
+    return a
 
 
-#xmsnOutputRpm is the Np SHAFT speed, not Nr. Nr = that / gearRatio, so 20900 -> 289 rpm.
-ROTOR_MOI, GEAR_RATIO = 5144.6, 72.291
-
-TWO_PI = 6.283185307179586
-
-
-class SimpleRotor:
-    """A port of fn_simpleRotor's torque path and fn_simpleRotorTorque. Same expressions:
-    drag over four modelled blade positions scaled by numBlades/4, acting at 0.75 R."""
-
-    def __init__(self, numBlades, gearRatio, bladeRadius, bladeChord, bladeMass,
-                 dragCoefTable, torqueTau):
-        self.numBlades, self.gearRatio = numBlades, gearRatio
-        self.bladeRadius, self.bladeChord, self.bladeMass = bladeRadius, bladeChord, bladeMass
-        self.dragCoefTable, self.torqueTau = dragCoefTable, torqueTau
-        self.bladeArea = bladeRadius * bladeChord
-        self.bladeRad75 = bladeRadius * 0.75
-        self.bladeScalar = numBlades / 4.0
-        #fn_simpleRotorTorque: numBlades * (1/3) m r^2
-        self.moi = numBlades * (1.0 / 3.0) * bladeMass * bladeRadius ** 2
-        self.reqEngTorque = 0.0
-
-    def dragCoef(self, collOutput, velXY):
-        """mathLinearInterp2D over the declared table, clamped at both ends."""
-        hdr = self.dragCoefTable[0][1:]
-        rows = self.dragCoefTable[1:]
-        keys = [r[0] for r in rows]
-
-        def interp1(vals):
-            if velXY <= hdr[0]:
-                return vals[0]
-            if velXY >= hdr[-1]:
-                return vals[-1]
-            for i in range(len(hdr) - 1):
-                if hdr[i] <= velXY <= hdr[i + 1]:
-                    f = (velXY - hdr[i]) / (hdr[i + 1] - hdr[i])
-                    return vals[i] + (vals[i + 1] - vals[i]) * f
-            return vals[-1]
-
-        if collOutput <= keys[0]:
-            return interp1(rows[0][1:])
-        if collOutput >= keys[-1]:
-            return interp1(rows[-1][1:])
-        for i in range(len(keys) - 1):
-            if keys[i] <= collOutput <= keys[i + 1]:
-                a, b = interp1(rows[i][1:]), interp1(rows[i + 1][1:])
-                f = (collOutput - keys[i]) / (keys[i + 1] - keys[i])
-                return a + (b - a) * f
-        return interp1(rows[-1][1:])
-
-    def step(self, rpm, collOutput, dt, rho=ISA_RHO, velXY=0.0):
-        """Returns reqEngTorque - the rotor's drag referred to the engine shaft, filtered."""
-        omega = 0.0 if rpm == 0.0 else TWO_PI * (rpm / 60.0)
-        bladeVel75 = omega * self.bladeRad75
-        cd = self.dragCoef(collOutput, velXY)
-        rotorTorque = 0.0
-        for _ in range(4):
-            drag = cd * 0.5 * rho * self.bladeArea * bladeVel75 ** 2 * self.bladeScalar
-            rotorTorque += drag * self.bladeRad75
-        req = rotorTorque / self.gearRatio if self.gearRatio > 0 else 0.0
-        alpha = 1.0 - pow(2.718281828459045, -dt / self.torqueTau)
-        self.reqEngTorque += (req - self.reqEngTorque) * alpha
-        return self.reqEngTorque
-
-
-#Straight off helisim_simpleRotor.hpp.
-AH64_MAIN_DRAG = [
-    ["A/S", 0.00, 10.29, 20.58, 36.01, 46.30, 51.44, 61.73, 66.88, 72.02],
-    [0.00, 0.0078, 0.0078, 0.0060, 0.0005, 0.0005, 0.0005, 0.0005, 0.0005, 0.0005],
-    [0.20, 0.0193, 0.0178, 0.0150, 0.0099, 0.0100, 0.0101, 0.0110, 0.0110, 0.0110],
-    [0.40, 0.0309, 0.0281, 0.0242, 0.0195, 0.0197, 0.0200, 0.0217, 0.0217, 0.0217],
-    [0.64, 0.0447, 0.0401, 0.0350, 0.0307, 0.0310, 0.0314, 0.0341, 0.0341, 0.0341],
-    [0.80, 0.0474, 0.0474, 0.0474, 0.0474, 0.0474, 0.0474, 0.0474, 0.0474, 0.0474],
-    [1.00, 0.1000, 0.1000, 0.1000, 0.1000, 0.1000, 0.1000, 0.1000, 0.1000, 0.1000],
-]
-
-
-def ah64_main():
-    return SimpleRotor(4, 72.291, 7.315, 0.533, 72.108, AH64_MAIN_DRAG, 0.10)
-
-
-def rotor_start(secs=60, lever='IDLE', coll=0.0, jExtra=0.0, shutdownAt=None):
-    """A start that spins a real rotor up. The rotor is the ported fn_simpleRotor drag path;
-    Nr is integrated exactly as fn_transmissionUpdate does, and the freewheel decides each
-    frame whether the turbine and the rotor are one shaft or two.
-
-    shutdownAt: seconds at which to pull the lever to OFF, for the decouple case.
-    jExtra: driveline inertia referred to the engine shaft, which the aircraft does not model."""
-    e = Engine(); e.starting = True
-    main = ah64_main()
-    wDesign = e.designRpm * e.npFly
-    jEng = main.moi / (main.gearRatio ** 2) + jExtra
-    rpm = 0.0
-    t = 0.0
+def governed_flight(collTarget, pullSecs=NORMAL_PULL_SEC, dt=ARMA_DT, jitter=JITTER,
+                    pullAt=45.0, secs=90.0, velXY=0.0, velZ=0.0):
+    a = twin_to_fly(dt, jitter)
     trace = []
-    peakShaft = peakGauge = 0.0
-    tUnlock = None
-    while t < secs:
-        if e.lever == 'OFF' and e.ng > 0.02 and shutdownAt is None:
-            e.setLever(lever)
-        if shutdownAt is not None:
-            if e.lever == 'OFF' and e.ng > 0.02 and t < shutdownAt:
-                e.setLever(lever)
-            if t >= shutdownAt and e.lever != 'OFF':
-                e.lever, e.starting = 'OFF', False
-        if e.starting and e.ng >= e.selfSustNg:
-            e.starting = False
-
-        nrFrac = rpm / wDesign
-        rotorTq = main.step(rpm / main.gearRatio, coll, DT)
-        e.step(DT, nrFrac=nrFrac)
-
-        #The transmission. Locked, the turbine's torque reaches the rotor and the pair share
-        #one inertia; free, the rotor coasts on its own drag alone and the engine is gone.
-        driveTq = e.tq if e.locked else 0.0
-        rpm = max(0.0, rpm + ((driveTq - rotorTq) / jEng) * DT * (60.0 / TWO_PI))
-        if tUnlock is None and not e.locked and t > 1.0 and rpm > 0.0:
-            tUnlock = t
-
-        peakShaft = max(peakShaft, e.tq / e.refTq)
-        peakGauge = max(peakGauge, e.gaugeTq / e.refTq)
-        t += DT
-        trace.append((t, e.ng, e.tgt, e.tq / e.refTq, e.gaugeTq / e.refTq, e.np,
-                      rpm / main.gearRatio, rotorTq, e.locked))
-    return dict(trace=trace, ng=e.ng, tgt=e.tgt, rpm=rpm, jEng=jEng, np=e.np,
-                peakShaft=peakShaft, peakGauge=peakGauge, nr=rpm / main.gearRatio,
-                locked=e.locked, tUnlock=tUnlock)
+    dts = dt_stream(dt, jitter, seed=3)
+    while a.t < secs:
+        if pullSecs > 0:
+            coll = collTarget * clamp((a.t - pullAt) / pullSecs, 0.0, 1.0)
+        else:
+            coll = collTarget if a.t >= pullAt else 0.0
+        a.frame(next(dts), coll=coll, velXY=velXY, velZ=velZ)
+        trace.append((a.t, a.ng(), a.np(), a.nrFrac(), a.tq(), a.tgt(), a.clutch(), a.tripped(),
+                      a.H['diag'][0]['orifice'], coll, a.demand()))
+    return a, trace
 
 
-def rotor_report():
+def governed_report():
+    print('\n' + '=' * 78)
+    print('FLIGHT - both engines, governed, rotor + tail rotor, Arma frame %.0f ms +-%.0f%%'
+          % (ARMA_DT * 1000, JITTER * 100))
     print('=' * 78)
-    print('ROTOR SPIN-UP - a real rotor, and Np as state through the freewheel')
+    a = Heli()
+    start_to(a, (0, 1), 'IDLE', 30.0, ARMA_DT, JITTER)
+    print('   twin IDLE at 30 s: Ng %.3f  TGT %.0fC  tq %.1f%%  Np %.1f%%  Nr %.1f%% of governed'
+          % (a.ng(), a.tgt(), a.tq() * 100, a.np() * 100, a.nrFrac() * 100))
+
+    a, tr = governed_flight(0.64)
+    print('\n   levers FLY at 30 s, collective 0 -> 0.64 over %.0f s at 45 s' % NORMAL_PULL_SEC)
+    print('        t     Ng     Np%    Nr%   %TQ  demand   TGT  clutch  orifice')
+    for mark in (30.5, 31, 32, 33, 34, 35, 38, 44.5, 45.5, 46, 47, 50, 60, 89.9):
+        r = min(tr, key=lambda x: abs(x[0] - mark))
+        print('   %6.1f  %.3f  %5.1f  %5.1f  %5.1f  %5.1f  %4.0f   %-5s  %.3f'
+              % (r[0], r[1], r[2] * 100, r[3] * 100, r[4] * 100, r[10] * 100, r[5],
+                 'lock' if r[6] else 'FREE', r[8]))
+    runup = max(r[3] for r in tr if 30.0 <= r[0] < 45.0)
+    flat = [r for r in tr if 42.0 <= r[0] < 45.0][-1]
+    last = tr[-1]
+    e = a.H['bmkhs_engines'][0]
+    print('\n   run-up peak Nr %.1f%% of governed' % (runup * 100))
+    print('   flat pitch      tq %.1f%%  Ng %.3f  TGT %.0fC   (flight 18.4%% / 0.787-0.800 / 478)'
+          % (flat[4] * 100, flat[1], flat[5]))
+    print('   FLIGHT ACCEPTANCE, coll 0.64 settled: tq %.1f%% (expect %.0f)  Nr %.1f%% of design (expect %.0f)'
+          % (last[4] * 100, EXPECTED['hoverTq'] * 100, last[3] * e['npFly'] * 100, EXPECTED['hoverNr'] * 100))
+    print('                                         Ng %.3f  TGT %.0fC   (flight ~94%%: 1.052 / 520)'
+          % (last[1], last[5]))
+
+    print('\n   Nr deviation from 45 s     normal pull    panic step')
+    for dt in FRAME_DTS:
+        dev = []
+        for ps in (NORMAL_PULL_SEC, 0.0):
+            _, t2 = governed_flight(0.64, pullSecs=ps, dt=dt)
+            dev.append(max((r[3] - 1.0 for r in t2 if r[0] >= 45.0), key=abs))
+        print('   dt %2.0f ms                   %+6.2f%%       %+6.2f%%' % (dt * 1000, dev[0] * 100, dev[1] * 100))
+
+
+def collective_for(tqPerEngine):
+    """Collective at which main + tail, on governed speed, demand this from each of two engines."""
+    lo, hi = 0.0, 1.0
+    for _ in range(30):
+        mid = (lo + hi) / 2.0
+        a = Heli()
+        e = a.H['bmkhs_engines'][0]
+        a.H['bmkhs_xmsnOutputRpm'] = e['designRpm'] * e['npFly']
+        a.H['bmkhs_collectiveOutput'] = mid
+        a.H['bmkhs_deltaTime'] = DT
+        for _ in range(300):
+            simple_rotor_update(a.H)
+        if a.demand() < tqPerEngine:
+            lo = mid
+        else:
+            hi = mid
+    return (lo + hi) / 2.0
+
+
+LOADED_ROWS = [(0.18, 0.834, 532), (0.59, None, None), (0.84, 0.930, None), (0.94, None, None),
+               (1.00, 0.951, 810), (1.18, None, None), (1.29, 1.010, 867)]
+#What the 15-19-01 flight settled at, for the same torque.
+FLIGHT_ROWS = {0.18: (0.787, 478), 0.59: (0.958, 517), 0.94: (1.052, 520), 1.18: (1.08, 570)}
+
+
+def loaded_report():
+    print('\n' + '=' * 78)
+    print('LOADED - each torque flown at the collective that demands it (main + tail rotor)')
     print('=' * 78)
-    print('   J_eng = %.3f kg m^2   (moi %.1f / gr %.3f^2)   ptInertia %.2f'
-          % (ROTOR_MOI / GEAR_RATIO ** 2, ROTOR_MOI, GEAR_RATIO, Engine.ptInertia))
+    print('   target   coll |  %TQ    Nr%     Ng  spec  flight |  TGT  spec flight | trip')
+    for tq, ngSpec, tgtSpec in LOADED_ROWS:
+        coll = collective_for(tq)
+        a, tr = governed_flight(coll, secs=100.0)
+        last = tr[-1]
+        fl = FLIGHT_ROWS.get(tq)
+        e = a.H['bmkhs_engines'][0]
+        print('   %5.0f%%  %.3f | %5.1f  %5.1f  %.3f %5s  %5s | %4.0f  %4s  %4s | %s'
+              % (tq * 100, coll, last[4] * 100, last[3] * e['npFly'] * 100, last[1],
+                 '%.3f' % ngSpec if ngSpec else '-', '%.3f' % fl[0] if fl else '-', last[5],
+                 '%d' % tgtSpec if tgtSpec else '-', '%d' % fl[1] if fl else '-',
+                 'YES' if any(r[7] for r in tr) else 'no'))
 
-    for lever in ('IDLE', 'FLY'):
-        r = rotor_start(lever=lever)
-        print('\n   lever %s: settled ng %.3f  tgt %.0fC  Np %.1f%%  Nr %.0f rpm  clutch %s'
-              % (lever, r['ng'], r['tgt'], r['np'] * 100, r['nr'],
-                 'LOCKED' if r['locked'] else 'free'))
-        print('        t     Ng    TGT    %TQ   gauge    Np%%   Nr rpm  clutch')
-        for mark in (2, 3, 4, 5, 6, 8, 10, 15, 20, 30, 44, 59):
-            row = min(r['trace'], key=lambda x: abs(x[0] - mark))
-            print('   %6.1f  %.3f   %4.0f  %5.0f  %6.0f  %5.0f  %6.0f  %s'
-                  % (row[0], row[1], row[2], row[3] * 100, row[4] * 100,
-                     row[5] * 100, row[6], 'lock' if row[8] else 'FREE'))
 
-    #The case that motivated 3c: at shutdown Np used to track a spooling rotor because it WAS
-    #the rotor. Now the clutch opens and the two separate.
-    r = rotor_start(secs=90, lever='FLY', shutdownAt=45.0)
-    print('\n   THE DECOUPLE - lever to OFF at 45s, from a spun-up rotor')
-    print('   clutch first opens at %s' % (('%.1fs' % r['tUnlock']) if r['tUnlock'] else 'never'))
-    print('        t     Ng     Np%%   Nr rpm   NrFrac%%  clutch')
-    wDesign = Engine().designRpm * Engine().npFly
-    for mark in (44, 45, 46, 48, 50, 55, 60, 70, 89):
-        row = min(r['trace'], key=lambda x: abs(x[0] - mark))
-        print('   %6.1f  %.3f  %5.1f  %6.0f   %6.1f   %s'
-              % (row[0], row[1], row[5] * 100, row[6],
-                 100 * row[6] * GEAR_RATIO / wDesign, 'lock' if row[8] else 'FREE'))
+def autorotation_report(velXY=36.0, velZ=-10.0):
+    print('\n' + '=' * 78)
+    print('POWER-ON AUTOROTATION - governed at 0.40 collective, %.0f m/s; at 60 s collective'
+          ' to 0 and %.0f m/s descent' % (velXY, -velZ))
+    print('   expected (user): torque ~0-1%, Np ~0.94-0.96, Ng ~idle, TGT not rising')
+    print('=' * 78)
+    a = twin_to_fly()
+    dts = dt_stream(ARMA_DT, JITTER, seed=5)
+    rows = []
+    while a.t < 110.0:
+        if a.t < 60.0:
+            kw = dict(coll=0.40 * clamp((a.t - 45.0) / 2.0, 0.0, 1.0), velXY=velXY, velZ=0.0)
+        else:
+            k = clamp((a.t - 60.0) / 2.0, 0.0, 1.0)
+            kw = dict(coll=0.40 * (1.0 - k), velXY=velXY, velZ=velZ * k)
+        a.frame(next(dts), **kw)
+        rows.append((a.t, a.ng(), a.np(), a.nrFrac(), a.tq(), a.tgt(), a.clutch(), a.demand(),
+                     a.H['diag'][0]['orifice']))
+    print('        t     Ng     Np%    Nr%   %TQ  demand   TGT  clutch  orifice')
+    for mark in (59, 61, 62, 63, 65, 70, 80, 90, 109.9):
+        r = min(rows, key=lambda x: abs(x[0] - mark))
+        print('   %6.1f  %.3f  %5.1f  %5.1f  %5.1f  %6.1f  %4.0f   %-5s  %.3f'
+              % (r[0], r[1], r[2] * 100, r[3] * 100, r[4] * 100, r[7] * 100, r[5],
+                 'lock' if r[6] else 'FREE', r[8]))
+
+
+def shutdown_from_flight_report():
+    print('\n' + '=' * 78)
+    print('SHUTDOWN FROM GOVERNED FLIGHT - both levers OFF at 60 s, flat pitch')
+    print('   Flight 1 (approved): Np stopped in ~2.5 s, leading Ng (~9.6 s)')
+    print('=' * 78)
+    a = twin_to_fly()
+    run_until(a, 60.0, ARMA_DT, JITTER)
+    a.H['pwrLvr'] = [0.0, 0.0]
+    t0 = a.t
+    rows = []
+    while a.t < t0 + 30.0:
+        a.frame(ARMA_DT)
+        rows.append((a.t - t0, a.ng(), a.np(), a.nrFrac(), a.clutch()))
+    print('      +t     Ng     Np%   Nr%   clutch')
+    for mark in (0.5, 1, 2, 3, 5, 8, 10, 15, 29.9):
+        r = min(rows, key=lambda x: abs(x[0] - mark))
+        print('   %5.1f  %.3f  %5.1f  %5.1f  %s' % (r[0], r[1], r[2] * 100, r[3] * 100, 'lock' if r[4] else 'FREE'))
+    npStop = next((r[0] for r in rows if r[2] < 0.01), None)
+    ngStop = next((r[0] for r in rows if r[1] < 0.001), None)
+    print('   Np < 1%% at %s   Ng stopped at %s'
+          % ('%.1fs' % npStop if npStop else 'never', '%.1fs' % ngStop if ngStop else 'never'))
+
+
+#The rotor tables' airspeed columns, m/s, and the collective steps flown at each.
+ENVELOPE_SPEEDS = (0.00, 10.29, 20.58, 36.01, 51.44, 61.73, 72.02)
+ENVELOPE_COLLS = tuple(round(c * 0.1, 1) for c in range(11))
+
+
+#The design gross weight (user, 2026-09-27): everything is built around it.
+GROSS_WEIGHT_LB = 18000.0
+LB_TO_N = 4.4482216
+
+
+#Level-flight pitch attitude (user, 2026-09-27): 0 deg at the hover, -5 deg at 90 kt. Between
+#and beyond, fn_mathLinearInterp's own rule - linear, held at the ends.
+PITCH_BY_KT = [[0.0, 0.0], [90.0, -5.0]]
+
+
+def level_flight(v):
+    """Hub-axis airflow and thrust tilt for level flight at v m/s, wings level. Nose-down pitch
+    puts +v*sin on the disc's up axis."""
+    pitch = math.radians(math_linear_interp(PITCH_BY_KT, v * 1.94384)[1])
+    return v * math.cos(pitch), -v * math.sin(pitch), pitch
+
+
+def trim_collective(velXY, velZ=0.0, pitch=0.0, weightLb=GROSS_WEIGHT_LB):
+    """Collective at which main rotor thrust, on governed speed, carries the weight."""
+    a = Heli()
+    e = a.H['bmkhs_engines'][0]
+    a.H['bmkhs_xmsnOutputRpm'] = e['designRpm'] * e['npFly']
+    a.H['hubVelXY'] = velXY
+    a.H['hubVelZ'] = velZ
+    main = a.H['bmkhs_simpleRotors'][0]
+    need = weightLb * LB_TO_N / math.cos(pitch)
+    lo, hi = 0.0, 1.0
+    for _ in range(40):
+        a.H['bmkhs_collectiveOutput'] = (lo + hi) / 2.0
+        if simple_rotor_thrust(a.H, main) < need:
+            lo = a.H['bmkhs_collectiveOutput']
+        else:
+            hi = a.H['bmkhs_collectiveOutput']
+    return (lo + hi) / 2.0
+
+
+def gross_weight_report():
+    print('\n' + '=' * 78)
+    print('%.0f lb - level flight at the collective that carries it, sea level ISA' % GROSS_WEIGHT_LB)
+    print('   both engines governed; wings level, pitch %s by kt; out of ground effect, no fuselage'
+          ' drag' % PITCH_BY_KT)
+    print('=' * 78)
+    print('     kt  pitch    coll   %TQ    Nr%     Ng     TGT   trip')
+    for v in ENVELOPE_SPEEDS:
+        vXY, vZ, pitch = level_flight(v)
+        c = trim_collective(vXY, vZ, pitch)
+        a, tr = governed_flight(c, secs=100.0, velXY=vXY, velZ=vZ)
+        last = tr[-1]
+        e = a.H['bmkhs_engines'][0]
+        print('   %4.0f  %5.1f   %.3f  %5.1f  %5.1f  %.3f   %4.0f   %s'
+              % (v * 1.94384, math.degrees(pitch), c, last[4] * 100, last[3] * e['npFly'] * 100,
+                 last[1], last[5], 'YES' if any(r[7] for r in tr) else 'no'))
+
+
+def governor_sweep(gains, ffwds=(1.0,)):
+    """Governor gains scored on what the rotor must do: settled Nr at every 18,000 lb speed and
+    every loaded row, the normal-pull and panic deviation at each frame rate, the run-up."""
+    points = [trim_collective(*level_flight(v)[:2], level_flight(v)[2]) for v in ENVELOPE_SPEEDS]
+    vels = [level_flight(v) for v in ENVELOPE_SPEEDS]
+    rows = [collective_for(tq) for tq, _, _ in LOADED_ROWS]
+    print('\n' + '=' * 78)
+    print('GOVERNOR SWEEP - worst settled Nr error, worst pull/panic deviation, run-up peak')
+    print('=' * 78)
+    print('     kp     ki   clamp  ffwd | settled GW  settled rows | pull   panic | run-up')
+    out = []
+    for kp, ki, clampI in gains:
+        for ff in ffwds:
+            overrides = dict(pid=[kp, ki, 0.0, clampI], ffwdGain=ff)
+
+            def fly(coll, **kw):
+                return governed_flight_with(overrides, coll, **kw)
+
+            gw = max(abs(fly(c, velXY=vx, velZ=vz)[-1][3] - 1.0)
+                     for c, (vx, vz, _) in zip(points, vels))
+            rw = max(abs(fly(c)[-1][3] - 1.0) for c in rows)
+            pull = max(abs(max((r[3] - 1.0 for r in fly(0.64, dt=d) if r[0] >= 45.0), key=abs))
+                       for d in FRAME_DTS)
+            panic = max(abs(max((r[3] - 1.0 for r in fly(0.64, dt=d, pullSecs=0.0) if r[0] >= 45.0), key=abs))
+                        for d in FRAME_DTS)
+            runup = max(r[3] for r in fly(0.0) if 30.0 <= r[0] < 45.0) - 1.0
+            out.append((max(gw, rw), kp, ki, clampI, ff, gw, rw, pull, panic, runup))
+            print('   %5.1f  %5.1f  %.3f  %.2f |   %5.2f%%      %5.2f%%    | %4.2f%%  %4.2f%% | %+5.2f%%'
+                  % (kp, ki, clampI, ff, gw * 100, rw * 100, pull * 100, panic * 100, runup * 100))
+    return out
+
+
+def governed_flight_with(overrides, collTarget, pullSecs=NORMAL_PULL_SEC, dt=ARMA_DT,
+                         jitter=JITTER, pullAt=45.0, secs=100.0, velXY=0.0, velZ=0.0):
+    """governed_flight on an aircraft whose engines carry these config overrides."""
+    a = Heli(overrides)
+    start_to(a, (0, 1), 'IDLE', 30.0, dt, jitter)
+    a.H['pwrLvr'] = [FLY, FLY]
+    trace = []
+    dts = dt_stream(dt, jitter, seed=3)
+    while a.t < secs:
+        k = clamp((a.t - pullAt) / pullSecs, 0.0, 1.0) if pullSecs > 0 else float(a.t >= pullAt)
+        a.frame(next(dts), coll=collTarget * k, velXY=velXY, velZ=velZ)
+        trace.append((a.t, a.ng(), a.np(), a.nrFrac(), a.tq(), a.tgt(), a.clutch(), a.tripped()))
+    return trace
+
+
+def envelope_report():
+    print('\n' + '=' * 78)
+    print('ENVELOPE - both engines governed, level flight, sea level ISA, settled at 100 s')
+    print('   each cell: collective set over %.0f s at 45 s. TRIP = an Ng or Np hard shutdown'
+          % NORMAL_PULL_SEC)
+    print('=' * 78)
+    cells = {}
+    for v in ENVELOPE_SPEEDS:
+        for c in ENVELOPE_COLLS:
+            a, tr = governed_flight(c, secs=100.0, velXY=v)
+            last = tr[-1]
+            e = a.H['bmkhs_engines'][0]
+            cells[(v, c)] = (last[4], last[3] * e['npFly'], last[1], last[5], any(r[7] for r in tr))
+
+    def table(title, fmt, pick):
+        print('\n   %s' % title)
+        print('    kt \\ coll ' + ''.join('%7.1f' % c for c in ENVELOPE_COLLS))
+        for v in ENVELOPE_SPEEDS:
+            row = []
+            for c in ENVELOPE_COLLS:
+                cell = cells[(v, c)]
+                row.append('   TRIP' if cell[4] else fmt % pick(cell))
+            print('   %5.0f      ' % (v * 1.94384) + ''.join(row))
+
+    table('torque per engine, %', '%7.1f', lambda x: x[0] * 100)
+    table('Nr, % of design', '%7.1f', lambda x: x[1] * 100)
+    table('Ng', '%7.3f', lambda x: x[2])
+    table('TGT, C', '%7.0f', lambda x: x[3])
 
 
 if __name__ == '__main__':
     report()
-    rotor_report()
+    governed_report()
+    loaded_report()
+    autorotation_report()
+    shutdown_from_flight_report()

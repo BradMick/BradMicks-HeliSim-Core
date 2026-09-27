@@ -36,8 +36,8 @@ private _numFields = [
    , "maxNp"
 ];
 private _sectionFields = [
-     ["ColdSection",  ["compressorInertia", "compressorLoad", "airCoef", "compDragMult"
-                     , "compDragFloor", "lightOffNg", "selfSustNg", "idleNg"]]
+     ["ColdSection",  ["compressorInertia", "compressorLoad", "airCoef", "compRunMult", "compRunExp"
+                     , "compDragMult", "compDragFloor", "lightOffNg", "selfSustNg", "idleNg"]]
    , ["HotSection",   ["massFlowExp", "tgtK", "thermalMassCoef", "coolingCoef", "stillAirFlow"
                      , "ramAirCoef", "maxTgt", "startTgt", "startMinTgt", "residualHeatGain"]]
    , ["PowerTurbine", ["ptEfficiency", "ptInertia", "ptDrag", "ptDragFloor"]]
@@ -155,8 +155,12 @@ _heli setVariable ["bmkhs_engIdleNP",       getNumber (_config >> "engIdleNP")];
 _heli setVariable ["bmkhs_engOvrspdNP",     getNumber (_config >> "engOvrspdNP")];
 _heli setVariable ["bmkhs_engFlyNG",        getNumber (_config >> "engFlyNG")];
 
+//Legacy model's PID, from its own flat gains.
+private _engPidGains = getArray (_config >> "pidEngine");
+_heli setVariable ["bmkhs_pid_engine", _engines apply {_engPidGains call bmkhs_fnc_pidCreate}];
+
 //Governor PID - one per engine, from that engine's own gains.
-_heli setVariable ["bmkhs_pid_engine", _engines apply {(_x get "pid") call bmkhs_fnc_pidCreate}];
+_heli setVariable ["bmkhs_gtPidEngine", _engines apply {(_x get "pid") call bmkhs_fnc_pidCreate}];
 
 //RUNTIME STATE - what the model carries frame to frame.
 _heli setVariable ["bmkhs_shiftLocked",           false];

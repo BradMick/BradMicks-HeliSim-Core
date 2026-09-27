@@ -17,8 +17,8 @@ Parameters:
     _deltaTime - Frame time [Number]
 
 Returns:
-    [_ng, _fuelGas, _absorbed, _airGas] - the stepped speed, and the terms the
-    power turbine needs for its share [Array]
+    [_ng, _fuelGas, _compWork, _airGas] - the stepped speed, and the terms the
+    power turbine needs [Array]
 
 Author:
     BradMick
@@ -32,14 +32,22 @@ private _fuelGas = [0.0, _fuelCmd * _dens] select _running;
 //No floor - a stopped compressor moves no air.
 private _airGas = ((_ng ^ (_engine get "massFlowExp")) * _dens) * (_engine get "airCoef");
 
-//Spooling down, the compressor is pure load and that is what stops it. The floor finishes the
-//stop, since ng^2 alone only asymptotes.
-private _drag     = (_engine get "compressorLoad") * ([1.0, _engine get "compDragMult"] select _spooling);
-private _absorbed = (_drag * _ng * _ng) + ([0.0, _engine get "compDragFloor"] select _spooling);
+//Running, the load rises steeply with Ng. Spooling down, the compressor is pure load and that
+//is what stops it; the floor finishes the stop, since ng^2 alone only asymptotes.
+private _compLoad = _engine get "compressorLoad";
+private _absorbed = if (_running) then {
+    _compLoad * (_engine get "compRunMult") * (_ng ^ (_engine get "compRunExp"))
+} else {
+    (_compLoad * ([1.0, _engine get "compDragMult"] select _spooling) * _ng * _ng)
+        + ([0.0, _engine get "compDragFloor"] select _spooling)
+};
+
+//What the compressor turbine takes out of the gas before it reaches the power turbine.
+private _compWork = _compLoad * _ng * _ng;
 
 //Heat against the compressor, and nothing else. The free turbine is FREE - rotor load reaches
 //it and stops there, so it cannot drag the gas generator down.
 private _ngDot = (_fuelGas + _starterTq - _absorbed) / (_engine get "compressorInertia");
 _ng = [_ng + (_ngDot * _deltaTime), 0.0, 1.1] call BIS_fnc_clamp;
 
-[_ng, _fuelGas, _absorbed, _airGas]
+[_ng, _fuelGas, _compWork, _airGas]

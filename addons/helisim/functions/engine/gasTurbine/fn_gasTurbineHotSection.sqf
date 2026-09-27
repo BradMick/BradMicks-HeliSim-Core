@@ -49,15 +49,16 @@ private _tgtNew = _tgt + ((_tgtHot - _tgt) * _rate * _deltaTime);
 
 //TEMPORARY - remove when the post-shutdown TGT climb is found.
 if (bmkhs_sysDebug) then {
-    private _last = missionNamespace getVariable ["bmkhs_hotDiagLast", 0];
+    private _key  = format ["bmkhs_hotDiagLast_%1", _engine get "name"];
+    private _last = missionNamespace getVariable [_key, 0];
     if (time > _last + 0.25) then {
-        missionNamespace setVariable ["bmkhs_hotDiagLast", time];
+        missionNamespace setVariable [_key, time];
         diag_log text format [
-            "HOTDIAG run=%1 fat=%2 ng=%3 fuel=%4 mflow=%5 heat=%6 tgtHot=%7 ram=%8 coolRate=%9 rate=%10 tgt=%11->%12 dt=%13",
+            "HOTDIAG eng=%14 run=%1 fat=%2 ng=%3 fuel=%4 mflow=%5 heat=%6 tgtHot=%7 ram=%8 coolRate=%9 rate=%10 tgt=%11->%12 dt=%13",
             _running, _fat toFixed 1, _ng toFixed 4, _fuelCmd toFixed 4,
             _massFlow toFixed 4, _currentHeat toFixed 3, _tgtHot toFixed 1,
             _ram toFixed 6, _coolRate toFixed 6, _rate toFixed 6,
-            _tgt toFixed 1, _tgtNew toFixed 1, _deltaTime toFixed 4
+            _tgt toFixed 1, _tgtNew toFixed 1, _deltaTime toFixed 4, _engine get "name"
         ];
     };
 };
