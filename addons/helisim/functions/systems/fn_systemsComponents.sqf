@@ -235,12 +235,12 @@ if !(_heli getVariable ["bmkhs_useSystems", false]) then {
     } forEach [
         //The transmission carries both engines summed, and has no single-engine case -
         //one engine can never overtorque what is rated for two.
-        ["transmission",  "bmkhs_engPctTQ", true,  getArray (_config >> "xmsnTqLimits"),
+        ["transmission",  "bmkhs_engPctTq", true,  getArray (_config >> "xmsnTqLimits"),
                           [], []],
         //A nose gearbox carries its own engine, which is only enough to hurt it when that
         //engine is doing the work of two - so it is rated single-engine and no other way.
         //Nothing breaks anything else here: there are no systems to fail.
-        ["noseGearboxes", "bmkhs_engPctTQ", false, [],
+        ["noseGearboxes", "bmkhs_engPctTq", false, [],
                           getArray (_config >> "ngbTqLimitsSE"), []]
     ];
     //Only the ones the aircraft actually gave limits for.

@@ -44,12 +44,11 @@ if (count _bgPos < 4) exitWith {};
 _bgPos params ["_x0", "_y0", "_W", "_H"];
 if (_W < 0.001) exitWith {};
 
-//The new model's output. It publishes gt* until the Phase 3b rename drops the prefix.
-private _ng  = _heli getVariable "bmkhs_gtEngPctNg";
-private _np  = _heli getVariable "bmkhs_gtEngPctNp";
-private _tq  = _heli getVariable "bmkhs_gtEngPctTq";
-private _tgt = _heli getVariable "bmkhs_gtEngTgt";
-private _oil = _heli getVariable "bmkhs_gtEngOilPsi";
+private _ng  = _heli getVariable "bmkhs_engPctNg";
+private _np  = _heli getVariable "bmkhs_engPctNp";
+private _tq  = _heli getVariable "bmkhs_engPctTq";
+private _tgt = _heli getVariable "bmkhs_engTgt";
+private _oil = _heli getVariable "bmkhs_engOilPsi";
 private _rtg = _heli getVariable "bmkhs_engRatingName";
 
 private _n = _heli getVariable "bmkhs_numEngines";
@@ -64,10 +63,10 @@ private _rTop    = _ratings # ((count _ratings) - 1);
 
 private _tgtAmb = _rBase get "maxTgt";
 private _tgtRed = _rTop  get "maxTgt";
-private _npOvsp = _heli getVariable "bmkhs_engOvrspdNP";
+private _npOvsp = ((_heli getVariable "bmkhs_engines") # 0) get "maxNp";
 
 //Full scale sits above the top limit so the red band has somewhere to be drawn.
-private _tqFs  = getNumber ((configOf _heli >> "BMKHS_HeliSim") >> "engMaxTQ");
+private _tqFs  = ED_TQ_FULL_SCALE;
 private _tgtFs = _tgtRed * 1.08;
 private _npFs  = _npOvsp * 1.05;
 
@@ -76,7 +75,7 @@ private _warn = [];
 private _caut = [];
 private _advs = [];
 
-private _state = _heli getVariable "bmkhs_gtEngState";
+private _state = _heli getVariable "bmkhs_engState";
 private _ovsp  = _heli getVariable "bmkhs_engineOverspeed";
 
 for "_i" from 0 to (_n - 1) do {

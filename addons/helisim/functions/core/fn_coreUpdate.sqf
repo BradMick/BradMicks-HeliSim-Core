@@ -56,7 +56,7 @@ if (isAutoHoverOn _heli) then {
 [_heli] call bmkhs_fnc_perfData;
 
 //Engines
-[_heli] call bmkhs_fnc_engineController;
+[_heli] call bmkhs_fnc_engineUpdate;
 
 //Transmission
 [_heli] call bmkhs_fnc_transmissionUpdate;

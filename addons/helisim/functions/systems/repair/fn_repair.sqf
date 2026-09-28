@@ -59,7 +59,6 @@ private _engines = _heli getVariable ["bmkhs_numEngines", 0];
 for "_i" from 0 to (_engines - 1) do {
     if (([_heli, "engines", _i] call bmkhs_fnc_damageGet) == 0) then {
         [_heli, "bmkhs_engineOverspeed", _i, false, true] call bmkhs_fnc_utilSetArrayVariable;
-        [_heli, "bmkhs_gtEngOverspeed",  _i, false, true] call bmkhs_fnc_utilSetArrayVariable;
         [_heli, "engines", 0.000001, _i] call bmkhs_fnc_damageSet;
     };
 };

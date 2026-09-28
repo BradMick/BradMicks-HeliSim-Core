@@ -29,10 +29,16 @@ private _sw = _heli getVariable [format ["bmkhs_eng%1StartSwVal", _index + 1], 0
 private _starting = _sw > 0 || {(_heli getVariable "bmkhs_engState" select _index) == "STARTING"};
 private _override = _sw < 0;
 
-if (_ng >= (_engine get "selfSustNg")) exitWith { 0.0 };
+//Self-sustaining ends the start - the starter cuts out and the engine is ON.
+if (_ng >= (_engine get "selfSustNg")) exitWith {
+    if ((_heli getVariable "bmkhs_engState" select _index) == "STARTING") then {
+        [_heli, "bmkhs_engState", _index, "ON", true] call bmkhs_fnc_utilSetArrayVariable;
+    };
+    0.0
+};
 if (!_starting && {!_override}) exitWith { 0.0 };
 //A tripped engine is locked out - the starter will not turn it until a repair resets it.
-if ((_heli getVariable "bmkhs_gtEngOverspeed") select _index) exitWith { 0.0 };
+if ((_heli getVariable "bmkhs_engineOverspeed") select _index) exitWith { 0.0 };
 
 //No gate means always supplied; every gate declared has to be on.
 private _supplied = true;

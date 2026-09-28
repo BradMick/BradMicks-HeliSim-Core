@@ -41,7 +41,7 @@ private _sectionFields = [
    , ["HotSection",   ["massFlowExp", "tgtK", "thermalMassCoef", "coolingCoef", "stillAirFlow"
                      , "ramAirCoef", "maxTgt", "startTgt", "startMinTgt", "residualHeatGain"]]
    , ["PowerTurbine", ["ptEfficiency", "ptInertia", "ptDrag", "ptDragFloor"]]
-   , ["Governor",     ["fuelIdle", "fuelFly", "startFuelBase", "ffwdGain"]]
+   , ["Governor",     ["fuelIdle", "fuelFly", "startFuelBase", "ffwdGain", "leverTravelTime", "loadShareGain"]]
 ];
 private _textFields = ["name", "engineType", "damageRole"];
 
@@ -131,81 +131,41 @@ if(isMultiplayer) then {
     _heli setVariable ["bmkhs_lastTimePropagated", 0];
 };
 
-//COMPAT 1.1.0: the old model reads these flat scalars. Deleted with it at Phase 3b. The
-//ones with a new-schema counterpart come from engine 1's block; the rest are its own knobs.
+//The shaft reference the transmission and Nr read.
 if (_numEngines > 0) then {
-    private _e1   = _engines # 0;
-    private _rtgs = _e1 get "ratings";
-    private _r1   = _rtgs # 0;
-    private _rS   = _rtgs # ((count _rtgs) - 1);
-
-    _heli setVariable ["bmkhs_engContPwrKW",    _r1 get "powerKw"];
-    _heli setVariable ["bmkhs_engCntgncyPwrKW", _rS get "powerKw"];
-    _heli setVariable ["bmkhs_engDesignRPM",    _e1 get "designRpm"];
-    _heli setVariable ["bmkhs_engRunNG",        _e1 get "selfSustNg"];
-    _heli setVariable ["bmkhs_engMaxTGT_DE",    _r1 get "maxTgt"];
-    _heli setVariable ["bmkhs_engMaxTGT_SE",    _rS get "maxTgt"];
-    _heli setVariable ["bmkhs_engFlyNP",        _e1 get "npFly"];
-    _heli setVariable ["bmkhs_engIdleNG",       _e1 get "idleNg"];
+    _heli setVariable ["bmkhs_engDesignRPM", (_engines # 0) get "designRpm"];
 };
 
-_heli setVariable ["bmkhs_engFriction",     getNumber (_config >> "engFriction")];
-_heli setVariable ["bmkhs_engGovGain",      getNumber (_config >> "engGovGain")];
-_heli setVariable ["bmkhs_engIdleNP",       getNumber (_config >> "engIdleNP")];
-_heli setVariable ["bmkhs_engOvrspdNP",     getNumber (_config >> "engOvrspdNP")];
-_heli setVariable ["bmkhs_engFlyNG",        getNumber (_config >> "engFlyNG")];
-
-//Legacy model's PID, from its own flat gains.
-private _engPidGains = getArray (_config >> "pidEngine");
-_heli setVariable ["bmkhs_pid_engine", _engines apply {_engPidGains call bmkhs_fnc_pidCreate}];
-
 //Governor PID - one per engine, from that engine's own gains.
-_heli setVariable ["bmkhs_gtPidEngine", _engines apply {(_x get "pid") call bmkhs_fnc_pidCreate}];
+_heli setVariable ["bmkhs_pid_engine", _engines apply {(_x get "pid") call bmkhs_fnc_pidCreate}];
 
 //RUNTIME STATE - what the model carries frame to frame.
 _heli setVariable ["bmkhs_shiftLocked",           false];
 _heli setVariable ["bmkhs_isSingleEng",           false];
 
-//Seeded here rather than in systemsVariables, which runs before the engine count is known.
+//Latched by either hard trip, cleared by a repair. Seeded here rather than in
+//systemsVariables, which runs before the engine count is known.
 _heli setVariable ["bmkhs_engineOverspeed",       _engines apply {false}, true];
 
 //Outputs
-_heli setVariable ["bmkhs_engFF",                 +_zeros];
-_heli setVariable ["bmkhs_engPctNG",              +_zeros];
-//SEEDS REQUIRED even though nothing READS these: bmkhs_fnc_utilSetArrayVariable does
-//`+(_heli getVariable _name)` then `set`, so the array must already exist or it
-//throws "Type Number, expected Array". Written per-engine by fn_engine.
-_heli setVariable ["bmkhs_engBaseNG",             +_zeros];
-_heli setVariable ["bmkhs_engBaseTGT",            +_zeros];
-_heli setVariable ["bmkhs_engBaseOilPSI",         +_zeros];
-_heli setVariable ["bmkhs_engTrimTq",             +_zeros];
-_heli setVariable ["bmkhs_engPctNP",              +_zeros];
-_heli setVariable ["bmkhs_engPctTQ",              +_zeros];
-_heli setVariable ["bmkhs_engTGT",                +_zeros];
-_heli setVariable ["bmkhs_engOilPSI",             +_zeros];
-
-_heli setVariable ["bmkhs_engOutputTq",           +_zeros];
-
-//New model - published beside the old one until Phase 3b drops the gt prefix.
-_heli setVariable ["bmkhs_gtEngPctNg",            +_zeros];
+_heli setVariable ["bmkhs_engFuelFlow",                 +_zeros];
+_heli setVariable ["bmkhs_engPctNg",              +_zeros];
 //Np is state with its own torque balance, not read off the rotor.
-_heli setVariable ["bmkhs_gtEngNp",               +_zeros];
-_heli setVariable ["bmkhs_gtEngPctNp",            +_zeros];
+_heli setVariable ["bmkhs_engNp",                 +_zeros];
+_heli setVariable ["bmkhs_engPctNp",              +_zeros];
 //The freewheel - true while the turbine is driving the rotor.
-_heli setVariable ["bmkhs_gtEngClutch",           _engines apply {false}];
-//Latched by either hard trip, cleared by a repair.
-_heli setVariable ["bmkhs_gtEngOverspeed",        _engines apply {false}, true];
-_heli setVariable ["bmkhs_gtEngPctTq",            +_zeros];
+_heli setVariable ["bmkhs_engClutch",             _engines apply {false}];
+_heli setVariable ["bmkhs_engPctTq",              +_zeros];
 //TGT is state, so it starts at ambient.
-_heli setVariable ["bmkhs_gtEngTgt",              _engines apply {_heli getVariable "bmkhs_FAT"}];
-_heli setVariable ["bmkhs_gtEngOilPsi",           +_zeros];
-_heli setVariable ["bmkhs_gtEngFf",               +_zeros];
-_heli setVariable ["bmkhs_gtEngOutputTq",         +_zeros];
-_heli setVariable ["bmkhs_gtEngState",            _engines apply {"OFF"}];
+_heli setVariable ["bmkhs_engTgt",                _engines apply {_heli getVariable "bmkhs_FAT"}];
+_heli setVariable ["bmkhs_engOilPsi",             +_zeros];
+_heli setVariable ["bmkhs_engOutputTq",           +_zeros];
 //Latched on the OFF -> IDLE/FLY transition; 1.0 is a purged hot section.
-_heli setVariable ["bmkhs_gtEngResidualHeat",     _engines apply {1.0}];
-_heli setVariable ["bmkhs_gtEngPrevLever",        _engines apply {"OFF"}];
+_heli setVariable ["bmkhs_engResidualHeat",       _engines apply {1.0}];
+_heli setVariable ["bmkhs_engPrevLever",          _engines apply {"OFF"}];
 //The lever's tracked position, as a fuel schedule. Travels up, snaps down.
-_heli setVariable ["bmkhs_gtEngLeverSched",       +_zeros];
+_heli setVariable ["bmkhs_engLeverSched",         +_zeros];
+//Np when the governor took over at FLY; negative until it does.
+_heli setVariable ["bmkhs_engNpRef",              _engines apply {-1.0}];
 _heli setVariable ["bmkhs_engRatingIdx",          _engines apply {0}];
 _heli setVariable ["bmkhs_engRatingName",         _engines apply {((_x get "ratings") # 0) get "displayName"}];

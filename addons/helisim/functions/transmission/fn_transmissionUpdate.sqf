@@ -21,20 +21,13 @@ private _rotorTq = _heli getVariable "bmkhs_reqEngTorque";
     _totTq = _totTq + _x;
 } forEach _rotorTq;
 
-//Which model's torque turns the rotor.
-private _engOutputTq = _heli getVariable (["bmkhs_engOutputTq", "bmkhs_gtEngOutputTq"] select bmkhs_engineModel);
+//Only an engaged freewheel drives the rotor - a decoupled turbine turns nothing.
+private _engOutputTq = _heli getVariable "bmkhs_engOutputTq";
+private _clutch      = _heli getVariable "bmkhs_engClutch";
 private _engInputTq  = 0.0;
-if (bmkhs_engineModel == 1) then {
-    //Only an engaged freewheel drives the rotor - a decoupled turbine turns nothing.
-    private _clutch = _heli getVariable "bmkhs_gtEngClutch";
-    {
-        if (_clutch select _forEachIndex) then { _engInputTq = _engInputTq + _x };
-    } forEach _engOutputTq;
-} else {
-    {
-        _engInputTq = _engInputTq + _x;
-    } forEach _engOutputTq;
-};
+{
+    if (_clutch select _forEachIndex) then { _engInputTq = _engInputTq + _x };
+} forEach _engOutputTq;
 
 // Lumped at the engine shaft, dimensionally correct and framerate-independent:
 //   alpha = tau_net / J_eng           [rad/s^2]
@@ -82,12 +75,12 @@ if (bmkhs_sysDebug) then {
     if (time > _last + 0.25) then {
         _heli setVariable ["bmkhs_xmsnDiagLast", time];
         diag_log text format [
-            "XMDIAG t=%1 model=%2 engIn=%3 rotorReq=%4 net=%5 jEng=%6 gr=%7 dRpm=%8 rpm=%9 brake=%10 clutch=%11 np=%12",
-            time toFixed 2, bmkhs_engineModel,
+            "XMDIAG t=%1 engIn=%2 rotorReq=%3 net=%4 jEng=%5 gr=%6 dRpm=%7 rpm=%8 brake=%9 clutch=%10 np=%11",
+            time toFixed 2,
             _engInputTq toFixed 1, _totTq toFixed 1, (_engInputTq - _totTq) toFixed 1,
             _jEng toFixed 3, _mainRotorGearRatio toFixed 3,
             _deltaRpm toFixed 2, _outputRpm toFixed 0, _brakePos,
-            _heli getVariable "bmkhs_gtEngClutch", _heli getVariable "bmkhs_gtEngNp"
+            _heli getVariable "bmkhs_engClutch", _heli getVariable "bmkhs_engNp"
         ];
     };
 };

@@ -35,7 +35,7 @@ params ["_heli", "_fuelMass", "_mains", "_deltaTime"];
 
 if (_mains isEqualTo []) exitWith { [true, true, true] };
 
-private _engFF    = _heli getVariable "bmkhs_engFF";
+private _engFF    = _heli getVariable "bmkhs_engFuelFlow";
 private _engState = _heli getVariable "bmkhs_engState";
 
 //Demand per consumer, paired with the main it draws from.

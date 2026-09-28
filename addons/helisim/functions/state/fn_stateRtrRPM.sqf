@@ -26,7 +26,7 @@ private _mainRtrDamage  = [_heli, "mainRotor"] call bmkhs_fnc_damageGet;
 if (_mainRtrDamage == 1.0) then {
     _rtrRPM = 0.0;
 } else {
-    //(_heli getVariable "bmkhs_engPctNP")
+    //(_heli getVariable "bmkhs_engPctNp")
     //params ["_e1Np", "_e2Np"];
 //
     //if (_e1Np == 0.0 && _e2Np == 0.0) then {

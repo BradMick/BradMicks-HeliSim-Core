@@ -1,5 +1,5 @@
 /* ----------------------------------------------------------------------------
-Function: bmkhs_fnc_engineController
+Function: bmkhs_fnc_engineUpdate
 
 Description:
     Monitors and controls engine states.
@@ -36,12 +36,12 @@ private _engPwrLvrState  = _heli getVariable "bmkhs_engPowerLeverState";
 private _eng1PwrLvrState = _engPwrLvrState select 0;
 private _eng2PwrLvrState = _engPwrLvrState select 1;
 
-private _eng1Np  = _heli getVariable "bmkhs_engPctNP" select 0;
-private _eng2Np  = _heli getVariable "bmkhs_engPctNP" select 1;
+private _eng1Np  = _heli getVariable "bmkhs_engPctNp" select 0;
+private _eng2Np  = _heli getVariable "bmkhs_engPctNp" select 1;
 private _rtrRPM  = _heli getVariable "bmkhs_rtrRPM";
 
-private _eng1TQ   = _heli getVariable "bmkhs_engPctTQ" select 0;
-private _eng2TQ   = _heli getVariable "bmkhs_engPctTQ" select 1;
+private _eng1TQ   = _heli getVariable "bmkhs_engPctTq" select 0;
+private _eng2TQ   = _heli getVariable "bmkhs_engPctTq" select 1;
 private _engPctTQ = _eng1TQ max _eng2TQ;
 private _eng1FuelAvail = _heli getVariable ["bmkhs_eng1FuelAvail", true];
 private _eng2FuelAvail = _heli getVariable ["bmkhs_eng2FuelAvail", true];
@@ -211,22 +211,13 @@ if (isMultiplayer && (currentPilot _heli == player || local _heli) && (_heli get
         _heli setVariable [_x, _heli getVariable _x, true];
     } forEach [
         "bmkhs_apuRPM_pct",
-        "bmkhs_engFF",
-        "bmkhs_engPctNG",
-        "bmkhs_engPctNP",
-        "bmkhs_engPctTQ",
-        "bmkhs_engBaseTGT",
-        "bmkhs_engTGT",
-        "bmkhs_engBaseOilPSI",
-        "bmkhs_engOilPSI",
+        "bmkhs_engFuelFlow",
+        "bmkhs_engPctNg",
+        "bmkhs_engPctNp",
+        "bmkhs_engPctTq",
+        "bmkhs_engTgt",
+        "bmkhs_engOilPsi",
         "bmkhs_engState",
-        "bmkhs_gtEngPctNg",
-        "bmkhs_gtEngPctNp",
-        "bmkhs_gtEngPctTq",
-        "bmkhs_gtEngTgt",
-        "bmkhs_gtEngOilPsi",
-        "bmkhs_gtEngFf",
-        "bmkhs_gtEngState",
         "bmkhs_collectiveOutput",
         "bmkhs_xmsnOutputRpm",
         "bmkhs_xmsnDeltaRpm"
@@ -235,19 +226,7 @@ if (isMultiplayer && (currentPilot _heli == player || local _heli) && (_heli get
 };
 
 if (currentPilot _heli == player || local _heli) then {
-    [_heli, 0] call bmkhs_fnc_engine;
-    [_heli, 1] call bmkhs_fnc_engine;
-
-    if (bmkhs_rotorModel == 1) then {
-        [_heli, 0] call bmkhs_fnc_engineBET;
-        [_heli, 1] call bmkhs_fnc_engineBET;
-    } else {
-        [_heli, 0] call bmkhs_fnc_engine2;
-        [_heli, 1] call bmkhs_fnc_engine2;
-    };
-
-    //The new model runs beside the old one, publishing to its own gt* variables. Config
-    //names the assembly, so a new engine type is a folder and a config string.
+    //Config names the assembly, so a new engine type is a folder and a config string.
     {
         private _fnc = missionNamespace getVariable [format ["bmkhs_fnc_%1", _x get "engineType"], {}];
         [_heli, _forEachIndex, _x] call _fnc;

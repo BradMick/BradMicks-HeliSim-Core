@@ -4,13 +4,11 @@ Run it:  python tools/engine/engine.py
 
 Every function below is named after the SQF function it ports and carries its inputs, outputs
 and expressions line for line. The frame runs in fn_coreUpdate's order: environment ->
-engineController -> transmissionUpdate -> simpleRotorUpdate. Values are read from the AH-64D's
+engineUpdate -> transmissionUpdate -> simpleRotorUpdate. Values are read from the AH-64D's
 own config files, so there is no third copy of any number.
 
-Not ported, because nothing on the new engine's path reads it: the legacy engine torque
-models (fn_engine2 / fn_engineBET), systems circuits (gates are scenario inputs), damage,
-torque jitter and the rotor's lift/force path. fn_engine is ported ONLY for the engState
-transitions the new starter reads.
+Not ported, because nothing on the engine's path reads it: systems circuits (gates are
+scenario inputs), damage, torque jitter and the rotor's lift/force path.
 
 If this file and the SQF ever disagree, the SQF is right and this file is the bug.
 """
@@ -36,12 +34,9 @@ STANDARD_TEMP = 15
 IN_MG_TO_HPA = 33.8639
 #engine.hpp
 GT_OIL_PSI_SCALE = 0.90
-GT_LEVER_TRAVEL_SEC = 12.0
 #rotor.hpp
 MAIN, TAIL = 0, 1
 CCW, CW = 0, 1
-#Legacy start timing used by fn_engine's state transitions.
-ENG_SIM_TIME_KEY = 'engSimTime'
 
 
 # ---------------------------------------------------------------------------------------------
@@ -187,7 +182,7 @@ SECTION_FIELDS = [
     ('HotSection', ['massFlowExp', 'tgtK', 'thermalMassCoef', 'coolingCoef', 'stillAirFlow',
                     'ramAirCoef', 'maxTgt', 'startTgt', 'startMinTgt', 'residualHeatGain']),
     ('PowerTurbine', ['ptEfficiency', 'ptInertia', 'ptDrag', 'ptDragFloor']),
-    ('Governor', ['fuelIdle', 'fuelFly', 'startFuelBase', 'ffwdGain']),
+    ('Governor', ['fuelIdle', 'fuelFly', 'startFuelBase', 'ffwdGain', 'leverTravelTime', 'loadShareGain']),
 ]
 ROTOR_NUM_FIELDS = ['numBlades', 'mastLength', 'gearRatio', 'torqueTau', 'bladeRadius',
                     'bladeChord', 'bladeMass', 'reacTqScalar', 'autoTorque']
@@ -213,19 +208,17 @@ def engine_variables(H, cfg, overrides=None):
     H['bmkhs_engines'] = engines
     H['bmkhs_engPowerLeverState'] = ['OFF', 'OFF']
     H['bmkhs_engState'] = ['OFF', 'OFF']
-    #fn_engine's own spool, read only for the engState transitions.
-    H['bmkhs_engPctNG'] = [0.0, 0.0]
-    H['bmkhs_gtPidEngine'] = [pid_create(*eng['pid']) for eng in engines]
+    H['bmkhs_pid_engine'] = [pid_create(*eng['pid']) for eng in engines]
     z = [0.0, 0.0]
-    for k in ('bmkhs_gtEngPctNg', 'bmkhs_gtEngNp', 'bmkhs_gtEngPctNp', 'bmkhs_gtEngPctTq',
-              'bmkhs_gtEngOilPsi', 'bmkhs_gtEngFf', 'bmkhs_gtEngOutputTq', 'bmkhs_gtEngLeverSched'):
+    for k in ('bmkhs_engPctNg', 'bmkhs_engNp', 'bmkhs_engPctNp', 'bmkhs_engPctTq',
+              'bmkhs_engOilPsi', 'bmkhs_engFuelFlow', 'bmkhs_engOutputTq', 'bmkhs_engLeverSched'):
         H[k] = list(z)
-    H['bmkhs_gtEngClutch'] = [False, False]
-    H['bmkhs_gtEngOverspeed'] = [False, False]
-    H['bmkhs_gtEngTgt'] = [H['bmkhs_FAT'], H['bmkhs_FAT']]
-    H['bmkhs_gtEngState'] = ['OFF', 'OFF']
-    H['bmkhs_gtEngResidualHeat'] = [1.0, 1.0]
-    H['bmkhs_gtEngPrevLever'] = ['OFF', 'OFF']
+    H['bmkhs_engClutch'] = [False, False]
+    H['bmkhs_engineOverspeed'] = [False, False]
+    H['bmkhs_engTgt'] = [H['bmkhs_FAT'], H['bmkhs_FAT']]
+    H['bmkhs_engResidualHeat'] = [1.0, 1.0]
+    H['bmkhs_engNpRef'] = [-1.0, -1.0]
+    H['bmkhs_engPrevLever'] = ['OFF', 'OFF']
 
 
 def simple_rotor_variables(H, cfg):
@@ -270,22 +263,45 @@ def engine_governor(H, i, eng, ng, np_, tgt, lever, fat, dt):
     idleNg = eng['idleNg']
     target = {'FLY': eng['fuelFly'], 'IDLE': eng['fuelIdle']}.get(lever, 0.0)
 
-    sched = H['bmkhs_gtEngLeverSched'][i]
-    if target > sched:
-        sched = min(sched + (eng['fuelFly'] / GT_LEVER_TRAVEL_SEC) * dt, target)
+    sched = H['bmkhs_engLeverSched'][i]
+    if lever == 'FLY' and target > sched:
+        sched = min(max(sched, eng['fuelIdle'])
+                    + ((eng['fuelFly'] - eng['fuelIdle']) / eng['leverTravelTime']) * dt, target)
     else:
         sched = target
-    H['bmkhs_gtEngLeverSched'][i] = sched
+    H['bmkhs_engLeverSched'][i] = sched
 
     govPowered = H['governorPowered'][i] if eng['governorGates'] else True
 
-    pid = H['bmkhs_gtPidEngine'][i]
+    pid = H['bmkhs_pid_engine'][i]
+    npRef = H['bmkhs_engNpRef'][i]
     orifice = sched
     if lever == 'FLY' and govPowered:
-        govFuel = pid_run(pid, dt, 1.0, np_) + H['bmkhs_collectiveOutput'] * eng['ffwdGain']
+        if npRef < 0.0:
+            pid['integral'] = sched / pid['ki']
+            pid['prevError'] = 0.0
+            npRef = np_
+        npTarget = npRef + (1.0 - npRef) * linear_conversion(eng['fuelIdle'], eng['fuelFly'], sched, 0.0, 1.0, True)
+        integral = pid['integral']
+        govFuel = pid_run(pid, dt, npTarget, np_) + H['bmkhs_collectiveOutput'] * eng['ffwdGain']
+        if govFuel > sched:
+            pid['integral'] = integral
+        elif H['bmkhs_engClutch'][i]:
+            #Load sharing: an engine below the average of those matched with it trims up; one above
+            #is never trimmed down.
+            matched = [k for k, e in enumerate(H['bmkhs_engines'])
+                       if H['bmkhs_engPowerLeverState'][k] == 'FLY' and H['bmkhs_engClutch'][k]]
+            if len(matched) > 1:
+                share = [H['bmkhs_engOutputTq'][k] / H['bmkhs_engines'][k]['refTq'] for k in matched]
+                mismatch = sum(share) / len(share) - H['bmkhs_engOutputTq'][i] / eng['refTq']
+                mismatch = max(mismatch, 0.0)
+                pid['integral'] = clamp(pid['integral'] + eng['loadShareGain'] * mismatch * dt / pid['ki'],
+                                        -pid['ki_clamp'], pid['ki_clamp'])
         orifice = min(sched, max(govFuel, 0.0))
     else:
         pid_reset(pid)
+        npRef = -1.0
+    H['bmkhs_engNpRef'][i] = npRef
 
     fuelCmd = orifice
     if ng < idleNg:
@@ -304,10 +320,12 @@ def gas_turbine_starter(H, i, eng, ng):
     starting = sw > 0 or H['bmkhs_engState'][i] == 'STARTING'
     override = sw < 0
     if ng >= eng['selfSustNg']:
+        if H['bmkhs_engState'][i] == 'STARTING':
+            H['bmkhs_engState'][i] = 'ON'
         return 0.0
     if not starting and not override:
         return 0.0
-    if H['bmkhs_gtEngOverspeed'][i]:
+    if H['bmkhs_engineOverspeed'][i]:
         return 0.0
     supplied = H['starterSupplied'][i] if eng['starterGates'] else True
     return eng['starterTorque'] if supplied else 0.0
@@ -356,23 +374,23 @@ def turbo_shaft_engine(H, i, eng):
     dens = H['bmkhs_rho'] / ISA_STD_DAY_AIR_DENSITY
     velY = H['bmkhs_velModelSpace'][1]
 
-    ng = H['bmkhs_gtEngPctNg'][i]
-    np_ = H['bmkhs_gtEngNp'][i]
-    tgt = H['bmkhs_gtEngTgt'][i]
-    residualHeat = H['bmkhs_gtEngResidualHeat'][i]
+    ng = H['bmkhs_engPctNg'][i]
+    np_ = H['bmkhs_engNp'][i]
+    tgt = H['bmkhs_engTgt'][i]
+    residualHeat = H['bmkhs_engResidualHeat'][i]
     lever = H['bmkhs_engPowerLeverState'][i]
 
-    prevLever = H['bmkhs_gtEngPrevLever'][i]
+    prevLever = H['bmkhs_engPrevLever'][i]
     if prevLever == 'OFF' and lever != 'OFF':
         residualHeat = 1.0 + eng['residualHeatGain'] * tgt
-        H['bmkhs_gtEngResidualHeat'][i] = residualHeat
+        H['bmkhs_engResidualHeat'][i] = residualHeat
     if prevLever != lever:
-        H['bmkhs_gtEngPrevLever'][i] = lever
+        H['bmkhs_engPrevLever'][i] = lever
 
-    tripped = H['bmkhs_gtEngOverspeed'][i]
+    tripped = H['bmkhs_engineOverspeed'][i]
     if not tripped and (ng >= eng['maxNg'] or np_ >= eng['maxNp']):
         tripped = True
-        H['bmkhs_gtEngOverspeed'][i] = True
+        H['bmkhs_engineOverspeed'][i] = True
 
     fuelAvail = H['fuelAvail'][i]
     running = ng > eng['lightOffNg'] and lever != 'OFF' and fuelAvail and not tripped
@@ -401,48 +419,22 @@ def turbo_shaft_engine(H, i, eng):
     else:
         state = 'OFF'
 
-    H['bmkhs_gtEngPctNg'][i] = ngNew
-    H['bmkhs_gtEngTgt'][i] = tgt
-    H['bmkhs_gtEngOutputTq'][i] = tqOut
-    H['bmkhs_gtEngState'][i] = state
-    H['bmkhs_gtEngPctTq'][i] = tqOut / refTq
-    H['bmkhs_gtEngNp'][i] = npNew
-    H['bmkhs_gtEngClutch'][i] = clutch
-    H['bmkhs_gtEngPctNp'][i] = npNew * eng['npFly']
-    H['bmkhs_gtEngFf'][i] = fuelCmd * eng['maxFuelFlow']
-    H['bmkhs_gtEngOilPsi'][i] = max(ngNew * GT_OIL_PSI_SCALE, 0.0)
+    H['bmkhs_engPctNg'][i] = ngNew
+    H['bmkhs_engTgt'][i] = tgt
+    H['bmkhs_engOutputTq'][i] = tqOut
+    H['bmkhs_engPctTq'][i] = tqOut / refTq
+    H['bmkhs_engNp'][i] = npNew
+    H['bmkhs_engClutch'][i] = clutch
+    H['bmkhs_engPctNp'][i] = npNew * eng['npFly']
+    H['bmkhs_engFuelFlow'][i] = fuelCmd * eng['maxFuelFlow']
+    H['bmkhs_engOilPsi'][i] = max(ngNew * GT_OIL_PSI_SCALE, 0.0)
     #Rig-only diagnostics, what GTDIAG / GOVDIAG print.
     H['diag'][i] = dict(fuel=fuelCmd, orifice=orifice, starterTq=starterTq, running=running,
                         tripped=tripped, share=share)
 
 
-def legacy_engine_state(H, i, cfg):
-    """fn_engine - ONLY the engState transitions, which the new starter reads."""
-    dt = H['bmkhs_deltaTime']
-    st = H['bmkhs_engState'][i]
-    lever = H['bmkhs_engPowerLeverState'][i]
-    ng = H['bmkhs_engPctNG'][i]
-    simTime = cfg[ENG_SIM_TIME_KEY]
-    throttle = 0.0 if lever in ('OFF', 'IDLE') else 1.0
-    baseNG = cfg['engIdleNG'] + (cfg['engFlyNG'] - cfg['engIdleNG']) * throttle
-    if st == 'OFF':
-        ng = lerp(ng, 0.0, dt)
-    elif st == 'STARTING':
-        if lever == 'OFF':
-            ng = lerp(ng, cfg['engStartNG'], (1.0 / (simTime / 2.0)) * dt)
-        else:
-            ng = lerp(ng, baseNG, (1.0 / simTime) * dt)
-        if ng > cfg['engRunNG']:
-            H['bmkhs_engState'][i] = 'ON'
-    elif st == 'ON':
-        #fn_engine.sqf:106 writes "ON" here, so the state does not change.
-        setNG = baseNG + (cfg['engMaxNG'] - baseNG) * throttle * H['bmkhs_collectiveOutput']
-        ng = lerp(ng, setNG, dt)
-    H['bmkhs_engPctNG'][i] = ng
-
-
 def engine_controller(H, cfg):
-    """fn_engineController, useSystems path, engine half."""
+    """fn_engineUpdate, useSystems path."""
     engState = list(H['bmkhs_engState'])
     for e in (0, 1):
         st = engState[e]
@@ -461,8 +453,6 @@ def engine_controller(H, cfg):
         for e in (0, 1):
             if engState[e] == 'STARTING':
                 H['bmkhs_engState'][e] = 'OFF'
-    for e in (0, 1):
-        legacy_engine_state(H, e, cfg)
     for e, eng in enumerate(H['bmkhs_engines']):
         turbo_shaft_engine(H, e, eng)
     for e in (0, 1):
@@ -483,7 +473,7 @@ def transmission_update(H):
             jEng += moi / (gr * gr)
     outputRpm = H['bmkhs_xmsnOutputRpm']
     totTq = sum(H['bmkhs_reqEngTorque'])
-    engInputTq = sum(tq for k, tq in enumerate(H['bmkhs_gtEngOutputTq']) if H['bmkhs_gtEngClutch'][k])
+    engInputTq = sum(tq for k, tq in enumerate(H['bmkhs_engOutputTq']) if H['bmkhs_engClutch'][k])
     dt = H['bmkhs_deltaTime']
     alpha = 0.0 if jEng == 0.0 else (engInputTq - totTq) / jEng
     deltaRpm = alpha * dt * (60.0 / (2.0 * math.pi))
@@ -613,12 +603,12 @@ class Heli:
         self.t += dt
 
     #Readouts, engine i.
-    def ng(self, i=0): return self.H['bmkhs_gtEngPctNg'][i]
-    def np(self, i=0): return self.H['bmkhs_gtEngNp'][i]
-    def tgt(self, i=0): return self.H['bmkhs_gtEngTgt'][i]
-    def tq(self, i=0): return self.H['bmkhs_gtEngPctTq'][i]
-    def clutch(self, i=0): return self.H['bmkhs_gtEngClutch'][i]
-    def tripped(self, i=0): return self.H['bmkhs_gtEngOverspeed'][i]
+    def ng(self, i=0): return self.H['bmkhs_engPctNg'][i]
+    def np(self, i=0): return self.H['bmkhs_engNp'][i]
+    def tgt(self, i=0): return self.H['bmkhs_engTgt'][i]
+    def tq(self, i=0): return self.H['bmkhs_engPctTq'][i]
+    def clutch(self, i=0): return self.H['bmkhs_engClutch'][i]
+    def tripped(self, i=0): return self.H['bmkhs_engineOverspeed'][i]
 
     def nrFrac(self):
         e = self.H['bmkhs_engines'][0]
@@ -684,7 +674,7 @@ EXPECTED = dict(light=2.6, cutout=5.5, peakLo=646.0, peakHi=661.0, stop=9.5, bel
 def cold_start(tgt0=None, secs=40.0):
     a = Heli()
     if tgt0 is not None:
-        a.H['bmkhs_gtEngTgt'][0] = tgt0
+        a.H['bmkhs_engTgt'][0] = tgt0
     H = a.H
     H['startSw'][0] = 1
     tLight = tCut = None
@@ -726,7 +716,7 @@ def shutdown(marksAt=(2, 5, 9.5, 30, 300, 1200, 3600)):
 
 def motoring(tgt0=163.0, secs=30.0):
     a = Heli()
-    a.H['bmkhs_gtEngTgt'][0] = tgt0
+    a.H['bmkhs_engTgt'][0] = tgt0
     a.H['startSw'][0] = -1
     m = {}
     while a.t < secs:
@@ -740,7 +730,7 @@ def motoring(tgt0=163.0, secs=30.0):
 def hot_start_abort(tgt0=163.0, abortAt=700.0, ovrDelay=2.0, secs=60.0):
     a = Heli()
     H = a.H
-    H['bmkhs_gtEngTgt'][0] = tgt0
+    H['bmkhs_engTgt'][0] = tgt0
     H['startSw'][0] = 1
     peak, tAb, t540 = tgt0, None, None
     first = True
@@ -903,7 +893,7 @@ def governed_flight(collTarget, pullSecs=NORMAL_PULL_SEC, dt=ARMA_DT, jitter=JIT
             coll = collTarget if a.t >= pullAt else 0.0
         a.frame(next(dts), coll=coll, velXY=velXY, velZ=velZ)
         trace.append((a.t, a.ng(), a.np(), a.nrFrac(), a.tq(), a.tgt(), a.clutch(), a.tripped(),
-                      a.H['diag'][0]['orifice'], coll, a.demand()))
+                      a.H['diag'][0]['orifice'], coll, a.demand(), a.H['diag'][0]['fuel']))
     return a, trace
 
 
@@ -989,6 +979,56 @@ def loaded_report():
                  'YES' if any(r[7] for r in tr) else 'no'))
 
 
+#Rough fuel burn, both engines, lb/h (user, 2026-09-27): flat pitch on 101 %, and 72 % torque.
+FUEL_BURN_LBH = [(0.0, None, 555.0), (None, 0.72, 1080.0)]
+LBH_TO_KGS = 0.45359237 / 3600.0
+
+
+def fuel_flow_report():
+    """The engine's dimensionless fuel against the user's fuel burn, per engine - what
+    maxFuelFlow has to convert between."""
+    print('\n' + '=' * 78)
+    print('FUEL FLOW - dimensionless fuel burned vs the stated burn (per engine)')
+    print('=' * 78)
+    e = Heli().H['bmkhs_engines'][0]
+    print('     %TQ    fuel    want kg/s   kg/s now   want/fuel')
+    for coll, tq, lbh in FUEL_BURN_LBH:
+        last = governed_flight(coll if coll is not None else collective_for(tq), secs=100.0)[1][-1]
+        want = lbh / 2.0 * LBH_TO_KGS
+        print('   %5.1f   %.3f    %.4f      %.4f      %.4f'
+              % (last[4] * 100, last[11], want, last[11] * e['maxFuelFlow'], want / last[11]))
+
+
+def load_share_run(coll, idleAt=60.0, flyAt=85.0, secs=160.0, dt=ARMA_DT, jitter=JITTER):
+    """Both engines governed at FLY; engine 2's lever to IDLE and back, as flown 19-52-59."""
+    a = twin_to_fly(dt, jitter)
+    dts = dt_stream(dt, jitter, seed=9)
+    rows = []
+    while a.t < secs:
+        if idleAt <= a.t < flyAt:
+            a.H['pwrLvr'][1] = IDLE
+        elif a.t >= flyAt:
+            a.H['pwrLvr'][1] = FLY
+        a.frame(next(dts), coll=coll * clamp((a.t - 45.0) / NORMAL_PULL_SEC, 0.0, 1.0))
+        rows.append((a.t, a.tq(0), a.tq(1), a.nrFrac(), a.clutch(1)))
+    return rows
+
+
+def load_share_report(coll=None):
+    coll = collective_for(0.72) if coll is None else coll
+    print('\n' + '=' * 78)
+    print('LOAD SHARING - both at FLY, engine 2 to IDLE at 60 s and back to FLY at 85 s')
+    print('=' * 78)
+    rows = load_share_run(coll)
+    print('        t   eng1 %TQ  eng2 %TQ   Nr%  clutch2')
+    for mark in (59, 70, 84, 90, 95, 100, 110, 120, 140, 159.9):
+        r = min(rows, key=lambda x: abs(x[0] - mark))
+        print('   %6.1f    %5.1f     %5.1f   %5.1f  %s' % (r[0], r[1] * 100, r[2] * 100, r[3] * 100, 'lock' if r[4] else 'FREE'))
+    even = next((r[0] - 85.0 for r in rows if r[0] > 90 and r[4] and abs(r[1] - r[2]) < 0.01), None)
+    print('   within 1%% of each other %s after the lever is selected to FLY (lever travel %.1f s)'
+          % ('%.1f s' % even if even is not None else 'NEVER', Heli().H['bmkhs_engines'][1]['leverTravelTime']))
+
+
 def autorotation_report(velXY=36.0, velZ=-10.0):
     print('\n' + '=' * 78)
     print('POWER-ON AUTOROTATION - governed at 0.40 collective, %.0f m/s; at 60 s collective'
@@ -1036,6 +1076,48 @@ def shutdown_from_flight_report():
     ngStop = next((r[0] for r in rows if r[1] < 0.001), None)
     print('   Np < 1%% at %s   Ng stopped at %s'
           % ('%.1fs' % npStop if npStop else 'never', '%.1fs' % ngStop if ngStop else 'never'))
+
+
+def engine_state_run():
+    """engState and the starter through a start to IDLE, 60 s at idle, lever OFF, 60 s after;
+    then START again. Returns when each thing happened."""
+    a = Heli()
+    H = a.H
+    H['startSw'][0] = 1
+    ev = {'STARTING': 0.0}
+    prev = H['bmkhs_engState'][0]
+    crankAfterOff = 0.0
+    first, phase = True, 'start'
+    while a.t < 200.0:
+        if phase == 'start' and H['pwrLvr'][0] == 0.0 and a.ng() > 0.02:
+            H['pwrLvr'][0] = IDLE
+        if phase == 'start' and a.t >= 70.0:
+            H['pwrLvr'][0], phase, tOff = 0.0, 'off', a.t
+        if phase == 'off' and a.t >= 130.0:
+            H['startSw'][0], phase, tRe = 1, 'restart', a.t
+            first = True
+        if phase == 'restart' and H['pwrLvr'][0] == 0.0 and a.ng() > 0.02:
+            H['pwrLvr'][0] = IDLE
+        a.frame(DT)
+        if first:
+            H['startSw'][0] = 0
+            first = False
+        st = H['bmkhs_engState'][0]
+        if st != prev:
+            ev['%s (%s)' % (st, phase)] = round(a.t, 2)
+            prev = st
+        d = H['diag'][0]
+        if phase == 'start' and 'cutout' not in ev and ev.get('crank') and d['starterTq'] == 0:
+            ev['cutout'] = round(a.t, 2)
+        if d['starterTq'] > 0 and 'crank' not in ev:
+            ev['crank'] = round(a.t, 2)
+        if phase == 'off' and d['starterTq'] > 0:
+            crankAfterOff += DT
+        if phase == 'restart' and d['running'] and 'restart light-off' not in ev:
+            ev['restart light-off'] = round(a.t - tRe, 2)
+    ev['starter cranking after lever OFF, s'] = round(crankAfterOff, 2)
+    ev['final'] = '%s  ng %.3f  tgt %.0f' % (H['bmkhs_engState'][0], a.ng(), a.tgt())
+    return ev
 
 
 #The rotor tables' airspeed columns, m/s, and the collective steps flown at each.
@@ -1180,3 +1262,4 @@ if __name__ == '__main__':
     loaded_report()
     autorotation_report()
     shutdown_from_flight_report()
+    load_share_report()

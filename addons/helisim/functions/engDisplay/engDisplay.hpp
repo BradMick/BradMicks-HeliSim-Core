@@ -17,4 +17,7 @@
 //Drift from the position hold point, in metres, that raises the hover drift advisory
 #define ED_HOVER_DRIFT_M    14.630
 
+//Torque tape full scale, as a fraction of rated torque
+#define ED_TQ_FULL_SCALE    1.50
+
 #endif

@@ -36,15 +36,16 @@ private _target = switch (_lever) do {
     default      { 0.0 };
 };
 
-//The lever travels to fly over GT_LEVER_TRAVEL_SEC and snaps back, so the schedule builds
-//over the push rather than stepping with the detent.
-private _fuelSched = _heli getVariable "bmkhs_gtEngLeverSched" select _index;
-if (_target > _fuelSched) then {
-    _fuelSched = (_fuelSched + (((_engine get "fuelFly") / GT_LEVER_TRAVEL_SEC) * _deltaTime)) min _target;
+//Idle to fly travels over leverTravelTime; every other move of the lever is instant.
+private _fuelIdle  = _engine get "fuelIdle";
+private _fuelFly   = _engine get "fuelFly";
+private _fuelSched = _heli getVariable "bmkhs_engLeverSched" select _index;
+if (_lever == "FLY" && {_target > _fuelSched}) then {
+    _fuelSched = ((_fuelSched max _fuelIdle) + (((_fuelFly - _fuelIdle) / (_engine get "leverTravelTime")) * _deltaTime)) min _target;
 } else {
     _fuelSched = _target;
 };
-[_heli, "bmkhs_gtEngLeverSched", _index, _fuelSched] call bmkhs_fnc_utilSetArrayVariable;
+[_heli, "bmkhs_engLeverSched", _index, _fuelSched] call bmkhs_fnc_utilSetArrayVariable;
 
 //Lose the ECU and nothing is metering fuel - the engine surges to maximum. Not a shutdown.
 private _govPowered = true;
@@ -58,15 +59,54 @@ private _govPowered = true;
 } forEach (_engine get "governorGates");
 
 //The torque motor trims the orifice below the lever's to hold Np; it never opens it past.
-private _pid     = _heli getVariable "bmkhs_gtPidEngine" select _index;
+private _pid     = _heli getVariable "bmkhs_pid_engine" select _index;
+private _npRef   = _heli getVariable "bmkhs_engNpRef" select _index;
 private _orifice = _fuelSched;
 if (_lever == "FLY" && {_govPowered}) then {
-    private _govFuel = ([_pid, _deltaTime, 1.0, _np] call bmkhs_fnc_pidRun)
-                     + ((_heli getVariable "bmkhs_collectiveOutput") * (_engine get "ffwdGain"));
+    //Taking over, the governor starts from the fuel already flowing and from Np where it is.
+    if (_npRef < 0.0) then {
+        _pid set ["integral", _fuelSched / (_pid get "ki")];
+        _pid set ["prevError", 0.0];
+        _npRef = _np;
+    };
+    //The Np it holds follows the lever, reaching trim as the lever reaches fly.
+    private _npTarget = _npRef + ((1.0 - _npRef) * linearConversion [_fuelIdle, _fuelFly, _fuelSched, 0.0, 1.0, true]);
+
+    private _integral = _pid get "integral";
+    private _govFuel  = ([_pid, _deltaTime, _npTarget, _np] call bmkhs_fnc_pidRun)
+                      + ((_heli getVariable "bmkhs_collectiveOutput") * (_engine get "ffwdGain"));
+    //While the lever is what limits fuel, the integral does not wind up.
+    if (_govFuel > _fuelSched) then {
+        _pid set ["integral", _integral];
+    } else {
+        //Load sharing: an engine below the average of those matched with it trims up. One above is
+        //never trimmed down - it gives up load through its own Np governing as the other takes it.
+        if ((_heli getVariable "bmkhs_engClutch") select _index) then {
+            private _outTq   = _heli getVariable "bmkhs_engOutputTq";
+            private _clutch  = _heli getVariable "bmkhs_engClutch";
+            private _lvrs    = _heli getVariable "bmkhs_engPowerLeverState";
+            private _shares  = [];
+            {
+                if ((_lvrs select _forEachIndex) == "FLY" && {_clutch select _forEachIndex}) then {
+                    _shares pushBack ((_outTq select _forEachIndex) / (_x get "refTq"));
+                };
+            } forEach (_heli getVariable "bmkhs_engines");
+            if (count _shares > 1) then {
+                private _avg = 0.0;
+                { _avg = _avg + _x } forEach _shares;
+                private _mismatch = ((_avg / count _shares) - ((_outTq select _index) / (_engine get "refTq"))) max 0.0;
+                private _clamp    = _pid get "ki_clamp";
+                _pid set ["integral", ((_pid get "integral")
+                    + ((_engine get "loadShareGain") * _mismatch * _deltaTime / (_pid get "ki"))) max -_clamp min _clamp];
+            };
+        };
+    };
     _orifice = _fuelSched min (_govFuel max 0.0);
 } else {
     [_pid] call bmkhs_fnc_pidReset;
+    _npRef = -1.0;
 };
+[_heli, "bmkhs_engNpRef", _index, _npRef] call bmkhs_fnc_utilSetArrayVariable;
 
 //Below idle Ng fuel is metered, which is what makes TGT peak above idle during a start and
 //fall back as the compressor catches up. Above it this is a no-op.

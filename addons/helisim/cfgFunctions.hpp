@@ -78,10 +78,7 @@ class CfgFunctions
         };
         class engine {
             file = "\bmkhs_helisim\functions\engine";
-            class engine  {R;};
-            class engine2 {R;};
-            class engineBET {R;};
-            class engineController {R;};
+            class engineUpdate {R;};
             class engineGovernor {R;};
             class engineVariables {R;};
         };
