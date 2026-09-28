@@ -23,6 +23,7 @@ Author:
     BradMick
 ---------------------------------------------------------------------------- */
 params ["_heli", "_config"];
+#include "\bmkhs_helisim\functions\systems\systems.hpp"
 
 //Fields grouped by the assembly that owns them, matching the config's own nesting. The key a
 //reader asks for IS the config property name, so grepping a knob finds config, list and use.
@@ -31,15 +32,17 @@ private _numFields = [
      "designRpm"
    , "npFly"
    , "maxFuelFlow"
+   , "powerKw"
      //Hard shutdowns - fly weights and the electrical trip.
    , "maxNg"
    , "maxNp"
 ];
 private _sectionFields = [
      ["ColdSection",  ["compressorInertia", "compressorLoad", "airCoef", "compRunMult", "compRunExp"
-                     , "compDragMult", "compDragFloor", "lightOffNg", "selfSustNg", "idleNg"]]
+                     , "compDragMult", "compDragFloor", "lightOffNg", "selfSustNg", "idleNg"
+                     , "ngLimitMax", "ngLimitBase", "ngLimitSlope"]]
    , ["HotSection",   ["massFlowExp", "tgtK", "thermalMassCoef", "coolingCoef", "stillAirFlow"
-                     , "ramAirCoef", "maxTgt", "startTgt", "startMinTgt", "residualHeatGain"]]
+                     , "ramAirCoef", "maxTgt", "maxTgtSe", "startTgt", "startMinTgt", "residualHeatGain"]]
    , ["PowerTurbine", ["ptEfficiency", "ptInertia", "ptDrag", "ptDragFloor"]]
    , ["Governor",     ["fuelIdle", "fuelFly", "startFuelBase", "ffwdGain", "leverTravelTime", "loadShareGain"]]
 ];
@@ -84,23 +87,12 @@ for "_i" from 1 to _numEngines do {
     //What the ECU needs to keep metering fuel. Declaring none means always powered.
     _engine set ["governorGates", (getArray (_e >> "Governor" >> "gate")) apply {_x}];
 
-    //Author-named rating tiers, in declaration order - the first is the reference.
-    private _ratings = ("true" configClasses (_e >> "PowerRatings")) apply {
-        createHashMapFromArray [
-             ["name",          configName _x]
-           , ["displayName",   getText   (_x >> "displayName")]
-           , ["powerKw",       getNumber (_x >> "powerKw")]
-           , ["maxTgt",        getNumber (_x >> "maxTgt")]
-           , ["maxNg",         getNumber (_x >> "maxNg")]
-           , ["maxOilPsi",     getNumber (_x >> "maxOilPsi")]
-           , ["timeLimit",     getNumber (_x >> "timeLimit")]
-           , ["unlockBelowTq", getNumber (_x >> "unlockBelowTq")]
-        ]
-    };
-    _engine set ["ratings", _ratings];
+    //Book limits, low to high {limit, seconds, divisor}.
+    { _engine set [_x, getArray (_e >> _x)]; }
+        forEach ["ngLimits", "npLimits", "tqLimits", "tgtLimits", "tqLimitsSe", "tgtLimitsSe"];
 
-    //refTq is derived, never declared: Q = P / w from the base tier's power at governed Np.
-    _engine set ["refTq", (((_ratings # 0) get "powerKw") * 1000)
+    //refTq is derived, never declared: Q = P / w from maximum continuous power at governed Np.
+    _engine set ["refTq", ((_engine get "powerKw") * 1000)
                         / ((_engine get "designRpm") * (_engine get "npFly") * 0.10472)];
 
     _engines pushBack _engine;
@@ -147,6 +139,26 @@ _heli setVariable ["bmkhs_isSingleEng",           false];
 //systemsVariables, which runs before the engine count is known.
 _heli setVariable ["bmkhs_engineOverspeed",       _engines apply {false}, true];
 
+//Damage ladder latches - cleared by a repair.
+_heli setVariable ["bmkhs_engChips",              _engines apply {false}, true];
+_heli setVariable ["bmkhs_engFailed",             _engines apply {false}, true];
+_heli setVariable ["bmkhs_lowOilPsiFailure",      _engines apply {false}, true];
+_heli setVariable ["bmkhs_engOilHealth",          _engines apply {1.0}];
+//Seconds left in the current band, {np, ng, tgt}: -1 none, 0 damage running.
+_heli setVariable ["bmkhs_engLimitTimers",        _engines apply {[-1, -1, -1]}];
+//The same for the drivetrain the engine's torque loads.
+_heli setVariable ["bmkhs_engTqTimer",            _engines apply {-1}];
+//useSystems = 0: the engine given the 0.25 fault, -1 until one is.
+_heli setVariable ["bmkhs_engFailureResult",      -1];
+//Clutch slip - the fraction of torque passed (1 is sound), and each engine's slip clock.
+_heli setVariable ["bmkhs_engClutchSlip",         _engines apply {1.0}];
+_heli setVariable ["bmkhs_engSlipT",              _engines apply {-1}];
+//A random start, so the engines slip out of step.
+_heli setVariable ["bmkhs_engSlipWait",           _engines apply {random SYS_SLIP_WAIT_LOW_DMG}];
+_heli setVariable ["bmkhs_engSlipDepth",          _engines apply {0}];
+//useSystems = 0: when Ng reached idle, -1 until it has.
+_heli setVariable ["bmkhs_engIdleSince",          _engines apply {-1}];
+
 //Outputs
 _heli setVariable ["bmkhs_engFuelFlow",                 +_zeros];
 _heli setVariable ["bmkhs_engPctNg",              +_zeros];
@@ -167,5 +179,5 @@ _heli setVariable ["bmkhs_engPrevLever",          _engines apply {"OFF"}];
 _heli setVariable ["bmkhs_engLeverSched",         +_zeros];
 //Np when the governor took over at FLY; negative until it does.
 _heli setVariable ["bmkhs_engNpRef",              _engines apply {-1.0}];
-_heli setVariable ["bmkhs_engRatingIdx",          _engines apply {0}];
-_heli setVariable ["bmkhs_engRatingName",         _engines apply {((_x get "ratings") # 0) get "displayName"}];
+//Fuel the TGT and Ng limiters allow; wide open until one is near its limit.
+_heli setVariable ["bmkhs_engLimFuel",            _engines apply {_x get "fuelFly"}];

@@ -29,6 +29,12 @@ params ["_heli", "_index", "_engine", "_ng", "_np", "_tgt", "_lever", "_fat", "_
 
 private _idleNg = _engine get "idleNg";
 
+//Single engine when one engine's torque is below 51% of another's.
+private _tqs = _heli getVariable "bmkhs_engPctTq";
+private _tqHigh = 0;
+{ _tqHigh = _tqHigh max _x } forEach _tqs;
+_heli setVariable ["bmkhs_isSingleEng", (_tqs findIf {_x < (_tqHigh * GT_SINGLE_ENG_TQ_RATIO)}) >= 0];
+
 //Each detent's schedule carries its own torque - idle and fly are loaded points.
 private _target = switch (_lever) do {
     case "FLY":  { _engine get "fuelFly" };
@@ -75,8 +81,20 @@ if (_lever == "FLY" && {_govPowered}) then {
     private _integral = _pid get "integral";
     private _govFuel  = ([_pid, _deltaTime, _npTarget, _np] call bmkhs_fnc_pidRun)
                       + ((_heli getVariable "bmkhs_collectiveOutput") * (_engine get "ffwdGain"));
-    //While the lever is what limits fuel, the integral does not wind up.
-    if (_govFuel > _fuelSched) then {
+
+    //TGT and Ng limiters - the fuel allowed rides above demand and is pulled down by whichever
+    //is over its limit. Never below the idle floor.
+    private _tgtLim = [_engine get "maxTgt", _engine get "maxTgtSe"] select (_heli getVariable "bmkhs_isSingleEng");
+    private _ngLim  = (_engine get "ngLimitMax") min ((_engine get "ngLimitBase") + ((_engine get "ngLimitSlope") * _fat));
+    private _err    = ((_tgtLim - _tgt) / GT_TGT_LIMIT_BAND) min ((_ngLim - _ng) / GT_NG_LIMIT_BAND);
+    private _lim    = ((_heli getVariable "bmkhs_engLimFuel") select _index) + (GT_LIMIT_GAIN * _err * _deltaTime);
+    _lim = _lim min ((_fuelSched min (_govFuel max 0.0)) * GT_LIMIT_TRACK);
+    _lim = (_lim max _fuelIdle) min _fuelFly;
+    [_heli, "bmkhs_engLimFuel", _index, _lim] call bmkhs_fnc_utilSetArrayVariable;
+    private _allowed = _fuelSched min _lim;
+
+    //While the lever or a limiter is what limits fuel, the integral does not wind up.
+    if (_govFuel > _allowed) then {
         _pid set ["integral", _integral];
     } else {
         //Load sharing: an engine below the average of those matched with it trims up. One above is
@@ -101,10 +119,11 @@ if (_lever == "FLY" && {_govPowered}) then {
             };
         };
     };
-    _orifice = _fuelSched min (_govFuel max 0.0);
+    _orifice = _allowed min (_govFuel max 0.0);
 } else {
     [_pid] call bmkhs_fnc_pidReset;
     _npRef = -1.0;
+    [_heli, "bmkhs_engLimFuel", _index, _fuelFly] call bmkhs_fnc_utilSetArrayVariable;
 };
 [_heli, "bmkhs_engNpRef", _index, _npRef] call bmkhs_fnc_utilSetArrayVariable;
 

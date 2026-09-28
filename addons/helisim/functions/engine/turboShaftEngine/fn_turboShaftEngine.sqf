@@ -59,7 +59,8 @@ if (!_tripped && {_ng >= (_engine get "maxNg") || {_np >= (_engine get "maxNp")}
 
 //The lever check is required - without it fuel keeps burning after shutdown.
 private _fuelAvail = _heli getVariable [format ["bmkhs_eng%1FuelAvail", _index + 1], true];
-private _running   = _ng > (_engine get "lightOffNg") && {_lever != "OFF"} && {_fuelAvail} && {!_tripped};
+private _failed    = _heli getVariable "bmkhs_engFailed" select _index;
+private _running   = _ng > (_engine get "lightOffNg") && {_lever != "OFF"} && {_fuelAvail} && {!_tripped} && {!_failed};
 
 private _starterTq = [_heli, _index, _engine, _ng] call bmkhs_fnc_gasTurbineStarter;
 private _cranking  = _starterTq > 0.0;
@@ -118,13 +119,13 @@ if (bmkhs_sysDebug) then {
     };
 };
 
+//A slipping clutch passes less, and grabs back - what the rotor gets and the gauge reads.
+_tqOut = _tqOut * ((_heli getVariable "bmkhs_engClutchSlip") select _index);
+
 [_heli, "bmkhs_engPctNg",    _index, _ngNew] call bmkhs_fnc_utilSetArrayVariable;
 [_heli, "bmkhs_engTgt",      _index, _tgt] call bmkhs_fnc_utilSetArrayVariable;
 [_heli, "bmkhs_engOutputTq", _index, _tqOut] call bmkhs_fnc_utilSetArrayVariable;
-
-//A damaged drivetrain makes the needle wander.
-[_heli, "bmkhs_engPctTq", _index,
-    (_tqOut / _refTq) + ([_heli, _index] call bmkhs_fnc_systemTorqueJitter)] call bmkhs_fnc_utilSetArrayVariable;
+[_heli, "bmkhs_engPctTq",    _index, _tqOut / _refTq] call bmkhs_fnc_utilSetArrayVariable;
 
 [_heli, "bmkhs_engNp",     _index, _npNew] call bmkhs_fnc_utilSetArrayVariable;
 [_heli, "bmkhs_engClutch", _index, _clutch] call bmkhs_fnc_utilSetArrayVariable;
@@ -135,6 +136,6 @@ if (bmkhs_sysDebug) then {
 
 //The pump is on the gas generator shaft, so pressure rises during a start before the engine
 //makes any torque - which is why this comes from Ng and not from torque.
-private _damage = [_heli, _engine get "damageRole", _engine get "damageRoleIndex"] call bmkhs_fnc_damageGet;
 [_heli, "bmkhs_engOilPsi", _index,
-    (_ngNew * GT_OIL_PSI_SCALE * (1.0 - _damage)) max 0.0] call bmkhs_fnc_utilSetArrayVariable;
+    (_ngNew * GT_OIL_PSI_SCALE * (_heli getVariable "bmkhs_engOilHealth" select _index)) max 0.0]
+        call bmkhs_fnc_utilSetArrayVariable;

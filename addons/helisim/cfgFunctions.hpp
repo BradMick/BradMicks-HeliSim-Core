@@ -80,6 +80,7 @@ class CfgFunctions
             file = "\bmkhs_helisim\functions\engine";
             class engineUpdate {R;};
             class engineGovernor {R;};
+            class engineDamage {R;};
             class engineVariables {R;};
         };
         class engineGasTurbine {
@@ -265,7 +266,6 @@ class CfgFunctions
             class systemProducer {R;};
             class systemStorage {R;};
             class systemTorque {R;};
-            class systemTorqueJitter {R;};
             class systemsComponents {R;};
             class systemsDebug {R;};
             class systemsSolve {R;};

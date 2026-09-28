@@ -2,8 +2,8 @@
 Function: bmkhs_fnc_engDisplayUpdate
 
 Description:
-    Draws the engine readout - torque, Np, Nr, TGT, Ng, oil pressure and the
-    active rating, with warnings, cautions and advisories beneath.
+    Draws the engine readout - torque, Np, Nr, TGT, Ng and oil pressure, with
+    warnings, cautions and advisories beneath.
 
     Always shown with useSystems = 0, where nothing else is fed this data, and
     optionally with the CBA debug setting so it can be compared against an
@@ -49,21 +49,46 @@ private _np  = _heli getVariable "bmkhs_engPctNp";
 private _tq  = _heli getVariable "bmkhs_engPctTq";
 private _tgt = _heli getVariable "bmkhs_engTgt";
 private _oil = _heli getVariable "bmkhs_engOilPsi";
-private _rtg = _heli getVariable "bmkhs_engRatingName";
 
 private _n = _heli getVariable "bmkhs_numEngines";
 _n = (_n min ED_MAX_ENG) max 1;
 
 private _nr = _heli getVariable "bmkhs_rtrRPM";
 
-//Band boundaries from the declared ratings - first tier ends green, last ends amber.
-private _ratings = ((_heli getVariable "bmkhs_engines") # 0) get "ratings";
-private _rBase   = _ratings # 0;
-private _rTop    = _ratings # ((count _ratings) - 1);
+private _engines = _heli getVariable "bmkhs_engines";
 
-private _tgtAmb = _rBase get "maxTgt";
-private _tgtRed = _rTop  get "maxTgt";
-private _npOvsp = ((_heli getVariable "bmkhs_engines") # 0) get "maxNp";
+//Single engine switches torque and TGT to their Se limits.
+private _single = _heli getVariable "bmkhs_isSingleEng";
+private _tqKey  = ["tqLimits",  "tqLimitsSe"]  select _single;
+private _tgtKey = ["tgtLimits", "tgtLimitsSe"] select _single;
+
+//A book limit set's first limit and its last.
+private _band = {
+    params ["_engine", "_key"];
+    private _lims = _engine get _key;
+    [(_lims # 0) # 0, (_lims # ((count _lims) - 1)) # 0]
+};
+//{idc, limit} for every line of a set - a mid control left over reads 0 and is hidden.
+private _lines = {
+    params ["_engine", "_key", "_first", "_mids", "_last"];
+    private _lims = _engine get _key;
+    private _k    = count _lims;
+    private _out  = [[_first, (_lims # 0) # 0], [_last, (_lims # (_k - 1)) # 0]];
+    { _out pushBack [_x, [0, (_lims # ((_forEachIndex + 1) min (_k - 1))) # 0] select (_forEachIndex + 1 < _k - 1)] } forEach _mids;
+    _out
+};
+private _colour = {
+    params ["_val", "_amber", "_red"];
+    switch (true) do {
+        case (_val >= _red):   { [1.00, 0.35, 0.35, 1.00] };
+        case (_val >= _amber): { [1.00, 0.85, 0.30, 1.00] };
+        default                { [0.80, 1.00, 0.80, 1.00] };
+    }
+};
+
+//Full scales from engine 1, so the tapes line up.
+private _tgtRed = ([_engines # 0, _tgtKey] call _band) # 1;
+private _npOvsp = (_engines # 0) get "maxNp";
 
 //Full scale sits above the top limit so the red band has somewhere to be drawn.
 private _tqFs  = ED_TQ_FULL_SCALE;
@@ -86,9 +111,11 @@ for "_i" from 0 to (_n - 1) do {
         _warn pushBack ("ENG" + _e + " OUT");
     };
     if ([_ovsp, _i, false] call BIS_fnc_param) then { _warn pushBack ("ENG" + _e + " OVSP") };
-    if (([_tgt, _i, 0.0] call BIS_fnc_param) > _tgtRed) then { _warn pushBack ("ENG" + _e + " TGT") };
+    if (([_tgt, _i, 0.0] call BIS_fnc_param) > (([_engines # _i, _tgtKey] call _band) # 1)) then {
+        _warn pushBack ("ENG" + _e + " TGT");
+    };
 
-    if (([_heli, "engines", _i] call bmkhs_fnc_damageGet) > SYS_ENG_DMG_THRESH) then {
+    if ((_heli getVariable "bmkhs_engChips") select _i) then {
         _caut pushBack ("ENG" + _e + " CHIPS");
     };
     if (_st == "STARTING") then { _advs pushBack ("ENG" + _e + " START") };
@@ -125,8 +152,8 @@ private _inner = _W - (_pad * 2);
 //within a group; the leftover width goes between the GROUPS, evenly.
 private _nTach  = _n + 1;
 private _nTapes = (_n * 2) + _nTach;
-private _tapeW  = (_inner / _nTapes) * 0.80;
-private _gapT   = _tapeW * 0.16;
+private _tapeW  = (_inner / _nTapes) * 0.76;
+private _gapT   = _tapeW * 0.33;
 private _grpTq  = (_n * _tapeW) + ((_n - 1) * _gapT);
 private _grpTch = (_nTach * _tapeW) + ((_nTach - 1) * _gapT);
 private _gapG   = ((_inner - (_grpTq * 2) - _grpTch) / 2) max 0;
@@ -134,6 +161,7 @@ private _gapG   = ((_inner - (_grpTq * 2) - _grpTch) / 2) max 0;
 //Text rows take a fixed share of the panel, so everything left over is tape.
 private _lblH  = _H * 0.048;
 private _numH  = _H * 0.056;
+private _tmrH  = _H * 0.046;
 private _rowH  = _H * 0.062;
 
 //Always three rows - the block stays put whether or not anything is annunciating.
@@ -144,10 +172,11 @@ private _yLbl  = _y0 + (_H * 0.010);
 private _yEng  = _yLbl + _lblH;
 private _yTape = _yEng + _lblH;
 //Two label rows at the top (group + engine number), one more above the digital rows.
-private _tapeH = _H - ((_H * 0.010) + (_lblH * 3) + _numH + (_rowH * 3) + _annH + (_H * 0.030));
+private _tapeH = _H - ((_H * 0.010) + (_lblH * 3) + _numH + _tmrH + (_rowH * 3) + _annH + (_H * 0.030));
 if (_tapeH < 0.01) then { _tapeH = _H * 0.30 };
 private _yNum  = _yTape + _tapeH;
-private _yRows = _yNum + _numH + (_H * 0.010) + _lblH;
+private _yTmr  = _yNum + _numH;
+private _yRows = _yTmr + _tmrH + (_H * 0.010) + _lblH;
 private _yAnn  = _yRows + (_rowH * 3) + (_H * 0.008);
 
 //Left edge of each group, walked across the panel.
@@ -159,7 +188,7 @@ private _tapeX = { params ["_base", "_i"]; _base + (_i * (_tapeW + _gapT)) };
 
 //A tape: frame, fill bottom-up, and the limit ticks over the top of it.
 private _drawTape = {
-    params ["_fIdc", "_lIdc", "_tx", "_val", "_fs", "_amber", "_red", "_aIdc", "_rIdc"];
+    params ["_fIdc", "_lIdc", "_tx", "_val", "_fs", "_amber", "_red", "_ticks"];
 
     private _f = _display displayCtrl _fIdc;
     _f ctrlSetPosition [_tx, _yTape, _tapeW, _tapeH];
@@ -181,7 +210,7 @@ private _drawTape = {
                 _c ctrlShow false;
             };
         };
-    } forEach [[_aIdc, _amber], [_rIdc, _red]];
+    } forEach _ticks;
 
     private _frac = ((_val / _fs) max 0) min 1;
     private _fill = _display displayCtrl _lIdc;
@@ -212,52 +241,73 @@ private _setText = {
 
 private _hide = { { private _c = _display displayCtrl _x; if !(isNull _c) then { _c ctrlShow false } } forEach _this };
 
+//Countdown, m:ss. Blank with no band; blinks at 0:00 once damage has started.
+private _blink = (floor (time * 4)) mod 2 == 0;
+private _timer = {
+    params ["_idc", "_left", "_x", "_y", "_w", "_h", "_col"];
+    if (_left < 0 || {_left <= 0 && {!_blink}}) exitWith { [_idc] call _hide };
+    private _s = ceil _left;
+    private _sec = _s mod 60;
+    [_idc, format ["%1:%2", floor (_s / 60), [str _sec, "0" + str _sec] select (_sec < 10)],
+        _x, _y, _w, _h, _col, _gapT * 0.5] call _setText;
+};
+
 // ── Tapes ────────────────────────────────────────────────────────────────────
+private _limTmrs = _heli getVariable "bmkhs_engLimitTimers";
+private _tqTmrs  = _heli getVariable "bmkhs_engTqTimer";
+
 for "_i" from 0 to (ED_MAX_ENG - 1) do {
     if (_i < _n) then {
         private _tqV  = [_tq,  _i, 0.0] call BIS_fnc_param;
         private _npV  = [_np,  _i, 0.0] call BIS_fnc_param;
         private _tgV  = [_tgt, _i, 0.0] call BIS_fnc_param;
 
+        private _eng = _engines # _i;
+        ([_eng, _tqKey]     call _band) params ["_tqAmb",  "_tqRed"];
+        ([_eng, "npLimits"] call _band) params ["_npAmb",  "_npRed"];
+        ([_eng, _tgtKey]    call _band) params ["_tgtAmb", "_tgtRedE"];
+
         private _xT = [_xTq, _i] call _tapeX;
-        [5310 + _i, 5320 + _i, _xT, _tqV, _tqFs, 1.0, 1.29, 5440 + _i, 5450 + _i] call _drawTape;
+        [5310 + _i, 5320 + _i, _xT, _tqV, _tqFs, _tqAmb, _tqRed,
+            [_eng, _tqKey, 5440 + _i, [5570 + _i], 5450 + _i] call _lines] call _drawTape;
         [5330 + _i, (_tqV * 100) toFixed 0, _xT, _yNum, _tapeW, _numH,
-            switch (true) do {
-                case (_tqV >= 1.29): { [1.00, 0.35, 0.35, 1.00] };
-                case (_tqV >= 1.00): { [1.00, 0.85, 0.30, 1.00] };
-                default               { [0.80, 1.00, 0.80, 1.00] };
-            }, _gapT * 0.5] call _setText;
+            [_tqV, _tqAmb, _tqRed] call _colour, _gapT * 0.5] call _setText;
         [5400 + _i, str (_i + 1), _xT, _yEng, _tapeW, _lblH] call _setText;
 
         //Np tape - engine 0 left of Nr, the rest to its right, so Nr stays centred.
         private _slot = [_i, _i + 1] select (_i >= (_nTach / 2) - 0.5);
         private _xN = [_xTach, _slot] call _tapeX;
-        [5340 + _i, 5350 + _i, _xN, _npV, _npFs, 1.05, _npOvsp, 5490 + _i, 5500 + _i] call _drawTape;
+        [5340 + _i, 5350 + _i, _xN, _npV, _npFs, _npAmb, _npRed,
+            [_eng, "npLimits", 5490 + _i, [], 5500 + _i] call _lines] call _drawTape;
         [5360 + _i, (_npV * 100) toFixed 0, _xN, _yNum, _tapeW, _numH,
-            [0.80, 1.00, 0.80, 1.00], _gapT * 0.5] call _setText;
+            [_npV, _npAmb, _npRed] call _colour, _gapT * 0.5] call _setText;
         [5470 + _i, str (_i + 1), _xN, _yEng, _tapeW, _lblH] call _setText;
 
         private _xG = [_xTgt, _i] call _tapeX;
-        [5370 + _i, 5380 + _i, _xG, _tgV, _tgtFs, _tgtAmb, _tgtRed, 5510 + _i, 5520 + _i] call _drawTape;
+        [5370 + _i, 5380 + _i, _xG, _tgV, _tgtFs, _tgtAmb, _tgtRedE,
+            [_eng, _tgtKey, 5510 + _i, [5580 + _i, 5590 + _i, 5600 + _i], 5520 + _i] call _lines] call _drawTape;
         [5390 + _i, _tgV toFixed 0, _xG, _yNum, _tapeW, _numH,
-            switch (true) do {
-                case (_tgV >= _tgtRed): { [1.00, 0.35, 0.35, 1.00] };
-                case (_tgV >= _tgtAmb): { [1.00, 0.85, 0.30, 1.00] };
-                default                 { [0.80, 1.00, 0.80, 1.00] };
-            }, _gapT * 0.5] call _setText;
+            [_tgV, _tgtAmb, _tgtRedE] call _colour, _gapT * 0.5] call _setText;
         [5540 + _i, str (_i + 1), _xG, _yEng, _tapeW, _lblH] call _setText;
+
+        //Countdowns under the numbers - {np, ng, tgt}, torque from the drivetrain it loads.
+        private _lim = _limTmrs # _i;
+        [5610 + _i, _tqTmrs # _i, _xT, _yTmr, _tapeW, _tmrH, [_tqV, _tqAmb, _tqRed] call _colour] call _timer;
+        [5620 + _i, _lim # 0,     _xN, _yTmr, _tapeW, _tmrH, [_npV, _npAmb, _npRed] call _colour] call _timer;
+        [5630 + _i, _lim # 2,     _xG, _yTmr, _tapeW, _tmrH, [_tgV, _tgtAmb, _tgtRedE] call _colour] call _timer;
     } else {
         [5310 + _i, 5320 + _i, 5330 + _i, 5340 + _i, 5350 + _i, 5360 + _i, 5370 + _i,
          5380 + _i, 5390 + _i, 5400 + _i, 5410 + _i, 5420 + _i, 5430 + _i, 5440 + _i,
          5450 + _i, 5470 + _i, 5490 + _i, 5500 + _i, 5510 + _i, 5520 + _i,
-         5540 + _i, 5550 + _i] call _hide;
+         5540 + _i, 5550 + _i, 5570 + _i, 5580 + _i, 5590 + _i, 5600 + _i,
+         5610 + _i, 5620 + _i, 5630 + _i, 5640 + _i] call _hide;
     };
 };
 
 //Nr sits in the middle slot of the tach group.
 private _nrSlot = floor (_nTach / 2);
 private _xNr    = [_xTach, _nrSlot] call _tapeX;
-[5304, 5305, _xNr, _nr, _npFs, ED_NR_HIGH, _npOvsp, 5530, 5531] call _drawTape;
+[5304, 5305, _xNr, _nr, _npFs, ED_NR_HIGH, _npOvsp, [[5530, ED_NR_HIGH], [5531, _npOvsp]]] call _drawTape;
 [5306, (_nr * 100) toFixed 0, _xNr, _yNum, _tapeW, _numH,
     [0.80, 1.00, 0.80, 1.00], _gapT * 0.5] call _setText;
 [5309, "R", _xNr, _yEng, _tapeW, _lblH] call _setText;
@@ -281,16 +331,20 @@ for "_i" from 0 to (_n - 1) do {
 {
     _x params ["_lblIdc", "_txt", "_row"];
     [_lblIdc, _txt, _x0 + _pad, _yRows + (_rowH * _row), _labW, _rowH] call _setText;
-} forEach [[5460, "NG", 0], [5461, "OIL", 1], [5462, "RTG", 2]];
+} forEach [[5460, "NG", 0], [5461, "OIL", 2]];
+[5462] call _hide;
 
+//NG, its countdowns, then oil.
 for "_i" from 0 to (_n - 1) do {
-    private _xc = [_i] call _colX;
-    [5410 + _i, ((([_ng, _i, 0.0] call BIS_fnc_param) * 100) toFixed 1),
-        _xc, _yRows, _colW, _rowH] call _setText;
+    private _xc  = [_i] call _colX;
+    private _ngV = [_ng, _i, 0.0] call BIS_fnc_param;
+    ([_engines # _i, "ngLimits"] call _band) params ["_ngAmb", "_ngRed"];
+    private _ngCol = [_ngV, _ngAmb, _ngRed] call _colour;
+    [5410 + _i, (_ngV * 100) toFixed 1, _xc, _yRows, _colW, _rowH, _ngCol] call _setText;
+    [5640 + _i, (_limTmrs # _i) # 1, _xc, _yRows + _rowH, _colW, _rowH, _ngCol] call _timer;
     [5420 + _i, ((([_oil, _i, 0.0] call BIS_fnc_param) * 100) toFixed 0),
-        _xc, _yRows + _rowH, _colW, _rowH] call _setText;
-    [5430 + _i, ([_rtg, _i, "--"] call BIS_fnc_param),
         _xc, _yRows + (_rowH * 2), _colW, _rowH] call _setText;
+    [5430 + _i] call _hide;
 };
 
 // ── Annunciators ─────────────────────────────────────────────────────────────

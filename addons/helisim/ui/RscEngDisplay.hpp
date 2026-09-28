@@ -130,6 +130,11 @@ class bmkhs_engdisplay
         class ED_TqRed1   : BMKHS_EngDisplay_Band      { idc = 5451; colorBackground[] = {0.90, 0.15, 0.15, 0.85}; };
         class ED_TqRed2   : BMKHS_EngDisplay_Band      { idc = 5452; colorBackground[] = {0.90, 0.15, 0.15, 0.85}; };
         class ED_TqRed3   : BMKHS_EngDisplay_Band      { idc = 5453; colorBackground[] = {0.90, 0.15, 0.15, 0.85}; };
+        //A line at each limit between the first and the last
+        class ED_TqMid0   : BMKHS_EngDisplay_Band      { idc = 5570; };
+        class ED_TqMid1   : BMKHS_EngDisplay_Band      { idc = 5571; };
+        class ED_TqMid2   : BMKHS_EngDisplay_Band      { idc = 5572; };
+        class ED_TqMid3   : BMKHS_EngDisplay_Band      { idc = 5573; };
         class ED_TqNum0   : BMKHS_EngDisplay_Num       { idc = 5330; };
         class ED_TqNum1   : BMKHS_EngDisplay_Num       { idc = 5331; };
         class ED_TqNum2   : BMKHS_EngDisplay_Num       { idc = 5332; };
@@ -186,6 +191,19 @@ class bmkhs_engdisplay
         class ED_TgtRed1   : BMKHS_EngDisplay_Band      { idc = 5521; colorBackground[] = {0.90, 0.15, 0.15, 0.85}; };
         class ED_TgtRed2   : BMKHS_EngDisplay_Band      { idc = 5522; colorBackground[] = {0.90, 0.15, 0.15, 0.85}; };
         class ED_TgtRed3   : BMKHS_EngDisplay_Band      { idc = 5523; colorBackground[] = {0.90, 0.15, 0.15, 0.85}; };
+        //A line at each limit between the first and the last
+        class ED_TgtMidA0  : BMKHS_EngDisplay_Band      { idc = 5580; };
+        class ED_TgtMidA1  : BMKHS_EngDisplay_Band      { idc = 5581; };
+        class ED_TgtMidA2  : BMKHS_EngDisplay_Band      { idc = 5582; };
+        class ED_TgtMidA3  : BMKHS_EngDisplay_Band      { idc = 5583; };
+        class ED_TgtMidB0  : BMKHS_EngDisplay_Band      { idc = 5590; };
+        class ED_TgtMidB1  : BMKHS_EngDisplay_Band      { idc = 5591; };
+        class ED_TgtMidB2  : BMKHS_EngDisplay_Band      { idc = 5592; };
+        class ED_TgtMidB3  : BMKHS_EngDisplay_Band      { idc = 5593; };
+        class ED_TgtMidC0  : BMKHS_EngDisplay_Band      { idc = 5600; };
+        class ED_TgtMidC1  : BMKHS_EngDisplay_Band      { idc = 5601; };
+        class ED_TgtMidC2  : BMKHS_EngDisplay_Band      { idc = 5602; };
+        class ED_TgtMidC3  : BMKHS_EngDisplay_Band      { idc = 5603; };
         class ED_TgtNum0   : BMKHS_EngDisplay_Num       { idc = 5390; };
         class ED_TgtNum1   : BMKHS_EngDisplay_Num       { idc = 5391; };
         class ED_TgtNum2   : BMKHS_EngDisplay_Num       { idc = 5392; };
@@ -219,6 +237,24 @@ class bmkhs_engdisplay
         class ED_RtgNum1 : BMKHS_EngDisplay_Num { idc = 5431; };
         class ED_RtgNum2 : BMKHS_EngDisplay_Num { idc = 5432; };
         class ED_RtgNum3 : BMKHS_EngDisplay_Num { idc = 5433; };
+
+        //Limit countdowns
+        class ED_TqTmr0  : BMKHS_EngDisplay_Num { idc = 5610; };
+        class ED_TqTmr1  : BMKHS_EngDisplay_Num { idc = 5611; };
+        class ED_TqTmr2  : BMKHS_EngDisplay_Num { idc = 5612; };
+        class ED_TqTmr3  : BMKHS_EngDisplay_Num { idc = 5613; };
+        class ED_NpTmr0  : BMKHS_EngDisplay_Num { idc = 5620; };
+        class ED_NpTmr1  : BMKHS_EngDisplay_Num { idc = 5621; };
+        class ED_NpTmr2  : BMKHS_EngDisplay_Num { idc = 5622; };
+        class ED_NpTmr3  : BMKHS_EngDisplay_Num { idc = 5623; };
+        class ED_TgtTmr0 : BMKHS_EngDisplay_Num { idc = 5630; };
+        class ED_TgtTmr1 : BMKHS_EngDisplay_Num { idc = 5631; };
+        class ED_TgtTmr2 : BMKHS_EngDisplay_Num { idc = 5632; };
+        class ED_TgtTmr3 : BMKHS_EngDisplay_Num { idc = 5633; };
+        class ED_NgTmr0  : BMKHS_EngDisplay_Num { idc = 5640; };
+        class ED_NgTmr1  : BMKHS_EngDisplay_Num { idc = 5641; };
+        class ED_NgTmr2  : BMKHS_EngDisplay_Num { idc = 5642; };
+        class ED_NgTmr3  : BMKHS_EngDisplay_Num { idc = 5643; };
 
         class ED_LblTorque : BMKHS_EngDisplay_Label  { idc = 5307; text = "TORQUE"; };
         class ED_LblTgt    : BMKHS_EngDisplay_Label  { idc = 5308; text = "TGT"; };

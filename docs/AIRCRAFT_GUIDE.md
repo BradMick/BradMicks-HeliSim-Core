@@ -264,10 +264,7 @@ class BMKHS_HeliSim {
     //Systems are ALL OR NOTHING. Start with 0 and fly it before turning it on.
     useSystems = 0;
 
-    //Drivetrain ratings for useSystems = 0 only - worst first,
-    //{fraction of rated torque, seconds it holds there, divisor}.
-    xmsnTqLimits[]  = {{2.30, 0, 20}, {2.00, 6, 10}};
-    ngbTqLimitsSE[] = {{1.25, 0, 40}, {1.22, 6, 20}, {1.10, 150, 10}};
+    //The drivetrain is rated by each engine's tqLimits / tqLimitsSe in helisim_engine.hpp.
 
     #include "bmkhs_config\helisim_airfoils.hpp"
     #include "bmkhs_config\helisim_engine.hpp"

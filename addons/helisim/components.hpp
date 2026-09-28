@@ -109,22 +109,13 @@
 //  stateAbove    output at or above which it counts as running
 //  torqueFrom    variable carrying the torque this component sees. Indexed per member
 //                where the source is, so engine 2's torque reaches gearbox 2
-//  tqLimits[]    what it is rated for, worst first: {fraction of rated torque, seconds it
-//                will hold there, divisor}. 0 seconds damages immediately. A tier's clock
-//                runs only while the torque is in THAT tier and resets when it leaves, so
-//                a brief excursion is not cumulative. Once any tier's clock expires the
-//                damage rate is the sum over every exceeded tier of (torque - limit) /
-//                divisor - so the harder it is pulled the faster it comes apart. Nothing
-//                accrues with the engines off
-//  tqLimitsSE[]  the same set, used while single-engine. Declare ONLY this one for a
-//                component that can only be hurt with one engine doing the work of two -
-//                a nose gearbox - and it is unrated the rest of the time
+//  tqLimitsFrom  the engine torque limit set it is rated to, "tqLimits" - times the engine
+//                count with torqueSum, else its own engine's
+//  tqLimitsSeFrom  the same while single engine, "tqLimitsSe"
 //  damagesHitpoints[]  hitpoints to damage directly, for a component whose damageRole
 //                nothing claims. Core uses this for the useSystems = 0 drivetrain, so an
 //                airframe declaring no drivetrain still has something to break
-//  jittersTorque  1 if damage to this component makes the torque needle wander. It
-//                publishes its own wander; anything reading torque asks Core for the
-//                total via systemTorqueJitter rather than knowing who contributes
+//  jittersTorque  1 if damage to this component slips the clutch of each engine it carries
 //  breaksOnFailure[]  what a destroyed component takes with it. An entry naming a damage
 //                role destroys that role outright - a transmission is what holds the
 //                rotors, the generators and the pumps up. An entry naming a bmkhs_

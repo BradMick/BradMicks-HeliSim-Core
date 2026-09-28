@@ -35,6 +35,11 @@ STANDARD_TEMP = 15
 IN_MG_TO_HPA = 33.8639
 #engine.hpp
 GT_OIL_PSI_SCALE = 0.90
+GT_SINGLE_ENG_TQ_RATIO = 0.51
+GT_TGT_LIMIT_BAND = 40.0
+GT_NG_LIMIT_BAND = 0.030
+GT_LIMIT_GAIN = 16.0
+GT_LIMIT_TRACK = 1.02
 #rotor.hpp
 MAIN, TAIL = 0, 1
 CCW, CW = 0, 1
@@ -176,12 +181,13 @@ def pid_reset(pid):
 # Init - fn_environmentVariables, fn_engineVariables, fn_simpleRotorVariables
 # ---------------------------------------------------------------------------------------------
 
-NUM_FIELDS = ['designRpm', 'npFly', 'maxFuelFlow', 'maxNg', 'maxNp']
+NUM_FIELDS = ['designRpm', 'npFly', 'maxFuelFlow', 'powerKw', 'maxNg', 'maxNp']
 SECTION_FIELDS = [
     ('ColdSection', ['compressorInertia', 'compressorLoad', 'airCoef', 'compRunMult', 'compRunExp',
-                     'compDragMult', 'compDragFloor', 'lightOffNg', 'selfSustNg', 'idleNg']),
+                     'compDragMult', 'compDragFloor', 'lightOffNg', 'selfSustNg', 'idleNg',
+                     'ngLimitMax', 'ngLimitBase', 'ngLimitSlope']),
     ('HotSection', ['massFlowExp', 'tgtK', 'thermalMassCoef', 'coolingCoef', 'stillAirFlow',
-                    'ramAirCoef', 'maxTgt', 'startTgt', 'startMinTgt', 'residualHeatGain']),
+                    'ramAirCoef', 'maxTgt', 'maxTgtSe', 'startTgt', 'startMinTgt', 'residualHeatGain']),
     ('PowerTurbine', ['ptEfficiency', 'ptInertia', 'ptDrag', 'ptDragFloor']),
     ('Governor', ['fuelIdle', 'fuelFly', 'startFuelBase', 'ffwdGain', 'leverTravelTime', 'loadShareGain']),
 ]
@@ -202,8 +208,7 @@ def engine_variables(H, cfg, overrides=None):
         eng['starterTorque'] = e['Starter']['torque']
         eng['starterGates'] = e['Starter']['gate']
         eng['governorGates'] = e['Governor']['gate']
-        ratings = list(e['PowerRatings'].values())
-        eng['refTq'] = (ratings[0]['powerKw'] * 1000) / (eng['designRpm'] * eng['npFly'] * 0.10472)
+        eng['refTq'] = (eng['powerKw'] * 1000) / (eng['designRpm'] * eng['npFly'] * 0.10472)
         eng.update(overrides or {})
         engines.append(eng)
     H['bmkhs_engines'] = engines
@@ -216,6 +221,11 @@ def engine_variables(H, cfg, overrides=None):
         H[k] = list(z)
     H['bmkhs_engClutch'] = [False, False]
     H['bmkhs_engineOverspeed'] = [False, False]
+    #The rig models no damage, so these stay healthy - kept so the lines reading them match Core.
+    H['bmkhs_engOilHealth'] = [1.0, 1.0]
+    H['bmkhs_engFailed'] = [False, False]
+    H['bmkhs_engLimFuel'] = [e['fuelFly'] for e in engines]
+    H['bmkhs_engClutchSlip'] = [1.0, 1.0]
     H['bmkhs_engTgt'] = [H['bmkhs_FAT'], H['bmkhs_FAT']]
     H['bmkhs_engResidualHeat'] = [1.0, 1.0]
     H['bmkhs_engNpRef'] = [-1.0, -1.0]
@@ -241,9 +251,13 @@ def simple_rotor_variables(H, cfg):
 # fn_environment - ISA_STD base
 # ---------------------------------------------------------------------------------------------
 
+#Sea-level temperature; 15 is ISA and what Core's environment uses.
+BASE_FAT = 15.0
+
+
 def environment(H):
     baroAlt = H['baroAltM'] * METERS_TO_FEET
-    baseAlt, baseFAT = 0, 15.0
+    baseAlt, baseFAT = 0, BASE_FAT
     altitude = sqf_round((baseAlt + baroAlt) / 10) * 10
     altimeter = 29.92
     temperature = baseFAT - sqf_round((baroAlt / 1000) * 2)
@@ -262,6 +276,9 @@ def environment(H):
 
 def engine_governor(H, i, eng, ng, np_, tgt, lever, fat, dt):
     idleNg = eng['idleNg']
+
+    tqs = H['bmkhs_engPctTq']
+    H['bmkhs_isSingleEng'] = any(t < max(tqs) * GT_SINGLE_ENG_TQ_RATIO for t in tqs)
     target = {'FLY': eng['fuelFly'], 'IDLE': eng['fuelIdle']}.get(lever, 0.0)
 
     sched = H['bmkhs_engLeverSched'][i]
@@ -285,7 +302,15 @@ def engine_governor(H, i, eng, ng, np_, tgt, lever, fat, dt):
         npTarget = npRef + (1.0 - npRef) * linear_conversion(eng['fuelIdle'], eng['fuelFly'], sched, 0.0, 1.0, True)
         integral = pid['integral']
         govFuel = pid_run(pid, dt, npTarget, np_) + H['bmkhs_collectiveOutput'] * eng['ffwdGain']
-        if govFuel > sched:
+        tgtLim = eng['maxTgtSe'] if H['bmkhs_isSingleEng'] else eng['maxTgt']
+        ngLim = min(eng['ngLimitMax'], eng['ngLimitBase'] + eng['ngLimitSlope'] * fat)
+        err = min((tgtLim - tgt) / GT_TGT_LIMIT_BAND, (ngLim - ng) / GT_NG_LIMIT_BAND)
+        lim = H['bmkhs_engLimFuel'][i] + GT_LIMIT_GAIN * err * dt
+        lim = min(lim, min(sched, max(govFuel, 0.0)) * GT_LIMIT_TRACK)
+        lim = min(max(lim, eng['fuelIdle']), eng['fuelFly'])
+        H['bmkhs_engLimFuel'][i] = lim
+        allowed = min(sched, lim)
+        if govFuel > allowed:
             pid['integral'] = integral
         elif H['bmkhs_engClutch'][i]:
             #Load sharing: an engine below the average of those matched with it trims up; one above
@@ -298,10 +323,11 @@ def engine_governor(H, i, eng, ng, np_, tgt, lever, fat, dt):
                 mismatch = max(mismatch, 0.0)
                 pid['integral'] = clamp(pid['integral'] + eng['loadShareGain'] * mismatch * dt / pid['ki'],
                                         -pid['ki_clamp'], pid['ki_clamp'])
-        orifice = min(sched, max(govFuel, 0.0))
+        orifice = min(allowed, max(govFuel, 0.0))
     else:
         pid_reset(pid)
         npRef = -1.0
+        H['bmkhs_engLimFuel'][i] = eng['fuelFly']
     H['bmkhs_engNpRef'][i] = npRef
 
     fuelCmd = orifice
@@ -327,6 +353,8 @@ def gas_turbine_starter(H, i, eng, ng):
     if not starting and not override:
         return 0.0
     if H['bmkhs_engineOverspeed'][i]:
+        return 0.0
+    if H['bmkhs_engFailed'][i]:
         return 0.0
     supplied = H['starterSupplied'][i] if eng['starterGates'] else True
     return eng['starterTorque'] if supplied else 0.0
@@ -394,7 +422,8 @@ def turbo_shaft_engine(H, i, eng):
         H['bmkhs_engineOverspeed'][i] = True
 
     fuelAvail = H['fuelAvail'][i]
-    running = ng > eng['lightOffNg'] and lever != 'OFF' and fuelAvail and not tripped
+    failed = H['bmkhs_engFailed'][i]
+    running = ng > eng['lightOffNg'] and lever != 'OFF' and fuelAvail and not tripped and not failed
 
     starterTq = gas_turbine_starter(H, i, eng, ng)
     cranking = starterTq > 0.0
@@ -420,6 +449,7 @@ def turbo_shaft_engine(H, i, eng):
     else:
         state = 'OFF'
 
+    tqOut = tqOut * H['bmkhs_engClutchSlip'][i]
     H['bmkhs_engPctNg'][i] = ngNew
     H['bmkhs_engTgt'][i] = tgt
     H['bmkhs_engOutputTq'][i] = tqOut
@@ -428,7 +458,7 @@ def turbo_shaft_engine(H, i, eng):
     H['bmkhs_engClutch'][i] = clutch
     H['bmkhs_engPctNp'][i] = npNew * eng['npFly']
     H['bmkhs_engFuelFlow'][i] = fuelCmd * eng['maxFuelFlow']
-    H['bmkhs_engOilPsi'][i] = max(ngNew * GT_OIL_PSI_SCALE, 0.0)
+    H['bmkhs_engOilPsi'][i] = max(ngNew * GT_OIL_PSI_SCALE * H['bmkhs_engOilHealth'][i], 0.0)
     #Rig-only diagnostics, what GTDIAG / GOVDIAG print.
     H['diag'][i] = dict(fuel=fuelCmd, orifice=orifice, starterTq=starterTq, running=running,
                         tripped=tripped, share=share)
