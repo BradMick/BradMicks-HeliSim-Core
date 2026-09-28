@@ -25,6 +25,7 @@ VEL_VNE = 128.611
 VEL_VRS = 24.384
 VEL_ETL = 12.347
 METERS_TO_FEET = 3.28084
+FEET_TO_METERS = 0.3048
 GRAVITY = 9.806
 MOLAR_MASS_OF_AIR = 0.0289644
 UNIVERSAL_GAS_CONSTANT = 8.31432
@@ -247,7 +248,7 @@ def environment(H):
     altimeter = 29.92
     temperature = baseFAT - sqf_round((baroAlt / 1000) * 2)
     refPressure = altimeter * IN_MG_TO_HPA
-    exp_ = (-GRAVITY * MOLAR_MASS_OF_AIR * (altitude - 0)
+    exp_ = (-GRAVITY * MOLAR_MASS_OF_AIR * ((altitude - 0) * FEET_TO_METERS)
             / (UNIVERSAL_GAS_CONSTANT * (temperature + DEG_C_TO_KELVIN)))
     pressure = ((refPressure / 0.01) * math.exp(exp_)) * 0.01
     H['bmkhs_PA'] = altitude

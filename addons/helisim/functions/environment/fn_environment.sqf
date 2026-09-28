@@ -51,7 +51,7 @@ if (false) then {
 
 private _referencePressure = _altimeter * IN_MG_TO_HPA;
 private _referenceAltitude = 0;
-private _exp               = -GRAVITY * MOLAR_MASS_OF_AIR * (_altitude - _referenceAltitude) / (UNIVERSAL_GAS_CONSTANT * (_temperature + DEG_C_TO_KELVIN));
+private _exp               = -GRAVITY * MOLAR_MASS_OF_AIR * ((_altitude - _referenceAltitude) * FEET_TO_METERS) / (UNIVERSAL_GAS_CONSTANT * (_temperature + DEG_C_TO_KELVIN));
 private _pressure          = ((_referencePressure / 0.01) * (exp _exp)) * 0.01;
 
 private _densityAltitude   = (_altitude + ((SEA_LEVEL_PRESSURE - _altimeter) * 1000)) + (120 * (_temperature - (STANDARD_TEMP - ((_altitude / 1000) * 2))));
