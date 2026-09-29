@@ -87,9 +87,10 @@ for "_i" from 1 to _numEngines do {
     //What the ECU needs to keep metering fuel. Declaring none means always powered.
     _engine set ["governorGates", (getArray (_e >> "Governor" >> "gate")) apply {_x}];
 
-    //Book limits, low to high {limit, seconds, divisor}.
+    _engine set ["ngMin", getNumber (_e >> "ngMin")];
+    //Book limits. Oil {minimum, maximum}; the rest low to high {limit, seconds, divisor}.
     { _engine set [_x, getArray (_e >> _x)]; }
-        forEach ["ngLimits", "npLimits", "tqLimits", "tgtLimits", "tqLimitsSe", "tgtLimitsSe"];
+        forEach ["oilPsiLimits", "ngLimits", "npLimits", "tqLimits", "tgtLimits", "tqLimitsSe", "tgtLimitsSe"];
 
     //refTq is derived, never declared: Q = P / w from maximum continuous power at governed Np.
     _engine set ["refTq", ((_engine get "powerKw") * 1000)
@@ -144,6 +145,8 @@ _heli setVariable ["bmkhs_engChips",              _engines apply {false}, true];
 _heli setVariable ["bmkhs_engFailed",             _engines apply {false}, true];
 _heli setVariable ["bmkhs_lowOilPsiFailure",      _engines apply {false}, true];
 _heli setVariable ["bmkhs_engOilHealth",          _engines apply {1.0}];
+//Oil below its minimum, running with the lever out of OFF - latched, cleared by a repair.
+_heli setVariable ["bmkhs_engOilPsiLow",          _engines apply {false}, true];
 //Seconds left in the current band, {np, ng, tgt}: -1 none, 0 damage running.
 _heli setVariable ["bmkhs_engLimitTimers",        _engines apply {[-1, -1, -1]}];
 //The same for the drivetrain the engine's torque loads.

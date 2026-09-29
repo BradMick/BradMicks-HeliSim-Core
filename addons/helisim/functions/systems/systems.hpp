@@ -53,6 +53,7 @@
 #define SYS_ENG_OIL_DIVISOR   12.1727 //oil tier divisors, D and 2D
 #define SYS_ENG_STARVE_RATE   0.00191702 //starvation damage per second at the reference Ng
 #define SYS_ENG_STARVE_REF_NG 0.75
+#define SYS_ENG_OIL_FIRE_CHANCE 0.65 //engine fire when an oil-starved engine fails
 #define SYS_ENG_HOTSTART_DIVISOR 81.339 //above startTgt while starting, per deg C
 
 //Damaged drive torque - a slipping clutch

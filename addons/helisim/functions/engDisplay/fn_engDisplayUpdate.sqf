@@ -54,6 +54,7 @@ private _n = _heli getVariable "bmkhs_numEngines";
 _n = (_n min ED_MAX_ENG) max 1;
 
 private _nr = _heli getVariable "bmkhs_rtrRPM";
+(_heli getVariable "bmkhs_nrLimits") params ["_nrLow", "_nrHigh", "_nrHighRtr", "_nrMax"];
 
 private _engines = _heli getVariable "bmkhs_engines";
 
@@ -107,7 +108,8 @@ for "_i" from 0 to (_n - 1) do {
     private _e  = str (_i + 1);
     private _st = [_state, _i, "OFF"] call BIS_fnc_param;
 
-    if (([_ng, _i, 0.0] call BIS_fnc_param) < ED_ENG_OUT_NG && {_st == "ON"}) then {
+    if ((([_ng, _i, 0.0] call BIS_fnc_param) < ((_engines # _i) get "ngMin") && {_st == "ON"})
+        || {(_heli getVariable "bmkhs_engFailed") select _i}) then {
         _warn pushBack ("ENG" + _e + " OUT");
     };
     if ([_ovsp, _i, false] call BIS_fnc_param) then { _warn pushBack ("ENG" + _e + " OVSP") };
@@ -118,14 +120,17 @@ for "_i" from 0 to (_n - 1) do {
     if ((_heli getVariable "bmkhs_engChips") select _i) then {
         _caut pushBack ("ENG" + _e + " CHIPS");
     };
+    if ((_heli getVariable "bmkhs_engOilPsiLow") select _i) then {
+        _caut pushBack ("ENG" + _e + " OIL PSI");
+    };
     if (_st == "STARTING") then { _advs pushBack ("ENG" + _e + " START") };
     if ((_heli getVariable [format ["bmkhs_eng%1StartSwVal", _i + 1], 0]) < 0) then {
         _advs pushBack ("ENG " + _e + " ORIDE");
     };
 };
 
-if (_nr > 0.01 && {_nr < ED_NR_LOW}) then { _warn pushBack "LOW RTR" };
-if (_nr > ED_NR_HIGH) then                { _warn pushBack "HIGH RTR" };
+if (_nr > 0.01 && {_nr < _nrLow}) then { _warn pushBack "LOW RTR" };
+if (_nr >= _nrHighRtr) then           { _warn pushBack "HIGH RTR" };
 if ((fuel _heli) < ED_FUEL_LOW) then      { _caut pushBack "FUEL LOW" };
 
 //Hold modes - the AH-64D WCA short forms, unpadded.
@@ -188,7 +193,7 @@ private _tapeX = { params ["_base", "_i"]; _base + (_i * (_tapeW + _gapT)) };
 
 //A tape: frame, fill bottom-up, and the limit ticks over the top of it.
 private _drawTape = {
-    params ["_fIdc", "_lIdc", "_tx", "_val", "_fs", "_amber", "_red", "_ticks"];
+    params ["_fIdc", "_lIdc", "_tx", "_val", "_fs", "_amber", "_red", "_ticks", ["_low", 0]];
 
     private _f = _display displayCtrl _fIdc;
     _f ctrlSetPosition [_tx, _yTape, _tapeW, _tapeH];
@@ -218,6 +223,7 @@ private _drawTape = {
     _fill ctrlSetBackgroundColor (switch (true) do {
         case (_val >= _red):   { [0.90, 0.15, 0.15, 0.95] };
         case (_val >= _amber): { [0.95, 0.75, 0.10, 0.95] };
+        case (_val < _low):    { [0.95, 0.75, 0.10, 0.95] };
         default                { [0.20, 0.90, 0.20, 0.95] };
     });
     _fill ctrlCommit 0;
@@ -307,7 +313,8 @@ for "_i" from 0 to (ED_MAX_ENG - 1) do {
 //Nr sits in the middle slot of the tach group.
 private _nrSlot = floor (_nTach / 2);
 private _xNr    = [_xTach, _nrSlot] call _tapeX;
-[5304, 5305, _xNr, _nr, _npFs, ED_NR_HIGH, _npOvsp, [[5530, ED_NR_HIGH], [5531, _npOvsp]]] call _drawTape;
+[5304, 5305, _xNr, _nr, _npFs, _nrHigh, _nrMax,
+    [[5530, _nrLow], [5650, _nrHigh], [5651, _nrHighRtr], [5531, _nrMax]], _nrLow] call _drawTape;
 [5306, (_nr * 100) toFixed 0, _xNr, _yNum, _tapeW, _numH,
     [0.80, 1.00, 0.80, 1.00], _gapT * 0.5] call _setText;
 [5309, "R", _xNr, _yEng, _tapeW, _lblH] call _setText;
@@ -339,7 +346,7 @@ for "_i" from 0 to (_n - 1) do {
     private _xc  = [_i] call _colX;
     private _ngV = [_ng, _i, 0.0] call BIS_fnc_param;
     ([_engines # _i, "ngLimits"] call _band) params ["_ngAmb", "_ngRed"];
-    private _ngCol = [_ngV, _ngAmb, _ngRed] call _colour;
+    private _ngCol = [[_ngV, _ngAmb, _ngRed] call _colour, [1.00, 0.35, 0.35, 1.00]] select (_ngV < ((_engines # _i) get "ngMin"));
     [5410 + _i, (_ngV * 100) toFixed 1, _xc, _yRows, _colW, _rowH, _ngCol] call _setText;
     [5640 + _i, (_limTmrs # _i) # 1, _xc, _yRows + _rowH, _colW, _rowH, _ngCol] call _timer;
     [5420 + _i, ((([_oil, _i, 0.0] call BIS_fnc_param) * 100) toFixed 0),

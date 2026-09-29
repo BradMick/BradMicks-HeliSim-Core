@@ -263,3 +263,19 @@ if ((_engFailed select 0) || !_eng1FuelAvail) then {
 if ((_engFailed select 1) || !_eng2FuelAvail) then {
 	[_heli, "bmkhs_engState", 1, "OFF", true] call bmkhs_fnc_utilSetArrayVariable;
 };
+
+//Oil pressure low - running or failed, the lever out of OFF, below the minimum. Latched until a repair.
+if (local _heli) then {
+    private _state = _heli getVariable "bmkhs_engState";
+    private _lever = _heli getVariable "bmkhs_engPowerLeverState";
+    private _oil   = _heli getVariable "bmkhs_engOilPsi";
+    private _low   = _heli getVariable "bmkhs_engOilPsiLow";
+    {
+        private _isLow = ((_state select _forEachIndex) == "ON" || {_engFailed select _forEachIndex})
+            && {(_lever select _forEachIndex) != "OFF"}
+            && {(_oil select _forEachIndex) < ((_x get "oilPsiLimits") select 0)};
+        if (_isLow && {!(_low select _forEachIndex)}) then {
+            [_heli, "bmkhs_engOilPsiLow", _forEachIndex, true, true] call bmkhs_fnc_utilSetArrayVariable;
+        };
+    } forEach (_heli getVariable "bmkhs_engines");
+};

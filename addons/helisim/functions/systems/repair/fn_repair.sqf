@@ -62,6 +62,7 @@ for "_i" from 0 to (_engines - 1) do {
         [_heli, "bmkhs_engChips",         _i, false, true] call bmkhs_fnc_utilSetArrayVariable;
         [_heli, "bmkhs_engFailed",        _i, false, true] call bmkhs_fnc_utilSetArrayVariable;
         [_heli, "bmkhs_lowOilPsiFailure", _i, false, true] call bmkhs_fnc_utilSetArrayVariable;
+        [_heli, "bmkhs_engOilPsiLow",     _i, false, true] call bmkhs_fnc_utilSetArrayVariable;
         [_heli, "bmkhs_engOilHealth",     _i, 1.0] call bmkhs_fnc_utilSetArrayVariable;
         if ((_heli getVariable "bmkhs_engFailureResult") == _i) then { _heli setVariable ["bmkhs_engFailureResult", -1] };
         [_heli, "engines", 0.000001, _i] call bmkhs_fnc_damageSet;

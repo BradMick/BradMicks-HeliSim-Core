@@ -82,6 +82,8 @@ for "_i" from 1 to _numSimpleRotors do {
 
 _heli setVariable ["bmkhs_numSimpleRotors", _numSimpleRotors];
 _heli setVariable ["bmkhs_simpleRotors",    _rotors];
+//{normal low, normal high, high rotor, maximum}
+_heli setVariable ["bmkhs_nrLimits",        getArray (_config >> "nrLimits")];
 
 //Live state - seeded because the torque filter and the transmission read these before
 //anything has written them.

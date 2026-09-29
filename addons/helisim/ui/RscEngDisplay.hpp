@@ -170,6 +170,8 @@ class bmkhs_engdisplay
         class ED_NrFrame : BMKHS_EngDisplay_TapeFrame { idc = 5304; };
         class ED_NrFill  : BMKHS_EngDisplay_TapeFill  { idc = 5305; };
         class ED_NrAmber : BMKHS_EngDisplay_Band      { idc = 5530; };
+        class ED_NrMid0  : BMKHS_EngDisplay_Band      { idc = 5650; };
+        class ED_NrMid1  : BMKHS_EngDisplay_Band      { idc = 5651; };
         class ED_NrRed   : BMKHS_EngDisplay_Band      { idc = 5531; colorBackground[] = {0.90, 0.15, 0.15, 0.85}; };
         class ED_NrNum   : BMKHS_EngDisplay_Num       { idc = 5306; };
         class ED_NrLbl   : BMKHS_EngDisplay_Label     { idc = 5309; text = "NR"; };
