@@ -161,6 +161,9 @@ _heli setVariable ["bmkhs_engSlipWait",           _engines apply {random SYS_SLI
 _heli setVariable ["bmkhs_engSlipDepth",          _engines apply {0}];
 //useSystems = 0: when Ng reached idle, -1 until it has.
 _heli setVariable ["bmkhs_engIdleSince",          _engines apply {-1}];
+//Fuel at the pump, and when its tank ran dry, -1 while it has fuel.
+_heli setVariable ["bmkhs_engFuelAvail",          _engines apply {true}];
+_heli setVariable ["bmkhs_engStarvedSince",       _engines apply {-1}];
 
 //Outputs
 _heli setVariable ["bmkhs_engFuelFlow",                 +_zeros];

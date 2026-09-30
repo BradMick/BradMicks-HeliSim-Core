@@ -49,9 +49,9 @@ private _maxA     = _fuelMax  param [_idxA, 0];
 private _maxB     = _fuelMax  param [_idxB, 0];
 
 private _engState = _heli getVariable "bmkhs_engState";
-private _eng1On   = (_engState select 0) == "ON";
-private _eng2On   = (_engState select 1) == "ON";
-private _airAvail = (_heli getVariable ["bmkhs_pneuAvail", false]) || _eng1On || _eng2On;
+private _anyOn    = "ON" in _engState;
+private _allOn    = (_engState findIf {_x != "ON"}) < 0;
+private _airAvail = (_heli getVariable ["bmkhs_pneuAvail", false]) || _anyOn;
 
 //The aircraft's XFER selection maps to the DESTINATION main. Anything that is not a
 //destination or AUTO leaves the pump off.
@@ -72,9 +72,9 @@ if (_xferMode == "AUTO") then {
         private _bLeadEnough = _leadB > ([AUTO_SPLIT_50_KG, AUTO_SPLIT_100_KG] select (_massB > AUTO_500_KG));
         private _aLeadEnough = _leadA > ([AUTO_SPLIT_50_KG, AUTO_SPLIT_100_KG] select (_massA > AUTO_500_KG));
 
-        //Topping up A needs only one engine running; drawing A down needs both, so a
+        //Topping up A needs only one engine running; drawing A down needs all of them, so a
         //single-engine failure cannot strand fuel away from the surviving side.
-        _doBToA = (_eng1On || _eng2On)
+        _doBToA = _anyOn
                && {_massA < AUTO_FILL_THRESH_KG}
                && {!_lowB}
                && {_massB > (_fuelLow param [_idxA, 0])}
@@ -82,7 +82,7 @@ if (_xferMode == "AUTO") then {
                && {_leadB >= AUTO_SPLIT_STOP_KG}
                && {_massA < (_maxA - 0.1)};
 
-        _doAToB = _eng1On && _eng2On
+        _doAToB = _allOn
                && {_massB < AUTO_FILL_THRESH_KG}
                && {!_lowA}
                && {_massA > AUTO_MIN_SRC_KG}

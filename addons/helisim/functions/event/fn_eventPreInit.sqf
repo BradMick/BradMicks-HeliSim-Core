@@ -251,6 +251,7 @@
 
 bmkhs_keyboardCollective         = true;
 bmkhs_keyboardCollectivePrevious = true;
+bmkhs_lastFrameGetIn             = false;
 
 //private _nonAnalogEvents = ["Activate", "Deactivate"];
 //

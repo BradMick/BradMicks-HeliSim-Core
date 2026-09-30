@@ -58,7 +58,7 @@ if (!(_heli getVariable ["bmkhs_systemsInitialised", false]) && local _heli) the
     _heli setVariable ["bmkhs_accHydPsi",  3000.0, true];
 };
 
-_heli setVariable ["bmkhs_apuFF_kgs",         0.0];
+_heli setVariable ["bmkhs_apuFuelAvail",      true];
 _heli setVariable ["bmkhs_dmgTimerCont",      0.0];
 _heli setVariable ["bmkhs_dmgTimerTrans",     0.0];
 

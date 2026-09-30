@@ -21,6 +21,7 @@ Author:
     BradMick
 ---------------------------------------------------------------------------- */
 params ["_heli", "_config"];
+#include "\bmkhs_helisim\functions\core\core.hpp"
 #include "\bmkhs_helisim\functions\systems\systems.hpp"
 
 //Field reference and the networking rules: \bmkhs_helisim\components.hpp
@@ -54,7 +55,10 @@ params ["_heli", "_config"];
     ["tqLimitsSeFrom", getText (cfg >> "tqLimitsSeFrom")], \
     ["torqueSum",    getNumber (cfg >> "torqueSum") > 0], \
     ["jitters",      getNumber (cfg >> "jittersTorque") > 0], \
-    ["damages",      getArray  (cfg >> "damagesHitpoints")] \
+    ["damages",      getArray  (cfg >> "damagesHitpoints")], \
+    ["fuelSource",   getText   (cfg >> "fuelSource")], \
+    ["fuelTank",     ""], \
+    ["fuelFlow",     (getNumber (cfg >> "fuelFlow")) / KG_TO_LBS / 3600] \
 ]
 
 private _circuits = createHashMap;

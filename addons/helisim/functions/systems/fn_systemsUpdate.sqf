@@ -36,4 +36,4 @@ private _deltaTime = _heli getVariable "bmkhs_deltaTime";
 //exited if this aircraft models no systems.
 if !(_heli getVariable ["bmkhs_useSystems", false]) exitWith {};
 
-[_heli] call bmkhs_fnc_apu;
+[_heli, _deltaTime] call bmkhs_fnc_apu;

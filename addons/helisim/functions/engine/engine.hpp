@@ -20,4 +20,7 @@
 #define GT_IDLE_STABLE_FRAC     0.99
 #define GT_IDLE_TO_FLY_SEC      1.0
 
+//Seconds an engine's tank may run dry before it is starved.
+#define FUEL_STARVE_GRACE_SEC   2
+
 #endif

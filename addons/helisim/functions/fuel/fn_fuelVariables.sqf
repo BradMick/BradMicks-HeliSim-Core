@@ -194,33 +194,45 @@ _heli setVariable ["bmkhs_xferFlowVars", (getArray (_config >> "xferFlowingVars"
 { _heli setVariable [_x, false] } forEach _flowVars;
 _heli setVariable ["bmkhs_fuelFlowVars", _flowVars];
 
-//Crossfeed positions - which main each engine draws from in each valve position. Static
-//aircraft data, resolved once here rather than rebuilt every frame. The valve starts in
-//the first position declared.
+//A tank named by a consumer, resolved to its variable name; "" if it matches no tank.
+private _tankRef = {
+    params ["_name", "_who"];
+    private _var = "bmkhs_" + _name;
+    if !(_var in _fuelNames) exitWith {
+        diag_log text format [
+            "[BMKHS] FUEL CONFIG ERROR: %1 names tank '%2', which matches no fuel tank variableName. It will have no fuel.",
+            _who, _name
+        ];
+        ""
+    };
+    _var
+};
+
+//Crossfeed positions - the tank each engine draws from in each valve position. The valve
+//starts in the first position declared.
 private _crossfeed  = createHashMap;
 private _defaultPos = "";
 for "_i" from 1 to (getNumber (_config >> "numCrossfeedModes")) do {
     private _c   = (_config >> "CrossfeedModes") select (_i - 1);
     private _pos = toUpper getText (_c >> "position");
     if (_defaultPos == "") then { _defaultPos = _pos };
-    _crossfeed set [_pos, getArray (_c >> "engSources")];
+    _crossfeed set [_pos, getArray (_c >> "engSources") apply {[_x, "Crossfeed " + _pos] call _tankRef}];
 };
 _heli setVariable ["bmkhs_crossfeedSources", _crossfeed];
 _heli setVariable ["bmkhs_crossfeedMode",    _defaultPos];
 
-//Which main tank the APU draws from. Independent of the crossfeed valve.
-_heli setVariable ["bmkhs_apuFuelSource", getNumber (_config >> "apuFuelSource")];
+//A producer that burns fuel names its tank.
+{
+    if ((_x get "fuelFlow") > 0) then {
+        _x set ["fuelTank", [_x get "fuelSource", _x get "varName"] call _tankRef];
+    };
+} forEach (_heli getVariable "bmkhs_sysProducers");
 
 // XFER pump selection: "OFF" | "AFT" | "FWD" | "AUTO"
 _heli setVariable ["bmkhs_xferMode", "AUTO"];
 
 // Boost pump state
 _heli setVariable ["bmkhs_boostOn", false];
-
-// Fuel system status flags
-_heli setVariable ["bmkhs_eng1FuelAvail", true];
-_heli setVariable ["bmkhs_eng2FuelAvail", true];
-_heli setVariable ["bmkhs_apuFuelAvail",  true];
 
 // AUX tank on/off — L controls all left-side stations, R controls all right-side stations
 // Default OFF — crew must arm before transfer begins

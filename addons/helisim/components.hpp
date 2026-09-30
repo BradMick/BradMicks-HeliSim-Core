@@ -107,6 +107,8 @@
 //                component and not of any circuit - an APU is on above a threshold, the
 //                way an engine publishes its own state. Always networked
 //  stateAbove    output at or above which it counts as running
+//  fuelSource    tank variableName a fuel-burning producer draws from (the APU)
+//  fuelFlow      its burn while running, lb/h
 //  torqueFrom    variable carrying the torque this component sees. Indexed per member
 //                where the source is, so engine 2's torque reaches gearbox 2
 //  tqLimitsFrom  the engine torque limit set it is rated to, "tqLimits" - times the engine

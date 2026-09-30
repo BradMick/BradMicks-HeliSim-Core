@@ -58,7 +58,7 @@ if (!_tripped && {_ng >= (_engine get "maxNg") || {_np >= (_engine get "maxNp")}
 };
 
 //The lever check is required - without it fuel keeps burning after shutdown.
-private _fuelAvail = _heli getVariable [format ["bmkhs_eng%1FuelAvail", _index + 1], true];
+private _fuelAvail = _heli getVariable "bmkhs_engFuelAvail" select _index;
 private _failed    = _heli getVariable "bmkhs_engFailed" select _index;
 private _running   = _ng > (_engine get "lightOffNg") && {_lever != "OFF"} && {_fuelAvail} && {!_tripped} && {!_failed};
 
