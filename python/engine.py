@@ -40,6 +40,18 @@ GT_TGT_LIMIT_BAND = 40.0
 GT_NG_LIMIT_BAND = 0.030
 GT_LIMIT_GAIN = 16.0
 GT_LIMIT_TRACK = 1.02
+GT_GAMMA_COLD = 1.40
+GT_CP_COLD = 1.005
+GT_GAMMA_HOT = 1.33
+GT_CP_HOT = 1.148
+GT_R_AIR = 0.28705
+GT_STD_TEMP_K = 288.15
+GT_STD_PRESSURE_KPA = 101.325
+GT_TGT_HEAT_RATE = 0.30
+GT_TGT_COOL_RATE = 0.70
+GT_TGT_STILL_AIR = 0.0012
+GT_TGT_RAM_AIR = 0.00065
+GT_SPOOL_UNIT_LOAD = 2.91244
 #rotor.hpp
 MAIN, TAIL = 0, 1
 CCW, CW = 0, 1
@@ -183,16 +195,46 @@ def pid_reset(pid):
 
 NUM_FIELDS = ['designRpm', 'npFly', 'maxFuelFlow', 'powerKw', 'maxNg', 'maxNp']
 SECTION_FIELDS = [
-    ('ColdSection', ['compressorInertia', 'compressorLoad', 'airCoef', 'compRunMult', 'compRunExp',
-                     'compDragMult', 'compDragFloor', 'lightOffNg', 'selfSustNg', 'idleNg',
-                     'ngLimitMax', 'ngLimitBase', 'ngLimitSlope']),
-    ('HotSection', ['massFlowExp', 'tgtK', 'thermalMassCoef', 'coolingCoef', 'stillAirFlow',
-                    'ramAirCoef', 'maxTgt', 'maxTgtSe', 'startTgt', 'startMinTgt', 'residualHeatGain']),
+    ('Compressor', ['pressureRatio', 'massFlow', 'inletDiameter', 'ramRecovery', 'compDrag', 'compDragFloor',
+                    'lightOffNg', 'selfSustNg', 'idleNg', 'ngLimitMax', 'ngLimitBase', 'ngLimitSlope']),
+    ('Combustor', ['fuelLhv', 'combustorEfficiency', 'maxTgt', 'maxTgtSe', 'startTgt', 'startMinTgt',
+                   'residualHeatGain']),
+    ('CompressorTurbine', ['turbineEfficiency', 'spoolInertia']),
     ('PowerTurbine', ['ptEfficiency', 'ptInertia', 'ptDrag', 'ptDragFloor']),
     ('Governor', ['fuelIdle', 'fuelFly', 'startFuelBase', 'ffwdGain', 'leverTravelTime', 'loadShareGain']),
 ]
 ROTOR_NUM_FIELDS = ['numBlades', 'mastLength', 'gearRatio', 'torqueTau', 'bladeRadius',
                     'bladeChord', 'bladeMass', 'reacTqScalar', 'autoTorque']
+
+
+#fn_engineVariables' compressor map: Ng / maxNg (corrected), PR / design, flow / design, efficiency,
+#compressor turbine expansion as ln(expansion) / ln(design PR).
+COMPRESSOR_MAP = [
+    [0.0000, 0.0588, 0.0000, 0.544, 0.4781],
+    [0.0500, 0.0595, 0.0116, 0.544, 0.4781],
+    [0.1000, 0.0618, 0.0329, 0.544, 0.4781],
+    [0.1500, 0.0656, 0.0604, 0.544, 0.4781],
+    [0.2000, 0.0712, 0.0930, 0.544, 0.4781],
+    [0.2500, 0.0789, 0.1300, 0.544, 0.4781],
+    [0.3000, 0.0891, 0.1709, 0.544, 0.4781],
+    [0.3500, 0.1024, 0.2153, 0.544, 0.4781],
+    [0.4000, 0.1194, 0.2631, 0.544, 0.4781],
+    [0.4500, 0.1410, 0.3139, 0.544, 0.4781],
+    [0.5000, 0.1683, 0.3676, 0.544, 0.4781],
+    [0.5500, 0.2026, 0.4241, 0.544, 0.4781],
+    [0.6000, 0.2456, 0.4833, 0.544, 0.4781],
+    [0.6173, 0.2629, 0.5043, 0.544, 0.4781],
+    [0.6768, 0.3329, 0.5891, 0.595, 0.4779],
+    [0.7546, 0.4559, 0.7130, 0.642, 0.4882],
+    [0.8125, 0.5971, 0.8152, 0.657, 0.5148],
+    [0.8369, 0.6835, 0.8609, 0.654, 0.5372],
+    [0.8592, 0.7712, 0.9043, 0.656, 0.5534],
+    [0.8712, 0.8288, 0.9283, 0.652, 0.5670],
+    [0.8772, 0.8571, 0.9413, 0.650, 0.5738],
+    [0.9167, 1.0306, 1.0196, 0.653, 0.5938],
+    [0.9500, 1.1766, 1.0855, 0.656, 0.6040],
+    [1.0000, 1.3959, 1.1845, 0.659, 0.6112],
+]
 
 
 def engine_variables(H, cfg, overrides=None):
@@ -206,10 +248,17 @@ def engine_variables(H, cfg, overrides=None):
                 eng[f] = e[section][f]
         eng['pid'] = e['Governor']['pid']
         eng['starterTorque'] = e['Starter']['torque']
+        eng['runawayNg'] = e['Starter']['runawayNg']
         eng['starterGates'] = e['Starter']['gate']
         eng['governorGates'] = e['Governor']['gate']
         eng['refTq'] = (eng['powerKw'] * 1000) / (eng['designRpm'] * eng['npFly'] * 0.10472)
+        eng['compressorMap'] = COMPRESSOR_MAP
+        eng['airflowTable'] = e['Compressor']['airflowTable']
         eng.update(overrides or {})
+        _, prFrac, flowFrac, eff, _ = math_linear_interp(COMPRESSOR_MAP, 1.0 / eng['maxNg'])
+        pr = eng['pressureRatio'] * prFrac
+        t3 = GT_STD_TEMP_K * (1 + ((pr ** ((GT_GAMMA_COLD - 1) / GT_GAMMA_COLD)) - 1) / eff)
+        eng['spoolUnitKw'] = eng['massFlow'] * flowFrac * GT_CP_COLD * (t3 - GT_STD_TEMP_K) / GT_SPOOL_UNIT_LOAD
         engines.append(eng)
     H['bmkhs_engines'] = engines
     H['bmkhs_engPowerLeverState'] = ['OFF', 'OFF']
@@ -225,6 +274,7 @@ def engine_variables(H, cfg, overrides=None):
     H['bmkhs_engOilHealth'] = [1.0, 1.0]
     H['bmkhs_engFailed'] = [False, False]
     H['bmkhs_engLimFuel'] = [e['fuelFly'] for e in engines]
+    H['bmkhs_engMinFuel'] = [0.0 for e in engines]
     H['bmkhs_engClutchSlip'] = [1.0, 1.0]
     H['bmkhs_engTgt'] = [H['bmkhs_FAT'], H['bmkhs_FAT']]
     H['bmkhs_engResidualHeat'] = [1.0, 1.0]
@@ -310,6 +360,12 @@ def engine_governor(H, i, eng, ng, np_, tgt, lever, fat, dt):
         lim = min(max(lim, eng['fuelIdle']), eng['fuelFly'])
         H['bmkhs_engLimFuel'][i] = lim
         allowed = min(sched, lim)
+        minFuel = H['bmkhs_engMinFuel'][i] + GT_LIMIT_GAIN * ((eng['idleNg'] - ng) / GT_NG_LIMIT_BAND) * dt
+        minFuel = min(max(minFuel, 0.0), eng['fuelIdle'])
+        H['bmkhs_engMinFuel'][i] = minFuel
+        if govFuel < minFuel:
+            pid['integral'] = integral
+            govFuel = minFuel
         if govFuel > allowed:
             pid['integral'] = integral
         elif H['bmkhs_engClutch'][i]:
@@ -328,6 +384,7 @@ def engine_governor(H, i, eng, ng, np_, tgt, lever, fat, dt):
         pid_reset(pid)
         npRef = -1.0
         H['bmkhs_engLimFuel'][i] = eng['fuelFly']
+        H['bmkhs_engMinFuel'][i] = 0.0
     H['bmkhs_engNpRef'][i] = npRef
 
     fuelCmd = orifice
@@ -357,50 +414,73 @@ def gas_turbine_starter(H, i, eng, ng):
     if H['bmkhs_engFailed'][i]:
         return 0.0
     supplied = H['starterSupplied'][i] if eng['starterGates'] else True
-    return eng['starterTorque'] if supplied else 0.0
+    return eng['starterTorque'] * max(1.0 - ng / eng['runawayNg'], 0.0) if supplied else 0.0
 
 
-def gas_turbine_cold_section(eng, ng, fuelCmd, starterTq, dens, running, spooling, dt):
-    fuelGas = fuelCmd * dens if running else 0.0
-    airGas = ((ng ** eng['massFlowExp']) * dens) * eng['airCoef']
-    compLoad = eng['compressorLoad']
-    if running:
-        absorbed = compLoad * eng['compRunMult'] * (ng ** eng['compRunExp'])
-    else:
-        absorbed = (compLoad * (eng['compDragMult'] if spooling else 1.0) * ng * ng
-                    + (eng['compDragFloor'] if spooling else 0.0))
-    compWork = compLoad * ng * ng
-    ngDot = (fuelGas + starterTq - absorbed) / eng['compressorInertia']
-    ng = clamp(ng + ngDot * dt, 0.0, 1.1)
-    return ng, fuelGas, compWork, airGas
+def gas_turbine_compressor(eng, ng, fat, pAmb, velFwd):
+    tAmb = fat + DEG_C_TO_KELVIN
+    mach2 = max(velFwd, 0.0) ** 2 / (GT_GAMMA_COLD * GT_R_AIR * 1000 * tAmb)
+    ram = 1 + (GT_GAMMA_COLD - 1) / 2 * mach2
+    t2 = tAmb * ram
+    p2 = pAmb + eng['ramRecovery'] * (pAmb * ram ** (GT_GAMMA_COLD / (GT_GAMMA_COLD - 1)) - pAmb)
+    theta = t2 / GT_STD_TEMP_K
+    nc = ng / math.sqrt(theta)
+    _, prFrac, flowFrac, eff, ctFrac = math_linear_interp(eng['compressorMap'], nc / eng['maxNg'])
+    designPr = eng['pressureRatio']
+    pr = designPr * prFrac
+    airflow = math_linear_interp(eng['airflowTable'], fat)[1]
+    mDot = eng['massFlow'] * flowFrac * airflow * (p2 / GT_STD_PRESSURE_KPA) / math.sqrt(theta)
+    xc = (GT_GAMMA_COLD - 1) / GT_GAMMA_COLD
+    t3 = t2 * (1 + ((pr ** xc) - 1) / eff)
+    compPower = mDot * GT_CP_COLD * (t3 - t2)
+    inletArea = math.pi * (eng['inletDiameter'] / 2) ** 2
+    inletVel = mDot / inletArea / (p2 / (GT_R_AIR * t2))
+    return nc, pr, mDot, t3, p2 * pr, compPower, designPr ** ctFrac, inletVel
 
 
-def gas_turbine_hot_section(eng, tgt, ng, fuelCmd, residualHeat, dens, fat, velY, running, dt):
-    massFlow = max((ng ** eng['massFlowExp']) * dens, 0.02)
-    currentHeat = 1.0 + (residualHeat - 1.0) * max(1.0 - ng / eng['idleNg'], 0.0)
-    tgtHot = fat + currentHeat * eng['tgtK'] * fuelCmd / massFlow if running else fat
-    ram = max(velY, 0.0) * eng['ramAirCoef']
-    coolRate = eng['coolingCoef'] * (ng + eng['stillAirFlow'] + ram)
-    rate = eng['thermalMassCoef'] if tgtHot > tgt else coolRate
-    return tgt + (tgtHot - tgt) * rate * dt
+def gas_turbine_combustor(eng, t3, mDot, fuelCmd, running):
+    if not running:
+        return t3
+    fuelKgs = fuelCmd * eng['maxFuelFlow']
+    return t3 + fuelKgs * eng['fuelLhv'] * eng['combustorEfficiency'] / (max(mDot, 0.001) * GT_CP_HOT)
 
 
-def turbo_shaft_power_turbine(eng, fuelGas, airGas, compWork, np_, nrFrac, dt):
+def gas_turbine_compressor_turbine(eng, ng, tgt, t4, p3, mDot, compPower, ctExpansion, starterTq,
+                                   residualHeat, fat, velY, running, spooling, dt):
+    m = max(mDot, 0.001)
+    xh = (GT_GAMMA_HOT - 1) / GT_GAMMA_HOT
+    ctPower = m * GT_CP_HOT * eng['turbineEfficiency'] * t4 * (1 - ctExpansion ** (-xh))
+    t45 = t4 - ctPower / (m * GT_CP_HOT)
+    drag = (eng['compDrag'] * ng * ng + eng['compDragFloor']) if spooling else 0.0
+    ngDot = ((ctPower - compPower) / eng['spoolUnitKw'] + starterTq - drag) / eng['spoolInertia']
+    ngNew = clamp(ng + ngDot * dt, 0.0, 1.1)
+    currentHeat = 1.0 + (residualHeat - 1.0) * max(1.0 - ngNew / eng['idleNg'], 0.0)
+    tgtHot = fat + currentHeat * (t45 - DEG_C_TO_KELVIN - fat) if running else fat
+    coolRate = GT_TGT_COOL_RATE * (ngNew + GT_TGT_STILL_AIR + max(velY, 0.0) * GT_TGT_RAM_AIR)
+    rate = GT_TGT_HEAT_RATE if tgtHot > tgt else coolRate
+    return ngNew, tgt + (tgtHot - tgt) * rate * dt, t45, p3 / ctExpansion
+
+
+def turbo_shaft_power_turbine(eng, t45, p45, p2, mDot, running, np_, nrFrac, dt):
     refTq = eng['refTq']
-    ptGas = max(fuelGas + airGas - (compWork if fuelGas > 0.0 else 0.0), 0.0)
-    shaftTq = ptGas * refTq * eng['ptEfficiency']
+    t5, ptPower = t45, 0.0
+    if p45 > p2:
+        xh = (GT_GAMMA_HOT - 1) / GT_GAMMA_HOT
+        t5 = t45 * (1 - eng['ptEfficiency'] * (1 - (p2 / p45) ** xh))
+        ptPower = max(mDot, 0.0) * GT_CP_HOT * (t45 - t5)
+    shaftTq = ptPower / eng['powerKw'] * refTq
     npDrag = eng['ptDrag'] * np_ * np_ + (eng['ptDragFloor'] if shaftTq <= 0.0 else 0.0)
     npDot = ((shaftTq / refTq) - npDrag) / eng['ptInertia']
     npFree = max(np_ + npDot * dt, 0.0)
     npDriven = np_ + ((shaftTq / refTq) / eng['ptInertia']) * dt
-    clutch = (npDriven if fuelGas > 0.0 else npFree) >= nrFrac
-    return shaftTq, (nrFrac if clutch else npFree), clutch
+    clutch = (npDriven if running else npFree) >= nrFrac
+    return shaftTq, (nrFrac if clutch else npFree), clutch, t5
 
 
 def turbo_shaft_engine(H, i, eng):
     dt = H['bmkhs_deltaTime']
     fat = H['bmkhs_FAT']
-    dens = H['bmkhs_rho'] / ISA_STD_DAY_AIR_DENSITY
+    p2 = H['bmkhs_rho'] * GT_R_AIR * (fat + DEG_C_TO_KELVIN)
     velY = H['bmkhs_velModelSpace'][1]
 
     ng = H['bmkhs_engPctNg'][i]
@@ -432,15 +512,16 @@ def turbo_shaft_engine(H, i, eng):
     fuelCmd, share, orifice = engine_governor(H, i, eng, ng, np_, tgt, lever, fat, dt)
     refTq = eng['refTq']
 
-    ngNew, gasPower, compWork, airGas = gas_turbine_cold_section(
-        eng, ng, fuelCmd, starterTq, dens, running, spooling, dt)
-    tgt = gas_turbine_hot_section(eng, tgt, ngNew, fuelCmd, residualHeat, dens, fat, velY, running, dt)
+    nc, pr, mDot, t3, p3, compPower, ctExpansion, inletVel = gas_turbine_compressor(eng, ng, fat, p2, velY)
+    t4 = gas_turbine_combustor(eng, t3, mDot, fuelCmd, running)
+    ngNew, tgt, t45, p45 = gas_turbine_compressor_turbine(
+        eng, ng, tgt, t4, p3, mDot, compPower, ctExpansion, starterTq, residualHeat, fat, velY,
+        running, spooling, dt)
 
     xmsnRpm = H['bmkhs_xmsnOutputRpm']
     nrFrac = xmsnRpm / (eng['npFly'] * eng['designRpm'])
 
-    tqOut, npNew, clutch = turbo_shaft_power_turbine(
-        eng, gasPower, airGas, compWork, np_, nrFrac, dt)
+    tqOut, npNew, clutch, t5 = turbo_shaft_power_turbine(eng, t45, p45, p2, mDot, running, np_, nrFrac, dt)
 
     if ngNew >= eng['selfSustNg'] and running:
         state = 'ON'
@@ -461,7 +542,8 @@ def turbo_shaft_engine(H, i, eng):
     H['bmkhs_engOilPsi'][i] = max(ngNew * GT_OIL_PSI_SCALE * H['bmkhs_engOilHealth'][i], 0.0)
     #Rig-only diagnostics, what GTDIAG / GOVDIAG print.
     H['diag'][i] = dict(fuel=fuelCmd, orifice=orifice, starterTq=starterTq, running=running,
-                        tripped=tripped, share=share)
+                        tripped=tripped, share=share, nc=nc, pr=pr, mDot=mDot, t3=t3, t4=t4, t45=t45,
+                        t5=t5, inletVel=inletVel)
 
 
 def engine_controller(H, cfg):
@@ -784,7 +866,7 @@ def hot_start_abort(tgt0=163.0, abortAt=700.0, ovrDelay=2.0, secs=60.0):
 
 
 #What fit_bench scores, and how much of each counts as one unit of error.
-FIT_PARAMS = ('starterTorque', 'startFuelBase', 'compDragMult', 'compDragFloor')
+FIT_PARAMS = ('starterTorque', 'startFuelBase', 'compDrag', 'compDragFloor')
 
 
 def bench_errors():
@@ -846,29 +928,12 @@ def fit_bench(x0, step=0.15, iters=120):
     return dict(zip(FIT_PARAMS, simplex[best])), costs[best]
 
 
-def equilibrium():
-    """The table as the SPEC writes it - algebraic, not flown. loaded_report flies it."""
-    e = Heli().H['bmkhs_engines'][0]
-    out = []
-    for tq, ng, dec in [(0.055, 0.679, 460), (0.18, 0.834, 532), (0.84, 0.930, None),
-                        (1.00, 0.951, 810), (1.29, 1.010, 867)]:
-        fuel = e['compressorLoad'] * ng ** 2 + tq / e['ptEfficiency'] - ng ** e['massFlowExp'] * e['airCoef']
-        out.append((tq, ng, 15 + e['tgtK'] * fuel / ng ** e['massFlowExp'], dec))
-    return out
-
-
 def report():
     a = Heli()
     e = a.H['bmkhs_engines'][0]
     print('=' * 78)
     print('derived: refTq %.1f  idleNg %.4f  fuelIdle %.3f  fuelFly %.3f   rho %.4f  FAT %.0f'
           % (e['refTq'], e['idleNg'], e['fuelIdle'], e['fuelFly'], a.H['bmkhs_rho'], a.H['bmkhs_FAT']))
-
-    print('\n-- equilibrium table, ALGEBRAIC (the spec, not flown) --')
-    print('     %TQ     Ng    TGT   declared   err')
-    for tq, ng, tgt, dec in equilibrium():
-        err = '' if dec is None else '%+d' % round(tgt - dec)
-        print('   %5.1f  %.3f   %4.0f  %8s  %4s' % (tq * 100, ng, tgt, dec if dec else '-', err))
 
     cs = cold_start()
     print('\n-- cold start, engine 1, rotor attached, lever to IDLE at first Ng rise --')

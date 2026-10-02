@@ -3,8 +3,8 @@ Function: bmkhs_fnc_turboShaftEngine
 
 Description:
     One turboshaft engine, one frame. Wires the modules together and owns the
-    call order: governor -> starter -> cold section -> hot section -> power
-    turbine. Config names this assembly, so a new engine type is a folder and a
+    call order: starter -> governor -> compressor -> combustor -> compressor
+    turbine -> power turbine. Config names this assembly, so a new engine type is a folder and a
     config string rather than a switch in the controller.
 
     Every state flag comes from the Ng at the TOP of the frame, before anything
@@ -28,7 +28,8 @@ params ["_heli", "_index", "_engine"];
 
 private _deltaTime = _heli getVariable "bmkhs_deltaTime";
 private _fat       = _heli getVariable "bmkhs_FAT";
-private _dens      = (_heli getVariable "bmkhs_rho") / ISA_STD_DAY_AIR_DENSITY;
+//Ambient pressure, kPa - the inlet the compressor starts from.
+private _p2        = (_heli getVariable "bmkhs_rho") * GT_R_AIR * (_fat + DEG_C_TO_KELVIN);
 private _velY      = (_heli getVariable "bmkhs_velModelSpace") select 1;
 
 private _ng           = _heli getVariable "bmkhs_engPctNg"        select _index;
@@ -71,18 +72,22 @@ private _spooling  = !_running && {!_cranking};
 
 private _refTq = _engine get "refTq";
 
-([_engine, _ng, _fuelCmd, _starterTq, _dens, _running, _spooling, _deltaTime]
-    call bmkhs_fnc_gasTurbineColdSection) params ["_ngNew", "_gasPower", "_compWork", "_airGas"];
+([_engine, _ng, _fat, _p2, _velY] call bmkhs_fnc_gasTurbineCompressor)
+    params ["_nc", "_pr", "_mDot", "_t3", "_p3", "_compPower", "_ctExpansion", "_inletVel"];
 
-_tgt = [_engine, _tgt, _ngNew, _fuelCmd, _residualHeat, _dens, _fat, _velY, _running, _deltaTime]
-        call bmkhs_fnc_gasTurbineHotSection;
+private _t4 = [_engine, _t3, _mDot, _fuelCmd, _running] call bmkhs_fnc_gasTurbineCombustor;
+
+([_engine, _ng, _tgt, _t4, _p3, _mDot, _compPower, _ctExpansion, _starterTq, _residualHeat, _fat, _velY,
+    _running, _spooling, _deltaTime] call bmkhs_fnc_gasTurbineCompressorTurbine)
+    params ["_ngNew", "_tgtNew", "_t45", "_p45"];
+_tgt = _tgtNew;
 
 //The rotor, as a fraction of governed Np - the only place real rpm meets the engine.
 private _xmsnRpm = _heli getVariable "bmkhs_xmsnOutputRpm";
 private _nrFrac  = _xmsnRpm / ((_engine get "npFly") * (_engine get "designRpm"));
 
-([_engine, _gasPower, _airGas, _compWork, _np, _nrFrac, _deltaTime]
-    call bmkhs_fnc_turboShaftPowerTurbine) params ["_tqOut", "_npNew", "_clutch"];
+([_engine, _t45, _p45, _p2, _mDot, _running, _np, _nrFrac, _deltaTime]
+    call bmkhs_fnc_turboShaftPowerTurbine) params ["_tqOut", "_npNew", "_clutch", "_t5"];
 
 //State follows Ng, so a start that hangs never reads ON and a flameout drops out of it.
 private _state = switch (true) do {
@@ -103,18 +108,20 @@ if (bmkhs_sysDebug) then {
         private _swSeen = _heli getVariable [_swKey, 0];
         _heli setVariable [_swKey, 0];
         diag_log text format [
-            "GTDIAG eng=%25 t=%1 lvr=%2 sw=%3 swSeen=%26 latch=%27 fuel=%4 run=%5 crank=%6 spool=%7 ng=%8->%9 np=%10->%11 clutch=%12 nrFrac=%13 gas=%14 comp=%15 air=%16 share=%17 tq=%18 Nr=%19 tgt=%20 state=%21 dt=%22 trip=%23 rtrMdl=%24",
+            "GTDIAG eng=%25 t=%1 lvr=%2 sw=%3 swSeen=%26 latch=%27 fuel=%4 run=%5 crank=%6 spool=%7 ng=%8->%9 np=%10->%11 clutch=%12 nrFrac=%13 nc=%14 pr=%15 mdot=%16 t3=%28 t4=%29 t45=%30 t5=%31 vin=%32 share=%17 tq=%18 Nr=%19 tgt=%20 state=%21 dt=%22 trip=%23 rtrMdl=%24",
             time toFixed 2, _lever, _sw, _fuelCmd toFixed 4,
             _running, _cranking, _spooling,
             _ng toFixed 4, _ngNew toFixed 4,
             _np toFixed 4, _npNew toFixed 4, _clutch, _nrFrac toFixed 4,
-            _gasPower toFixed 4, _compWork toFixed 4,
-            _airGas toFixed 4, _engineLoadShareTq toFixed 1,
+            _nc toFixed 4, _pr toFixed 3,
+            _mDot toFixed 3, _engineLoadShareTq toFixed 1,
             _tqOut toFixed 1,
             _xmsnRpm toFixed 0,
             _tgt toFixed 0, _state, _deltaTime toFixed 4,
             _tripped, bmkhs_rotorModel, _index + 1,
-            _swSeen, _heli getVariable "bmkhs_engState" select _index
+            _swSeen, _heli getVariable "bmkhs_engState" select _index,
+            (_t3 - DEG_C_TO_KELVIN) toFixed 1, (_t4 - DEG_C_TO_KELVIN) toFixed 1,
+            (_t45 - DEG_C_TO_KELVIN) toFixed 1, (_t5 - DEG_C_TO_KELVIN) toFixed 1, _inletVel toFixed 1
         ];
     };
 };

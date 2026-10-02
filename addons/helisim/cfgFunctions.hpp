@@ -87,8 +87,9 @@ class CfgFunctions
         class engineGasTurbine {
             file = "\bmkhs_helisim\functions\engine\gasTurbine";
             class gasTurbineStarter {R;};
-            class gasTurbineColdSection {R;};
-            class gasTurbineHotSection {R;};
+            class gasTurbineCompressor {R;};
+            class gasTurbineCombustor {R;};
+            class gasTurbineCompressorTurbine {R;};
         };
         class engineTurboShaft {
             file = "\bmkhs_helisim\functions\engine\turboShaftEngine";

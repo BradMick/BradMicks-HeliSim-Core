@@ -14,6 +14,7 @@ field means:
 - `addons/helisim/components.hpp` - systems: producers, converters,
   storage, circuits, consumers
 - `addons/helisim/controls.hpp` - switches, buttons and levers
+- `addons/helisim/engine.hpp` - the gas turbine engine, station by station
 
 This guide is the ORDER. Those are the DETAIL.
 
@@ -30,7 +31,8 @@ model needs them and guessing produces an aircraft that flies like nothing:
 
 - Rotor radius, blade count, chord, twist, design RPM
 - Empty mass and its centre of gravity, in model space
-- Engine continuous and contingency power, design Ng/Np
+- Engine: power at 100% torque, compressor pressure ratio and airflow, power
+  turbine RPM, Ng/Np/TGT limits, and the Maximum Torque Available charts
 - Transmission gear ratio, drivetrain torque ratings
 
 ---
@@ -283,6 +285,43 @@ Include it from your `cfgVehicles.hpp` inside the vehicle class.
 
 **Get it flying before you go further.** Systems off, no components, no controls.
 An aircraft that does not fly well will not fly better with hydraulics.
+
+### The engines
+
+`bmkhs_config/helisim_engine.hpp`, one `class EngineNN` per engine inside
+`class Engines`. `engine.hpp` in Core is the field reference and carries a full
+template; copy it rather than starting from nothing.
+
+**The engine is physics worked from Ng, not a schedule.** You declare what a
+data sheet gives you - pressure ratio, airflow, power, limits - and Core works
+the compressor, combustor and both turbines every frame. Starts, idle, spool-up,
+hot and cold days and altitude all come out of that. Core carries the compressor
+map, normalised, and scales it by your engine's numbers.
+
+Set it up in this order:
+
+1. **Spec numbers.** `pressureRatio`, `massFlow`, `powerKw`, `designRpm`,
+   `npFly`, `maxNg`, `maxNp`, and the book limits.
+2. **Idle.** Adjust `fuelIdle` until the engine, lever at IDLE, settles at
+   `idleNg`.
+3. **Start.** `startFuelBase` sets the peak TGT, `Starter >> torque` how quickly
+   it lights, `runawayNg` where it motors with no fuel.
+4. **Max torque available.** Fly or run max power at each FAT on your Maximum
+   Torque Available chart and set that row of `airflowTable` - below 1.0 where
+   the engine makes too much, above where too little. Leave the 15 C row at 1.0:
+   a standard day is the untrimmed engine. The Ng and TGT limiters then decide
+   which limit holds, as on the real engine.
+
+**`maxNg` is also the compressor map's scale.** The map's Ng axis runs 0 to 1 as
+a fraction of it, so set it to the true mechanical maximum.
+
+**`maxFuelFlow` is physical.** The combustor burns fuel units times
+`maxFuelFlow` kg/s, so it sets how much heat a unit of fuel carries, not just
+the gauge.
+
+**The governor never pulls Ng below idle in flight.** A power-on autorotation
+holds Ng at `idleNg` while the clutch releases and the rotor runs free - an
+engine below `ngMin` is an engine out.
 
 ---
 

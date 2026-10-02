@@ -52,4 +52,5 @@ private _supplied = true;
     if (!_ok) exitWith { _supplied = false };
 } forEach (_engine get "starterGates");
 
-[0.0, _engine get "starterTorque"] select _supplied
+//An air turbine - full torque stalled, none at its runaway speed, which is what motoring settles at.
+[0.0, (_engine get "starterTorque") * ((1.0 - (_ng / (_engine get "runawayNg"))) max 0.0)] select _supplied

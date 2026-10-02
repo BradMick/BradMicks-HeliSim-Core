@@ -23,4 +23,22 @@
 //Seconds an engine's tank may run dry before it is starved.
 #define FUEL_STARVE_GRACE_SEC   2
 
+//Gas properties - cold air through the compressor, hot gas through the turbines.
+#define GT_GAMMA_COLD       1.40
+#define GT_CP_COLD          1.005   //kJ/kg K
+#define GT_GAMMA_HOT        1.33
+#define GT_CP_HOT           1.148   //kJ/kg K
+#define GT_R_AIR            0.28705 //kJ/kg K
+#define GT_STD_TEMP_K       288.15
+#define GT_STD_PRESSURE_KPA 101.325
+
+//TGT gauge lag - how fast the reading chases the gas at station 4.5.
+#define GT_TGT_HEAT_RATE    0.30
+#define GT_TGT_COOL_RATE    0.70
+#define GT_TGT_STILL_AIR    0.0012
+#define GT_TGT_RAM_AIR      0.00065
+
+//Compressor power at Ng 1.0, ISA, in spool units - the spool's torque scale.
+#define GT_SPOOL_UNIT_LOAD  2.91244
+
 #endif

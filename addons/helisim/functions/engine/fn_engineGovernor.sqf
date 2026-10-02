@@ -93,6 +93,16 @@ if (_lever == "FLY" && {_govPowered}) then {
     [_heli, "bmkhs_engLimFuel", _index, _lim] call bmkhs_fnc_utilSetArrayVariable;
     private _allowed = _fuelSched min _lim;
 
+    //Minimum flow - the governor never pulls Ng below idle. Rises as Ng falls under it, as the limiters do.
+    private _minFuel = ((_heli getVariable "bmkhs_engMinFuel") select _index)
+                     + (GT_LIMIT_GAIN * (((_engine get "idleNg") - _ng) / GT_NG_LIMIT_BAND) * _deltaTime);
+    _minFuel = (_minFuel max 0.0) min _fuelIdle;
+    [_heli, "bmkhs_engMinFuel", _index, _minFuel] call bmkhs_fnc_utilSetArrayVariable;
+    if (_govFuel < _minFuel) then {
+        _pid set ["integral", _integral];
+        _govFuel = _minFuel;
+    };
+
     //While the lever or a limiter is what limits fuel, the integral does not wind up.
     if (_govFuel > _allowed) then {
         _pid set ["integral", _integral];
@@ -124,6 +134,7 @@ if (_lever == "FLY" && {_govPowered}) then {
     [_pid] call bmkhs_fnc_pidReset;
     _npRef = -1.0;
     [_heli, "bmkhs_engLimFuel", _index, _fuelFly] call bmkhs_fnc_utilSetArrayVariable;
+    [_heli, "bmkhs_engMinFuel", _index, 0.0] call bmkhs_fnc_utilSetArrayVariable;
 };
 [_heli, "bmkhs_engNpRef", _index, _npRef] call bmkhs_fnc_utilSetArrayVariable;
 
