@@ -1287,7 +1287,115 @@ def envelope_report():
     table('TGT, C', '%7.0f', lambda x: x[3])
 
 
+def pulled(pa, fat, single=False, coll=1.0, secs=100.0):
+    """One engine's state settled at collective coll, at pressure altitude pa (ft) and FAT (C).
+    Single engine: engine 2 lever OFF before the pull."""
+    global BASE_FAT
+    saved = BASE_FAT
+    #The environment lapses 2 C per 1,000 ft from its base, so the base that lands on fat.
+    BASE_FAT = fat + sqf_round(pa / 1000.0 * 2)
+    try:
+        alt = pa * FEET_TO_METERS
+        a = Heli(baroAltM=alt)
+        start_to(a, (0, 1), 'IDLE', 30.0, ARMA_DT, JITTER, baroAltM=alt)
+        a.H['pwrLvr'] = [FLY, FLY]
+        run_until(a, 40.0, ARMA_DT, JITTER, baroAltM=alt)
+        if single:
+            a.H['pwrLvr'][1] = 0.0
+        run_until(a, 45.0, ARMA_DT, JITTER, baroAltM=alt)
+        run_until(a, secs, ARMA_DT, JITTER,
+                  each=lambda h: dict(coll=coll * clamp((h.t - 45.0) / NORMAL_PULL_SEC, 0.0, 1.0),
+                                      baroAltM=alt))
+    finally:
+        BASE_FAT = saved
+    return a
+
+
+#Nr, as a fraction of governed, that still counts as "on speed" (the chart's 101% NR).
+PERF_ON_SPEED = 0.995
+
+
+def max_power(pa, fat, single=False, iters=10):
+    """The highest collective that still holds Nr on speed, and what the engine is doing there.
+    Held by is whichever limit sits closest: TGT or Ng."""
+    lo, hi, best = 0.0, 1.0, None
+    for _ in range(iters):
+        mid = (lo + hi) / 2.0
+        a = pulled(pa, fat, single, mid)
+        if a.nrFrac() >= PERF_ON_SPEED:
+            lo, best = mid, a
+        else:
+            hi = mid
+    #Nothing holds Nr on speed - no point to report.
+    if best is None:
+        return None
+    a = best
+    e = a.H['bmkhs_engines'][0]
+    tgtLim = e['maxTgtSe'] if a.H['bmkhs_isSingleEng'] else e['maxTgt']
+    ngLim = min(e['ngLimitMax'], e['ngLimitBase'] + e['ngLimitSlope'] * a.H['bmkhs_FAT'])
+    tgtGap = (tgtLim - a.tgt()) / GT_TGT_LIMIT_BAND
+    ngGap = (ngLim - a.ng()) / GT_NG_LIMIT_BAND
+    why = 'TGT' if tgtGap < ngGap else 'Ng'
+    return a.tq(), a.tgt(), a.ng(), ngLim, why
+
+
+#Read off the user's charts: the FAT below which the limit is Ng and above which it is TGT.
+CHART_SWITCH = {
+    False: {0: -10, 2000: -10, 4000: -10, 6000: -10, 8000: -12, 10000: -12, 12000: -14,
+            14000: -16, 16000: -16, 18000: -16, 20000: -18},
+    True: {0: -4, 2000: -4, 4000: -4, 6000: -6, 8000: -6, 10000: -8, 12000: -8,
+           14000: -10, 16000: -12, 18000: -13, 20000: -14},
+}
+SWITCH_PAS = (0, 2000, 4000, 6000, 8000, 10000)
+SWITCH_FATS = tuple(range(-40, 56, 5))
+
+
+def perf_report(jsonPath=None):
+    print('\n' + '=' * 78)
+    print('LIMIT SWITCH vs THE CHARTS - hover, highest collective holding Nr >= %.1f%% of governed'
+          % (PERF_ON_SPEED * 100))
+    print('   per PA: which limit binds at each FAT; the switch is the first FAT held by TGT')
+    print('=' * 78)
+    results = {}
+    for single, name in ((False, 'DUAL ENGINE (10-min, TGT 867)'), (True, 'SINGLE ENGINE (2.5-min, TGT 896)')):
+        print('\n   %s' % name)
+        print('      PA   chart   rig |  ' + ' '.join('%4d' % f for f in SWITCH_FATS))
+        detail = []
+        for pa in SWITCH_PAS:
+            held, sw = [], None
+            for fat in SWITCH_FATS:
+                r = max_power(pa, fat, single)
+                if r is None:
+                    held.append('-')
+                    continue
+                tq, tgt, ng, ngLim, why = r
+                held.append(why)
+                detail.append((pa, fat, tq, tgt, ng, ngLim, why))
+                if sw is None and why == 'TGT':
+                    sw = fat
+            print('   %6d  %5d  %4s |  ' % (pa, CHART_SWITCH[single][pa], sw if sw is not None else '-')
+                  + ' '.join('%4s' % {'TGT': 'T', 'Ng': 'N'}.get(w, '-') for w in held))
+        print('\n      PA   FAT |   %TQ    TGT     Ng  ngLim  held')
+        for pa, fat, tq, tgt, ng, ngLim, why in detail:
+            print('   %6d  %4d | %5.1f  %5.0f  %.3f  %.3f  %s' % (pa, fat, tq * 100, tgt, ng, ngLim, why))
+        results['SE' if single else 'DE'] = [
+            dict(pa=pa, fat=fat, tq=tq, tgt=tgt, ng=ng, held=why)
+            for pa, fat, tq, tgt, ng, ngLim, why in detail]
+    if jsonPath:
+        import json
+        results['chartSwitch'] = {k: {str(pa): v for pa, v in CHART_SWITCH[s].items()}
+                                  for k, s in (('DE', False), ('SE', True))}
+        with open(jsonPath, 'w') as f:
+            json.dump(results, f, indent=1)
+
+
 if __name__ == '__main__':
+    import sys
+    if 'perf' in sys.argv:
+        #python engine.py perf [results.json]
+        i = sys.argv.index('perf')
+        perf_report(sys.argv[i + 1] if len(sys.argv) > i + 1 else None)
+        sys.exit()
     report()
     governed_report()
     loaded_report()
