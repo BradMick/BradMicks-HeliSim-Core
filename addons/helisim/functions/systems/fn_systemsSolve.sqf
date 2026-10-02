@@ -56,7 +56,7 @@ private _feedsOf  = _heli getVariable ["bmkhs_sysFeeds_of", createHashMap];
 
 //Anything a component is gated on is a dependency like any other, so a switch being
 //thrown or a hitpoint being lost enters the walk the same way a circuit moving does.
-private _watched = _heli getVariable ["bmkhs_sysWatchedLast", createHashMap];
+private _watched = _heli getVariable "bmkhs_sysWatchedLast";
 private _queue   = [];
 private _seen    = createHashMap;
 

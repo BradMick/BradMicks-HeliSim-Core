@@ -71,7 +71,7 @@ _heli setVariable ["bmkhs_xmsnDeltaRpm",  _deltaRpm];
 
 //TEMPORARY - remove when the zero torque output is found.
 if (bmkhs_sysDebug) then {
-    private _last = _heli getVariable ["bmkhs_xmsnDiagLast", 0];
+    private _last = _heli getVariable "bmkhs_xmsnDiagLast";
     if (time > _last + 0.25) then {
         _heli setVariable ["bmkhs_xmsnDiagLast", time];
         diag_log text format [

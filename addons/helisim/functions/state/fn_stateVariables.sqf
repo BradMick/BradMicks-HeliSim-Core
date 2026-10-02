@@ -14,6 +14,36 @@ Returns:
 ---------------------------------------------------------------------------- */
 params ["_heli", "_config"];
 
+_heli setVariable ["bmkhs_previousTime",        0.0];
+_heli setVariable ["bmkhs_deltaTime",           0.0];
+_heli setVariable ["bmkhs_deltaTime_avg",       [bmkhs_movingAverageSize] call bmkhs_fnc_smoothAverageInit];
+
+_heli setVariable ["bmkhs_gndSpeed",            0.0];
+_heli setVariable ["bmkhs_vel2D",               0.0];
+_heli setVariable ["bmkhs_vel3D",               0.0];
+_heli setVariable ["bmkhs_velWindModelSpace",   [0.0,0.0,0.0]];
+_heli setVariable ["bmkhs_velModelSpace",       [0.0,0.0,0.0]];
+_heli setVariable ["bmkhs_velModelSpaceNoWind", [0.0,0.0,0.0]];
+_heli setVariable ["bmkhs_velModelSpaceX_avg",  [bmkhs_movingAverageSize] call bmkhs_fnc_smoothAverageInit];
+_heli setVariable ["bmkhs_velModelSpaceY_avg",  [bmkhs_movingAverageSize] call bmkhs_fnc_smoothAverageInit];
+_heli setVariable ["bmkhs_velModelSpaceZ_avg",  [bmkhs_movingAverageSize] call bmkhs_fnc_smoothAverageInit];
+_heli setVariable ["bmkhs_velWorldSpace",       [0.0,0.0,0.0]];
+_heli setVariable ["bmkhs_velWorldSpaceNoWind", [0.0,0.0,0.0]];
+_heli setVariable ["bmkhs_velWorldSpaceNoWind_prev", [0.0,0.0,0.0]];
+_heli setVariable ["bmkhs_velWorldSpaceX_avg",  [bmkhs_movingAverageSize] call bmkhs_fnc_smoothAverageInit];
+_heli setVariable ["bmkhs_velWorldSpaceY_avg",  [bmkhs_movingAverageSize] call bmkhs_fnc_smoothAverageInit];
+_heli setVariable ["bmkhs_velWorldSpaceZ_avg",  [bmkhs_movingAverageSize] call bmkhs_fnc_smoothAverageInit];
+_heli setVariable ["bmkhs_velClimb",            0.0];
+_heli setVariable ["bmkhs_angVelModelSpace",    [0.0,0.0,0.0]];
+_heli setVariable ["bmkhs_angVelModelSpaceX_avg", [bmkhs_movingAverageSize] call bmkhs_fnc_smoothAverageInit];
+_heli setVariable ["bmkhs_angVelModelSpaceY_avg", [bmkhs_movingAverageSize] call bmkhs_fnc_smoothAverageInit];
+_heli setVariable ["bmkhs_angVelModelSpaceZ_avg", [bmkhs_movingAverageSize] call bmkhs_fnc_smoothAverageInit];
+
+_heli setVariable ["bmkhs_worldAccel",        [0.0,0.0,0.0]];
+_heli setVariable ["bmkhs_ballTerms",         [0.0,0.0,0.0]];
+_heli setVariable ["bmkhs_bodyAccel",         [0.0,0.0,0.0]];
+_heli setVariable ["bmkhs_rtrRPM",            0.0];
+
 //Smoothed worldAccel - slip ball only.
 _heli setVariable ["bmkhs_worldAccelFiltered", [0.0,0.0,0.0]];
 _heli setVariable ["bmkhs_worldAccelX_avg",   [bmkhs_movingAverageSize] call bmkhs_fnc_smoothAverageInit];

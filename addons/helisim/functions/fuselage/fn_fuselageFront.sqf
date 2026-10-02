@@ -67,7 +67,7 @@ for "_i" from 0 to (_count - 1) do {
     //Applied AT the CoM, so the arm is zero and this makes no moment - published
     //with a zero arm so the readout says that rather than implying one.
     if (BMKHS_FORCES_DEBUG) then {
-        private _acc = _heli getVariable ["bmkhs_dbgForces", []];
+        private _acc = _heli getVariable "bmkhs_dbgForces";
         _acc pushBack ["fuse front", _dragVector, [0,0,0]];
         _heli setVariable ["bmkhs_dbgForces", _acc];
     };

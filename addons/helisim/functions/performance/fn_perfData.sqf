@@ -26,7 +26,7 @@ private _pa        = _heli getVariable "bmkhs_PA";
 private _fat       = _heli getVariable "bmkhs_FAT";
 
 private _perfDataUpdatestr  = str  round _curGWT_kg + str _pa + str _fat + str bmkhs_helisimEnvironment;
-private _perfDatacompareStr = _heli getVariable ["bmkhs_perfDataChange", ""];
+private _perfDatacompareStr = _heli getVariable "bmkhs_perfDataChange";
 if (_perfDataUpdatestr == _perfDatacompareStr) exitWith {};
 _heli setVariable ["bmkhs_perfDataChange", _perfDataUpdatestr];
 

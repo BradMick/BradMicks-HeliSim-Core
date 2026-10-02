@@ -58,6 +58,7 @@ class CfgFunctions
         class fmDebug {
             file = "\bmkhs_helisim\functions\fmDebug";
             class fmDebugUpdate {R;};
+            class fmDebugVariables {R;};
         };
         class ctrlVis {
             file = "\bmkhs_helisim\functions\ctrlVis";
@@ -276,6 +277,7 @@ class CfgFunctions
         class systemsApu {
             file = "\bmkhs_helisim\functions\systems\apu";
             class apu {R;};
+            class apuVariables {R;};
         };
         class systemsRepair {
             file = "\bmkhs_helisim\functions\systems\repair";

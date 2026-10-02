@@ -33,7 +33,6 @@ if (!(_heli getVariable ["bmkhs_systemsInitialised", false]) && local _heli) the
 
     //Electrical - cold and dark. With systems the crew brings the buses up; without them
     //they come on with everything else when the aircraft wakes.
-    _heli setVariable ["bmkhs_battPower_pctCharge", 1.0, true];
     _heli setVariable ["bmkhs_battBusOn",         false, true];
     _heli setVariable ["bmkhs_acBusOn",           false, true];
     _heli setVariable ["bmkhs_dcBusOn",           false, true];
@@ -48,9 +47,6 @@ if (!(_heli getVariable ["bmkhs_systemsInitialised", false]) && local _heli) the
 
 
     //Hydraulics - reservoirs and the accumulator start full.
-    _heli setVariable ["bmkhs_priLevel_pctCharge",  1.0, true];
-    _heli setVariable ["bmkhs_utilLevel_pctCharge", 1.0, true];
-    _heli setVariable ["bmkhs_accHydPsiCharge",     1.0, true];
 
     //Pressure comes up with the aircraft too, so it reads zero until then.
     _heli setVariable ["bmkhs_priHydPsi",  0.0,    true];
@@ -59,8 +55,10 @@ if (!(_heli getVariable ["bmkhs_systemsInitialised", false]) && local _heli) the
 };
 
 _heli setVariable ["bmkhs_apuFuelAvail",      true];
-_heli setVariable ["bmkhs_dmgTimerCont",      0.0];
-_heli setVariable ["bmkhs_dmgTimerTrans",     0.0];
+_heli setVariable ["bmkhs_repairPending",     false];
+_heli setVariable ["bmkhs_sysWalkCost",       0];
+_heli setVariable ["bmkhs_sysWalkPeak",       0];
+_heli setVariable ["bmkhs_sysWatchedLast",    createHashMap];
 
 _heli setVariable ["bmkhs_emerHydOn",         false, true];
 //Latched by a start begun with the rotor brake set; cleared only by the brake coming off.

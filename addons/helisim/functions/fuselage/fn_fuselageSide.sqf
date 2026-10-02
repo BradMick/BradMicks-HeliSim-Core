@@ -20,31 +20,6 @@ private _airfoilTable   = [_heli, _heli getVariable ["bmkhs_fuselageAirfoil", ""
 private _count          = _panelSet get "count";
 private _coords         = _panelSet get "panels";
 
-//Fuselage side-force scalar vs airspeed. The fuselage produces a physical side
-//force (and thus a yaw moment) when the aircraft flies crabbed - this scalar
-//is realistic. Source array is the single source of truth: publish into the live
-//write-back read & write this same var.
-private _sideForceScalarTable =
-[
- [ 0.00, 1.000]
-,[10.29, 1.000]
-,[20.58, 1.000]
-,[36.01, 1.000]
-,[46.30, 1.000]
-,[51.44, 1.000]
-,[61.73, 1.000]
-,[66.88, 1.000]
-,[72.02, 1.000]
-];
-//Published for the force overlay readout - the array above is the source of truth.
-_heli setVariable ["bmkhs_fuseSideTable", _sideForceScalarTable];
-//Interpolate at the current 2D airspeed (m/s).
-private _fuseSpd = vectorMagnitude [
-    (_heli getVariable ["bmkhs_velModelSpace", [0,0,0]]) select 0,
-    (_heli getVariable ["bmkhs_velModelSpace", [0,0,0]]) select 1
-];
-private _sideForceScalar = [_sideForceScalarTable, _fuseSpd] call bmkhs_fnc_mathLinearInterp select 1;
-
 private _pitch          = _rotation select 0;
 private _roll           = _rotation select 1;
 private _yaw            = _rotation select 2;
@@ -117,11 +92,11 @@ for "_i" from 0 to (_count - 1) do {
     private _liftVector = _relWindNormalized vectorCrossProduct _up;
     _liftVector = _liftVector vectorCrossProduct _relWindNormalized;
     _liftVector = vectorNormalized _liftVector;
-    _liftVector = _liftVector vectorMultiply (_lift * _sideForceScalar * _deltaTime);
+    _liftVector = _liftVector vectorMultiply (_lift * _deltaTime);
 
     private _dragVector = _relWind;
     _dragVector = (vectorNormalized _dragVector) vectorMultiply -1.0;
-    _dragVector = _dragVector vectorMultiply (_drag * _sideForceScalar * _deltaTime);
+    _dragVector = _dragVector vectorMultiply (_drag * _deltaTime);
 
     if (BMKHS_FM_DEBUG) then {
     [_heli, _e vectorAdd (_liftVector vectorMultiply _debugLineScale), _e, "green"] call bmkhs_fnc_debugDrawLine;
@@ -129,7 +104,7 @@ for "_i" from 0 to (_count - 1) do {
     };
 
     if (BMKHS_FORCES_DEBUG) then {
-        private _acc = _heli getVariable ["bmkhs_dbgForces", []];
+        private _acc = _heli getVariable "bmkhs_dbgForces";
         _acc pushBack ["fuse side", _liftVector vectorAdd _dragVector, _e vectorDiff _heliCom];
         _heli setVariable ["bmkhs_dbgForces", _acc];
     };

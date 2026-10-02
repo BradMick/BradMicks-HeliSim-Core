@@ -27,7 +27,7 @@ Author:
 ---------------------------------------------------------------------------- */
 params ["_heli"];
 
-if !(_heli getVariable ["bmkhs_repairPending", false]) exitWith {};
+if !(_heli getVariable "bmkhs_repairPending") exitWith {};
 _heli setVariable ["bmkhs_repairPending", false];
 
 //Stores come back full - fluid and charge are what a repair replaces. A store with no

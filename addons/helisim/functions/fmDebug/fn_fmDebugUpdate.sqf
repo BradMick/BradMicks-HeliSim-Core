@@ -51,7 +51,7 @@ if (isNull _display) exitWith {
 private _ctrl = _display displayCtrl 5203;
 if (isNull _ctrl) exitWith {};
 
-private _rows = _heli getVariable ["bmkhs_dbgForces", []];
+private _rows = _heli getVariable "bmkhs_dbgForces";
 
 private _pad = {
     params ["_s", "_w"];

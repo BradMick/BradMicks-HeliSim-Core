@@ -89,5 +89,4 @@ _heli setVariable ["bmkhs_nrLimits",        getArray (_config >> "nrLimits")];
 //anything has written them.
 _heli setVariable ["bmkhs_reqEngTorque",   [0.0, 0.0]];
 _heli setVariable ["bmkhs_rtrThrust",      [0.0, 0.0]];
-_heli setVariable ["bmkhs_rtrRPM",         0.0];
 _heli setVariable ["bmkhs_rtrMoi",         [0.0, 0.0]];

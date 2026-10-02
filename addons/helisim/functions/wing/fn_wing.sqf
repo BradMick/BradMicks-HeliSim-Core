@@ -207,7 +207,7 @@ for "_j" from 0 to (_numElements - 1) do {
     };
 
     if (BMKHS_FORCES_DEBUG) then {
-        private _acc = _heli getVariable ["bmkhs_dbgForces", []];
+        private _acc = _heli getVariable "bmkhs_dbgForces";
         _acc pushBack [format ["wing %1", _wingIndex], _liftVector vectorAdd _dragVector, _e vectorDiff _heliCom];
         _heli setVariable ["bmkhs_dbgForces", _acc];
     };

@@ -35,26 +35,14 @@ _heli setVariable ["bmkhs_pid_sas_yaw", (getArray (_config >> "pidSasYaw")) call
 
 _heli setVariable ["bmkhs_autoAttLevelPitch", getNumber (_config >> "autoAttLevelPitch")];
 _heli setVariable ["bmkhs_autoAttRollLimit", getNumber (_config >> "autoAttRollLimit")];
-_heli setVariable ["bmkhs_autoAttCycRollOut", 0.0];
 _heli setVariable ["bmkhs_pid_autoAttPitch", (getArray (_config >> "pidAutoAttPitch")) call bmkhs_fnc_pidCreate];
 _heli setVariable ["bmkhs_pid_autoAttRoll", (getArray (_config >> "pidAutoAttRoll")) call bmkhs_fnc_pidCreate];
 _heli setVariable ["bmkhs_pid_autoPedalHdg", (getArray (_config >> "pidAutoPedalHdg")) call bmkhs_fnc_pidCreate];
 _heli setVariable ["bmkhs_pid_autoPedalNtt", (getArray (_config >> "pidAutoPedalNtt")) call bmkhs_fnc_pidCreate];
 _heli setVariable ["bmkhs_pid_autoPedalAero", (getArray (_config >> "pidAutoPedalAero")) call bmkhs_fnc_pidCreate];
 
-_heli setVariable ["bmkhs_posIntKp",    0.0200];
-_heli setVariable ["bmkhs_posIntClamp", 0.2500];
 _heli setVariable ["bmkhs_posIntX",     0.0];
 _heli setVariable ["bmkhs_posIntY",     0.0];
-
-_heli setVariable ["bmkhs_autoPedalHdg",       getDir _heli];
-_heli setVariable ["bmkhs_autoPedalRegime",    "hdg"];   //hdg | ntt | aero (live regime)
-_heli setVariable ["bmkhs_autoPedalRegimeWgt", 1.0];     //0-1, share of the pedal that regime owns
-_heli setVariable ["bmkhs_autoPedalHdgErr",    0.0];     //deg, heading error
-_heli setVariable ["bmkhs_autoPedalNttErr",    0.0];     //deg, kinematic sideslip
-_heli setVariable ["bmkhs_autoPedalAeroErr",   0.0];     //g,   lateral accel
-_heli setVariable ["bmkhs_autoPedalOut",       0.0];     //blended pedal output
-_heli setVariable ["bmkhs_autoPedalPrevOut",   0.0];     //pilot-feet filter state (rate limit + lag)
 
 //FMC output state
 _heli setVariable ["bmkhs_fmcAttHoldCycPitchOut", 0.0];
@@ -63,3 +51,39 @@ _heli setVariable ["bmkhs_fmcSasRollOut",         0.0];
 _heli setVariable ["bmkhs_fmcHdgHoldPedalYawOut", 0.0];
 _heli setVariable ["bmkhs_fmcSasYawOut",          0.0];
 _heli setVariable ["bmkhs_fmcAltHoldCollOut",     0.0];
+_heli setVariable ["bmkhs_fmcAttHoldCycRollOut",  0.0];
+_heli setVariable ["bmkhs_fmcCollectiveToPitch",  0.0];
+_heli setVariable ["bmkhs_fmcCollectiveToRoll",   0.0];
+_heli setVariable ["bmkhs_fmcYawToPitch",         0.0];
+_heli setVariable ["bmkhs_fmcYawToRoll",          0.0];
+
+//Modes and holds - networked, so only the machine the aircraft is local to sets them.
+if (local _heli) then {
+    //FMC
+    _heli setVariable ["bmkhs_fmcPitchOn",                true,  true];
+    _heli setVariable ["bmkhs_fmcRollOn",                 true,  true];
+    _heli setVariable ["bmkhs_fmcYawOn",                  true,  true];
+    _heli setVariable ["bmkhs_fmcCollOn",                 true,  true];
+    _heli setVariable ["bmkhs_fmcTrimOn",                 true,  true];
+    //Force Trim
+    _heli setVariable ["bmkhs_forceTrimInterupted",       false, true];
+    _heli setVariable ["bmkhs_forceTrimPosPitch",         0.0,   true];
+    _heli setVariable ["bmkhs_forceTrimPosRoll",          0.0,   true];
+    _heli setVariable ["bmkhs_forceTrimPosYaw",           0.0,   true];
+    //Attitude Hold
+    _heli setVariable ["bmkhs_attHoldActive",             false, true];
+    _heli setVariable ["bmkhs_attHoldDesiredPos",         getPos _heli, true];
+    _heli setVariable ["bmkhs_attHoldDesiredVel",         [0.0, 0.0], true];
+    _heli setVariable ["bmkhs_attHoldDesiredAtt",         [0.0, 0.0], true];
+    _heli setVariable ["bmkhs_attHoldSubMode",            "pos", true];   //pos, vel, att
+    //Altitude Hold
+    _heli setVariable ["bmkhs_altHoldActive",             false, true];
+    _heli setVariable ["bmkhs_altHoldDesiredAlt",         0.0,   true];
+    _heli setVariable ["bmkhs_altHoldSubMode",            "rad", true];   //rad, bar
+    _heli setVariable ["bmkhs_altHoldCollRef",            0.0,   true];
+    //Heading Hold
+    _heli setVariable ["bmkhs_hdgHoldActive",             false, true];
+    _heli setVariable ["bmkhs_hdgHoldDesiredHdg",         0.0,   true];
+    _heli setVariable ["bmkhs_hdgHoldDesiredSideslip",    0.0,   true];
+    _heli setVariable ["bmkhs_hdgHoldSubMode",            "hdg", true];    //hdg, trn, yaw, aut
+};

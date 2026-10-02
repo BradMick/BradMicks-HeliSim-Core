@@ -197,7 +197,7 @@ for "_i" from 0 to 3 do {
 	};
 
 	if (BMKHS_FORCES_DEBUG) then {
-		private _acc = _heli getVariable ["bmkhs_dbgForces", []];
+		private _acc = _heli getVariable "bmkhs_dbgForces";
 		_acc pushBack [format ["%1 blade %2", ["main","tail"] select (_type == TAIL), _i], _bladeLiftVector vectorAdd _bladeDragVector, _bladeThrustPos vectorDiff _heliCom];
 		_heli setVariable ["bmkhs_dbgForces", _acc];
 	};

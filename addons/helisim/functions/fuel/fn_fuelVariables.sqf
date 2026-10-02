@@ -141,7 +141,6 @@ private _fuelNames = _fuelTanks apply {_x get "varName"};
     _tank set ["requires", _requiresIdx];
 } forEach _auxRefs;
 
-_heli setVariable ["bmkhs_numAuxTanks", _numAuxTanks];
 _heli setVariable ["bmkhs_auxTanks",    _auxTanks];
 
 //FLOW FLAGS. Every path fuel moves along may name a variable that reads true while fuel is

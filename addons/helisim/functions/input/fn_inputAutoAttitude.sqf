@@ -48,7 +48,7 @@ private _wSpeed = linearConversion [AUTOATT_SPD_LO, AUTOATT_SPD_HI, _gndSpeed, 0
 
 //The roll key commands a TARGET, not the stick - held it sweeps to the bank limit,
 //released it returns to level. Lerped so the roll in and out is not a step.
-private _rollSet = _heli getVariable ["bmkhs_autoAttRollTarget", 0.0];
+private _rollSet = _heli getVariable "bmkhs_autoAttRollTarget";
 private _rollWant = 0.0;
 if (_rollKey > 0.0) then {
     _rollWant = _rollLimit * ([-1, 1] select (_cyclicLeftRight < 0.0));

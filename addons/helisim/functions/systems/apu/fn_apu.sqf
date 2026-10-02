@@ -37,14 +37,13 @@ if (_apu isNotEqualTo [] && {(_heli getVariable "bmkhs_numFuelTanks") > 0}) then
 
 //Stopped, or no fuel: the APU drops out and needs a fresh press to restart.
 if (local _heli && {_heli getVariable "bmkhs_apuBtnOn"}
-        && {!(_heli getVariable "bmkhs_apuFuelAvail") || {!_apuOn && {_heli getVariable ["bmkhs_apuOnLast", false]}}}) then {
+        && {!(_heli getVariable "bmkhs_apuFuelAvail") || {!_apuOn && {_heli getVariable "bmkhs_apuOnLast"}}}) then {
     ["apuBtn", 0, _heli] call bmkhs_fnc_controlSet;
 };
 
 //Cockpit indication is the aircraft's business - Core only reports the state, and only
-//when it actually changes. The default here has to be something apuOn can DIFFER from, or
-//the first transition compares equal to itself and the notify never fires at all.
-if (_apuOn isNotEqualTo (_heli getVariable ["bmkhs_apuOnLast", !_apuOn])) then {
+//when it actually changes. Seeded opposite the cold start, so the first frame reports too.
+if (_apuOn isNotEqualTo (_heli getVariable "bmkhs_apuOnLast")) then {
     _heli setVariable ["bmkhs_apuOnLast", _apuOn];
     [_heli, "apuStateChanged"] call bmkhs_fnc_utilNotify;
 };
