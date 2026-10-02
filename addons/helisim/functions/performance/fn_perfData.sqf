@@ -21,9 +21,9 @@ params ["_heli"];
 #include "\bmkhs_helisim\functions\core\core.hpp"
 
 private _config    = configOf _heli >> "BMKHS_HeliSim";
-private _curGWT_kg = _heli getVariable "bmkhs_GWT";
-private _pa        = _heli getVariable "bmkhs_PA";
-private _fat       = _heli getVariable "bmkhs_FAT";
+private _curGWT_kg = _heli getVariable "bmkhs_gwt";
+private _pa        = _heli getVariable "bmkhs_pa";
+private _fat       = _heli getVariable "bmkhs_fat";
 
 private _perfDataUpdatestr  = str  round _curGWT_kg + str _pa + str _fat + str bmkhs_helisimEnvironment;
 private _perfDatacompareStr = _heli getVariable "bmkhs_perfDataChange";
@@ -46,17 +46,17 @@ private _perfTable  = [[    -40, _perfTable0 # 1, _perfTable0 # 2, _perfTable0 #
                        [     40, _perfTable4 # 1, _perfTable4 # 2, _perfTable4 # 3, _perfTable4 # 4, _perfTable4 # 5, _perfTable4 # 6, _perfTable4 # 7, _perfTable4 # 8, _perfTable4 # 9]];
 private _intPerfTable = [_perfTable, _fat] call bmkhs_fnc_mathLinearInterp;
 //Set max TQ CONT/DE/SE
-_heli setVariable ["bmkhs_maxTQ_CONT",   _intPerfTable select 1];
-_heli setVariable ["bmkhs_maxTQ_DE",     _intPerfTable select 2];
-_heli setVariable ["bmkhs_maxTQ_SE",     _intPerfTable select 3];
+_heli setVariable ["bmkhs_maxTq_cont",   _intPerfTable select 1];
+_heli setVariable ["bmkhs_maxTq_de",     _intPerfTable select 2];
+_heli setVariable ["bmkhs_maxTq_se",     _intPerfTable select 3];
 //Set max GWT IGE/OGE
-_heli setVariable ["bmkhs_maxGWT_DE_IGE",   _intPerfTable select 4];
-_heli setVariable ["bmkhs_maxGWT_DE_OGE",   _intPerfTable select 5];
-_heli setVariable ["bmkhs_maxGWT_SE_IGE",   _intPerfTable select 6];
-_heli setVariable ["bmkhs_maxGWT_SE_OGE",   _intPerfTable select 7];
+_heli setVariable ["bmkhs_maxGwt_de_ige",   _intPerfTable select 4];
+_heli setVariable ["bmkhs_maxGwt_de_oge",   _intPerfTable select 5];
+_heli setVariable ["bmkhs_maxGwt_se_ige",   _intPerfTable select 6];
+_heli setVariable ["bmkhs_maxGwt_se_oge",   _intPerfTable select 7];
 //Set go/no-go Torque
-_heli setVariable ["bmkhs_goNoGoTQ_IGE", _intPerfTable select 8];
-_heli setVariable ["bmkhs_goNoGoTQ_OGE", _intPerfTable select 9];
+_heli setVariable ["bmkhs_goNoGoTq_ige", _intPerfTable select 8];
+_heli setVariable ["bmkhs_goNoGoTq_oge", _intPerfTable select 9];
 /////////////////////////////////////////////////////////////////////////////////////////////
 // Hover Data       /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////
@@ -79,8 +79,8 @@ private _intHoverTable = [_hoverTable, _fat] call bmkhs_fnc_mathLinearInterp;
                              [  9525, _intHoverTable # 7, _intHoverTable # 8]];
 private _intHoverTable2 = [_hoverTable_GWT, _curGWT_kg] call bmkhs_fnc_mathLinearInterp;
 //Set hover TQ IGE/OGE
-_heli setVariable ["bmkhs_hvrTQ_IGE", _intHoverTable2 select 1];
-_heli setVariable ["bmkhs_hvrTQ_OGE", _intHoverTable2 select 2];
+_heli setVariable ["bmkhs_hvrTq_ige", _intHoverTable2 select 1];
+_heli setVariable ["bmkhs_hvrTq_oge", _intHoverTable2 select 2];
 /////////////////////////////////////////////////////////////////////////////////////////////
 // Cruise Data      /////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////
@@ -162,13 +162,13 @@ private _TASTable_FAT = [[-40,  _TASTable0 # 1, _TASTable0 # 2, _TASTable0 # 3, 
                          [ 40,  _TASTable4 # 1, _TASTable4 # 2, _TASTable4 # 3, _TASTable4 # 4, _TASTable4 # 5, _TASTable4 # 6]];
 private _TASTable = [_TASTable_FAT, _fat] call bmkhs_fnc_mathLinearInterp;
 //Set TAS variables
-_heli setVariable ["bmkhs_TAS_vne",    _TASTable # 1];
-_heli setVariable ["bmkhs_TAS_vsse",   _TASTable # 2];
+_heli setVariable ["bmkhs_tas_vne",    _TASTable # 1];
+_heli setVariable ["bmkhs_tas_vsse",   _TASTable # 2];
 
-_heli setVariable ["bmkhs_TAS_rngTAS", _TASTable # 3];
-_heli setVariable ["bmkhs_TAS_rngTQ",  _TASTable # 4];
-_heli setVariable ["bmkhs_TAS_rngFF",  ([getArray (_config >> "engFFTable"), _TASTable # 4] call bmkhs_fnc_mathLinearInterp select 1) * (_heli getVariable "bmkhs_numEngines") * 7936.64];
+_heli setVariable ["bmkhs_tas_rngTas", _TASTable # 3];
+_heli setVariable ["bmkhs_tas_rngTq",  _TASTable # 4];
+_heli setVariable ["bmkhs_tas_rngFf",  ([getArray (_config >> "engFFTable"), _TASTable # 4] call bmkhs_fnc_mathLinearInterp select 1) * (_heli getVariable "bmkhs_numEngines") * 7936.64];
 
-_heli setVariable ["bmkhs_TAS_endTAS", _TASTable # 5];
-_heli setVariable ["bmkhs_TAS_endTQ",  _TASTable # 6];
-_heli setVariable ["bmkhs_TAS_endFF",  ([getArray (_config >> "engFFTable"), _TASTable # 6] call bmkhs_fnc_mathLinearInterp select 1) * (_heli getVariable "bmkhs_numEngines") * 7936.64];
+_heli setVariable ["bmkhs_tas_endTas", _TASTable # 5];
+_heli setVariable ["bmkhs_tas_endTq",  _TASTable # 6];
+_heli setVariable ["bmkhs_tas_endFf",  ([getArray (_config >> "engFFTable"), _TASTable # 6] call bmkhs_fnc_mathLinearInterp select 1) * (_heli getVariable "bmkhs_numEngines") * 7936.64];

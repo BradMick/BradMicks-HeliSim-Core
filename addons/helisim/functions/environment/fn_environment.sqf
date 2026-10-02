@@ -57,8 +57,8 @@ private _pressure          = ((_referencePressure / 0.01) * (exp _exp)) * 0.01;
 private _densityAltitude   = (_altitude + ((SEA_LEVEL_PRESSURE - _altimeter) * 1000)) + (120 * (_temperature - (STANDARD_TEMP - ((_altitude / 1000) * 2))));
 private _dryAirDensity     = (_pressure / 0.01) / (287.05 * (_temperature + DEG_C_TO_KELVIN));
 
-_heli setVariable ["bmkhs_PA",  _altitude];
-_heli setVariable ["bmkhs_FAT", _temperature];
+_heli setVariable ["bmkhs_pa",  _altitude];
+_heli setVariable ["bmkhs_fat", _temperature];
 _heli setVariable ["bmkhs_rho", _dryAirDensity];
 
 //Wind world-space velocity vector — direction/speed display is handled in getVelocities

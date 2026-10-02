@@ -77,9 +77,9 @@ private _uVec           = [[0.0, 0.0, 1.0], _p, _r, _y] call bmkhs_fnc_mathVecto
 private _pos     		= _pivot vectorAdd (_uVec vectorMultiply _mastLength);
 private _heliCom 		= getCenterOfMass _heli;
 //Environment
-private _altitude       = _heli getVariable "bmkhs_PA";
-private _temperature    = _heli getVariable "bmkhs_FAT";
-private _dryAirDensity  = _heli getVariable "bmkhs_RHO";
+private _altitude       = _heli getVariable "bmkhs_pa";
+private _temperature    = _heli getVariable "bmkhs_fat";
+private _dryAirDensity  = _heli getVariable "bmkhs_rho";
 
 //Velocity in hub axes
 private _velModel    = _heli getVariable "bmkhs_velModelSpace";
@@ -88,10 +88,10 @@ private _velX        = _velModel vectorDotProduct _rVec;
 private _velY        = _velModel vectorDotProduct _fVec;
 private _velZ        = _velModel vectorDotProduct _uVec;
 private _velXY       = vectorMagnitude [_velX, _velY] min VEL_VNE;
-if ([_velX]  call bmkhs_fnc_mathIsNAN || [_velX]  call bmkhs_fnc_mathIsINF) then { _velX  = 0.0; };
-if ([_velY]  call bmkhs_fnc_mathIsNAN || [_velY]  call bmkhs_fnc_mathIsINF) then { _velY  = 0.0; };
-if ([_velXY] call bmkhs_fnc_mathIsNAN || [_velXY] call bmkhs_fnc_mathIsINF) then { _velXY = 0.0; };
-if ([_velZ]  call bmkhs_fnc_mathIsNAN || [_velZ]  call bmkhs_fnc_mathIsINF) then { _velZ  = 0.0; };
+if ([_velX]  call bmkhs_fnc_mathIsNan || [_velX]  call bmkhs_fnc_mathIsInf) then { _velX  = 0.0; };
+if ([_velY]  call bmkhs_fnc_mathIsNan || [_velY]  call bmkhs_fnc_mathIsInf) then { _velY  = 0.0; };
+if ([_velXY] call bmkhs_fnc_mathIsNan || [_velXY] call bmkhs_fnc_mathIsInf) then { _velXY = 0.0; };
+if ([_velZ]  call bmkhs_fnc_mathIsNan || [_velZ]  call bmkhs_fnc_mathIsInf) then { _velZ  = 0.0; };
 
 //Rpm, and blade geometry/velocity
 private _xmsnRpm        = _heli getVariable "bmkhs_xmsnOutputRpm";

@@ -98,5 +98,5 @@ private _stores = [];
 } forEach ([_config >> "Stores", "Store", getNumber (_config >> "numStores")] call _readClass);
 _heli setVariable ["bmkhs_stores", _stores];
 
-_heli setVariable ["bmkhs_GWT", 0.0];
-_heli setVariable ["bmkhs_CG",  0.0];
+_heli setVariable ["bmkhs_gwt", 0.0];
+_heli setVariable ["bmkhs_cg",  0.0];

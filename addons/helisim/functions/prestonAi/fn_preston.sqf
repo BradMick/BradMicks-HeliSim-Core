@@ -46,9 +46,9 @@ if (!_active) exitWith {
     _heli setVariable ["bmkhs_prestonActive",      false];
     _heli setVariable ["bmkhs_prestonPitchActive", false];
     _heli setVariable ["bmkhs_prestonRollActive",  false];
-    _heli setVariable ["bmkhs_prestonWPos",        0.0];
-    _heli setVariable ["bmkhs_prestonWVel",        0.0];
-    _heli setVariable ["bmkhs_prestonWAtt",        0.0];
+    _heli setVariable ["bmkhs_prestonPosWgt",        0.0];
+    _heli setVariable ["bmkhs_prestonVelWgt",        0.0];
+    _heli setVariable ["bmkhs_prestonAttWgt",        0.0];
 };
 
 _heli setVariable ["bmkhs_prestonActive", true];

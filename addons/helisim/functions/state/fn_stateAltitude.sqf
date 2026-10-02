@@ -20,7 +20,7 @@ Author:
 
 params ["_heli"];
 
-private _barAlt  = _heli getVariable "bmkhs_PA";
+private _barAlt  = _heli getVariable "bmkhs_pa";
 _barAlt = [_barAlt, 0.0, 20000] call bis_fnc_clamp;
 
 //Both in METRES - the flight model works in metres, and a caller that wants feet

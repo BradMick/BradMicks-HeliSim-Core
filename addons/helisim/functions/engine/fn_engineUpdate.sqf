@@ -28,7 +28,7 @@ private _pneuAvail = _heli getVariable ["bmkhs_pneuAvail", true];
 private _engState       = _heli getVariable "bmkhs_engState";
 private _engPwrLvrState = _heli getVariable "bmkhs_engPowerLeverState";
 private _allOff         = (_engState findIf {_x != "OFF"}) < 0;
-private _rtrRPM         = _heli getVariable "bmkhs_rtrRPM";
+private _rtrRPM         = _heli getVariable "bmkhs_rtrRpm";
 
 private _shiftLocked = _heli getVariable "bmkhs_shiftLocked";
 private _useSystems  = _heli getVariable ["bmkhs_useSystems", false];
@@ -200,7 +200,7 @@ if (isMultiplayer && (currentPilot _heli == player || local _heli) && (_heli get
     {
         _heli setVariable [_x, _heli getVariable _x, true];
     } forEach [
-        "bmkhs_apuRPM_pct",
+        "bmkhs_apuRpm_pct",
         "bmkhs_engFuelFlow",
         "bmkhs_engPctNg",
         "bmkhs_engPctNp",

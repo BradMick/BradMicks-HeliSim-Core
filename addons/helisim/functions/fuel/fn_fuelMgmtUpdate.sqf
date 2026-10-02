@@ -56,6 +56,6 @@ if (_targetSec > 0 && _elapsed >= _targetSec) then {
     [_heli, "fuelCheckComplete"] call bmkhs_fnc_utilNotify;
     [_heli, "bmkhs_checkBurnRate", _burnRate] call bmkhs_fnc_utilUpdateNetworkGlobal;
     [_heli, "bmkhs_checkBurnoutZulu", [dayTime + _burnoutHours]        call _fnZulu] call bmkhs_fnc_utilUpdateNetworkGlobal;
-    [_heli, "bmkhs_checkVFRZulu",    [dayTime + _burnoutHours - FUEL_CHECK_VFR_RESERVE_HR] call _fnZulu] call bmkhs_fnc_utilUpdateNetworkGlobal;
-    [_heli, "bmkhs_checkIFRZulu",    [dayTime + _burnoutHours - FUEL_CHECK_IFR_RESERVE_HR] call _fnZulu] call bmkhs_fnc_utilUpdateNetworkGlobal;
+    [_heli, "bmkhs_checkVfrZulu",    [dayTime + _burnoutHours - FUEL_CHECK_VFR_RESERVE_HR] call _fnZulu] call bmkhs_fnc_utilUpdateNetworkGlobal;
+    [_heli, "bmkhs_checkIfrZulu",    [dayTime + _burnoutHours - FUEL_CHECK_IFR_RESERVE_HR] call _fnZulu] call bmkhs_fnc_utilUpdateNetworkGlobal;
 };

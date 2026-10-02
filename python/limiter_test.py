@@ -13,8 +13,8 @@ def scenario(label, limiter, gain=1.0, base_fat=15.0, single=False, coll=1.0):
         c = min(coll, 0.64 + (coll - 0.64) * (a.t - t0) / 2.0)   # 2 s pull
         a.frame(r.DT, coll=c); tr.append((a.t - t0, a.tgt(0), a.ng(0), a.nrFrac(), a.tq(0)))
     pk = max(tr, key=lambda x: x[1]); ngp = max(tr, key=lambda x: x[2]); nrm = min(tr, key=lambda x: x[3]); end = tr[-1]
-    ngLim = min(0.0 + a.H['bmkhs_engines'][0]['ngLimitMax'], a.H['bmkhs_engines'][0]['ngLimitBase'] + a.H['bmkhs_engines'][0]['ngLimitSlope'] * a.H['bmkhs_FAT'])
-    print(f'{label}: FAT {a.H["bmkhs_FAT"]:.0f} C, single {a.H["bmkhs_isSingleEng"]}, Ng limit {ngLim:.3f}')
+    ngLim = min(0.0 + a.H['bmkhs_engines'][0]['ngLimitMax'], a.H['bmkhs_engines'][0]['ngLimitBase'] + a.H['bmkhs_engines'][0]['ngLimitSlope'] * a.H['bmkhs_fat'])
+    print(f'{label}: FAT {a.H["bmkhs_fat"]:.0f} C, single {a.H["bmkhs_isSingleEng"]}, Ng limit {ngLim:.3f}')
     print(f'    TGT peak {pk[1]:.0f} C at {pk[0]:.1f} s, end {end[1]:.0f} C | Ng peak {ngp[2]:.4f}, end {end[2]:.4f} | Nr min {nrm[3]*100:.1f}% end {end[3]*100:.1f}% | torque end {end[4]*100:.0f}%')
 for lim in (False, True):
     tag = 'LIMITER ON ' if lim else 'limiter off'

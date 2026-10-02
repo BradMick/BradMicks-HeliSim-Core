@@ -145,8 +145,8 @@ if (bmkhs_helisimRealismSetting != REALISTIC) then {
 //Update mass
 _heli setMass _curMass;
 
-_heli setVariable ["bmkhs_GWT", _curMass,   true];
-_heli setVariable ["bmkhs_CG",  _curLongCG, true];
+_heli setVariable ["bmkhs_gwt", _curMass,   true];
+_heli setVariable ["bmkhs_cg",  _curLongCG, true];
 
 if (BMKHS_FM_DEBUG) then {
     private _vecX = [5.0, 0.0, 0.0];

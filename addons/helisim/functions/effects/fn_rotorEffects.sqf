@@ -36,7 +36,7 @@ private _velXYNoWind  = vectorMagnitude [_velNoWind select 0, _velNoWind select 
 private _velZ         = _velNoWind select 2;
 private _vel2d        = (_heli getVariable "bmkhs_vel2D") * KNOTS_TO_MPS;
 private _isOnGnd      = [_heli] call bmkhs_fnc_stateOnGround;
-private _inputRPM     = _heli getVariable "bmkhs_rtrRPM";
+private _inputRPM     = _heli getVariable "bmkhs_rtrRpm";
 
 //Camera shake effect for ETL (16 to 24 knots)
 if (_velXYNoWind > 8.23 && _velXYNoWind < 12.35 && !_isOnGnd) then {

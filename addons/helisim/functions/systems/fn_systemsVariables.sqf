@@ -40,7 +40,7 @@ if (!(_heli getVariable ["bmkhs_systemsInitialised", false]) && local _heli) the
     //APU - an aircraft with no systems has no APU to be on, so it reads OFF. Anything
     //that needed it, like an engine start, is not gated on it either.
     _heli setVariable ["bmkhs_apuBtnOn",          false, true];
-    _heli setVariable ["bmkhs_apuRPM_pct",        0.0,   true];
+    _heli setVariable ["bmkhs_apuRpm_pct",        0.0,   true];
     _heli setVariable ["bmkhs_apuOn",             false, true];
     //Bleed air defaults available without systems, so nothing that needs it is blocked.
     _heli setVariable ["bmkhs_pneuAvail",         !_sys, true];

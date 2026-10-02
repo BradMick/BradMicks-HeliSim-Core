@@ -276,7 +276,7 @@ def engine_variables(H, cfg, overrides=None):
     H['bmkhs_engLimFuel'] = [e['fuelFly'] for e in engines]
     H['bmkhs_engMinFuel'] = [0.0 for e in engines]
     H['bmkhs_engClutchSlip'] = [1.0, 1.0]
-    H['bmkhs_engTgt'] = [H['bmkhs_FAT'], H['bmkhs_FAT']]
+    H['bmkhs_engTgt'] = [H['bmkhs_fat'], H['bmkhs_fat']]
     H['bmkhs_engResidualHeat'] = [1.0, 1.0]
     H['bmkhs_engNpRef'] = [-1.0, -1.0]
     H['bmkhs_engPrevLever'] = ['OFF', 'OFF']
@@ -315,8 +315,8 @@ def environment(H):
     exp_ = (-GRAVITY * MOLAR_MASS_OF_AIR * ((altitude - 0) * FEET_TO_METERS)
             / (UNIVERSAL_GAS_CONSTANT * (temperature + DEG_C_TO_KELVIN)))
     pressure = ((refPressure / 0.01) * math.exp(exp_)) * 0.01
-    H['bmkhs_PA'] = altitude
-    H['bmkhs_FAT'] = temperature
+    H['bmkhs_pa'] = altitude
+    H['bmkhs_fat'] = temperature
     H['bmkhs_rho'] = (pressure / 0.01) / (287.05 * (temperature + DEG_C_TO_KELVIN))
 
 
@@ -479,7 +479,7 @@ def turbo_shaft_power_turbine(eng, t45, p45, p2, mDot, running, np_, nrFrac, dt)
 
 def turbo_shaft_engine(H, i, eng):
     dt = H['bmkhs_deltaTime']
-    fat = H['bmkhs_FAT']
+    fat = H['bmkhs_fat']
     p2 = H['bmkhs_rho'] * GT_R_AIR * (fat + DEG_C_TO_KELVIN)
     velY = H['bmkhs_velModelSpace'][1]
 
@@ -933,7 +933,7 @@ def report():
     e = a.H['bmkhs_engines'][0]
     print('=' * 78)
     print('derived: refTq %.1f  idleNg %.4f  fuelIdle %.3f  fuelFly %.3f   rho %.4f  FAT %.0f'
-          % (e['refTq'], e['idleNg'], e['fuelIdle'], e['fuelFly'], a.H['bmkhs_rho'], a.H['bmkhs_FAT']))
+          % (e['refTq'], e['idleNg'], e['fuelIdle'], e['fuelFly'], a.H['bmkhs_rho'], a.H['bmkhs_fat']))
 
     cs = cold_start()
     print('\n-- cold start, engine 1, rotor attached, lever to IDLE at first Ng rise --')
@@ -1397,7 +1397,7 @@ def max_power(pa, fat, single=False, iters=10):
     a = best
     e = a.H['bmkhs_engines'][0]
     tgtLim = e['maxTgtSe'] if a.H['bmkhs_isSingleEng'] else e['maxTgt']
-    ngLim = min(e['ngLimitMax'], e['ngLimitBase'] + e['ngLimitSlope'] * a.H['bmkhs_FAT'])
+    ngLim = min(e['ngLimitMax'], e['ngLimitBase'] + e['ngLimitSlope'] * a.H['bmkhs_fat'])
     tgtGap = (tgtLim - a.tgt()) / GT_TGT_LIMIT_BAND
     ngGap = (ngLim - a.ng()) / GT_NG_LIMIT_BAND
     why = 'TGT' if tgtGap < ngGap else 'Ng'

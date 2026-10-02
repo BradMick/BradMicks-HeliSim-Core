@@ -27,7 +27,7 @@ Author:
 params ["_heli", "_index", "_engine"];
 
 private _deltaTime = _heli getVariable "bmkhs_deltaTime";
-private _fat       = _heli getVariable "bmkhs_FAT";
+private _fat       = _heli getVariable "bmkhs_fat";
 //Ambient pressure, kPa - the inlet the compressor starts from.
 private _p2        = (_heli getVariable "bmkhs_rho") * GT_R_AIR * (_fat + DEG_C_TO_KELVIN);
 private _velY      = (_heli getVariable "bmkhs_velModelSpace") select 1;

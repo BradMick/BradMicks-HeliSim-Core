@@ -48,7 +48,7 @@ if (_outputRpm < 0.0) then {
 //that, BRAKE drags the rotor down over ROTOR_BRAKE_STOP_SEC and LOCK holds it at zero, which
 //is what makes a locked-rotor start work: Nr reads 0 while the engines run and Np is normal.
 private _brakePos  = _heli getVariable ["bmkhs_rotorBrakeVal", 0];
-private _designRpm = _heli getVariable ["bmkhs_engDesignRPM", 20900];
+private _designRpm = _heli getVariable ["bmkhs_engDesignRpm", 20900];
 
 //The brake coming off is the only thing that clears the locked-rotor start latch.
 if (_brakePos == 0) then {

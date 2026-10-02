@@ -62,7 +62,7 @@ if (isAutoHoverOn _heli) then {
 [_heli] call bmkhs_fnc_transmissionUpdate;
 
 //Nr, from the RPM the transmission just published
-[_heli] call bmkhs_fnc_stateRtrRPM;
+[_heli] call bmkhs_fnc_stateRtrRpm;
 
 //Damage - stub, see fn_damageApply
 //[_heli] call bmkhs_fnc_damageApply;
@@ -170,7 +170,7 @@ if (bmkhs_fmDebug && {!bmkhs_sysDebug}) then {
     (getCenterOfMass _heli) select 0 toFixed 3,   //27
     (getCenterOfMass _heli) select 1 toFixed 3,   //28
     (getCenterOfMass _heli) select 2 toFixed 3,   //29
-    ((_heli getVariable "bmkhs_GWT") * 2.20462) toFixed 0,              //30
+    ((_heli getVariable "bmkhs_gwt") * 2.20462) toFixed 0,              //30
     _heli getVariable "bmkhs_attHoldActive",                               //31
     _heli getVariable "bmkhs_attHoldSubMode",                              //32
     _heli getVariable "bmkhs_altHoldActive",                               //33

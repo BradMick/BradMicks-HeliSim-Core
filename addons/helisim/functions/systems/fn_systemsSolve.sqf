@@ -106,7 +106,7 @@ _heli setVariable ["bmkhs_sysWatchedLast", _watched];
 
 //Nr comes from the flight model rather than a component, and it moves constantly, so it
 //is fed in first and wakes the drivetrain when it actually changes.
-private _nr = _heli getVariable "bmkhs_rtrRPM";
+private _nr = _heli getVariable "bmkhs_rtrRpm";
 if (([_heli, "Nr", "rotor", _nr, true] call bmkhs_fnc_systemCircuitFeed)) then {
     ["Nr"] call _dirtyCircuit;
 };

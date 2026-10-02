@@ -1,5 +1,5 @@
 /* ----------------------------------------------------------------------------
-Function: bmkhs_fnc_stateRtrRPM
+Function: bmkhs_fnc_stateRtrRpm
 
 Description:
     Returns the rotor RPM depending on the simulation being used
@@ -20,7 +20,7 @@ params ["_heli"];
 
 
 private _deltaTime = _heli getVariable "bmkhs_deltaTime";
-private _rtrRPM    = _heli getVariable "bmkhs_rtrRPM";
+private _rtrRPM    = _heli getVariable "bmkhs_rtrRpm";
 
 private _mainRtrDamage  = [_heli, "mainRotor"] call bmkhs_fnc_damageGet;
 if (_mainRtrDamage == 1.0) then {
@@ -34,8 +34,8 @@ if (_mainRtrDamage == 1.0) then {
     //} else {
     //    _rtrRPM = _e1Np max _e2Np;
     //};
-    _rtrRPM = (_heli getVariable "bmkhs_xmsnOutputRpm") / (_heli getVariable "bmkhs_engDesignRPM");
+    _rtrRPM = (_heli getVariable "bmkhs_xmsnOutputRpm") / (_heli getVariable "bmkhs_engDesignRpm");
 };
-_heli setVariable ["bmkhs_rtrRPM", _rtrRPM];
+_heli setVariable ["bmkhs_rtrRpm", _rtrRPM];
 
 _rtrRPM;

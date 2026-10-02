@@ -170,7 +170,7 @@ if(isMultiplayer) then {
 
 //The shaft reference the transmission and Nr read.
 if (_numEngines > 0) then {
-    _heli setVariable ["bmkhs_engDesignRPM", (_engines # 0) get "designRpm"];
+    _heli setVariable ["bmkhs_engDesignRpm", (_engines # 0) get "designRpm"];
 };
 
 //Governor PID - one per engine, from that engine's own gains.
@@ -219,7 +219,7 @@ _heli setVariable ["bmkhs_engPctNp",              +_zeros];
 _heli setVariable ["bmkhs_engClutch",             _engines apply {false}];
 _heli setVariable ["bmkhs_engPctTq",              +_zeros];
 //TGT is state, so it starts at ambient.
-_heli setVariable ["bmkhs_engTgt",                _engines apply {_heli getVariable "bmkhs_FAT"}];
+_heli setVariable ["bmkhs_engTgt",                _engines apply {_heli getVariable "bmkhs_fat"}];
 _heli setVariable ["bmkhs_engOilPsi",             +_zeros];
 _heli setVariable ["bmkhs_engOutputTq",           +_zeros];
 //Latched on the OFF -> IDLE/FLY transition; 1.0 is a purged hot section.

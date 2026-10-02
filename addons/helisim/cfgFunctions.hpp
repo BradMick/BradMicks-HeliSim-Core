@@ -117,7 +117,7 @@ class CfgFunctions
             class fmcSetChannel {R;};
             class fmcHeadingHold {R;};
             class fmcHoldModesDisable {R;};
-            class fmcSAS {R;};
+            class fmcSas {R;};
             class fmcVariables {R;};
         };
         class prestonAi {
@@ -177,8 +177,8 @@ class CfgFunctions
             file = "\bmkhs_helisim\functions\math";
             class mathBuildInterpGrid {R;};
             class mathGetArea {R;};
-            class mathIsINF {R;};
-            class mathIsNAN {R;};
+            class mathIsInf {R;};
+            class mathIsNan {R;};
             class mathLinearInterp {R;};
             class mathLinearInterp2D {R;};
             class mathLinearInterpFromCenter {R;};
@@ -254,7 +254,7 @@ class CfgFunctions
             class stateVariables {R;};
             class stateDeltaTime {R;};
             class stateAltitude {R;};
-            class stateRtrRPM {R;};
+            class stateRtrRpm {R;};
             class stateVelocities {R;};
             class stateOnGround {R;};
         };

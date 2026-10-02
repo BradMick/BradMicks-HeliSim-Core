@@ -41,6 +41,6 @@ private _reqEngTorque = if (_gearRatio > 0.0) then { _rotorTorque / _gearRatio }
 private _tqSmoothed = (_heli getVariable "bmkhs_reqEngTorque") select _rotorIndex;
 private _tqAlpha    = 1.0 - (exp (-_deltaTime / _torqueTau));
 _tqSmoothed         = _tqSmoothed + ((_reqEngTorque - _tqSmoothed) * _tqAlpha);
-if ([_tqSmoothed] call bmkhs_fnc_mathIsNAN || [_tqSmoothed] call bmkhs_fnc_mathIsINF) then { _tqSmoothed = 0.0; };
+if ([_tqSmoothed] call bmkhs_fnc_mathIsNan || [_tqSmoothed] call bmkhs_fnc_mathIsInf) then { _tqSmoothed = 0.0; };
 
 [_heli, "bmkhs_reqEngTorque", _rotorIndex, _tqSmoothed, true] call bmkhs_fnc_utilSetArrayVariable;

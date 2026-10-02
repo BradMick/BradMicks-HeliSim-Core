@@ -249,8 +249,8 @@ _heli setVariable ["bmkhs_checkActiveCpg", false];
 _heli setVariable ["bmkhs_checkPendingAdvisory", false];
 _heli setVariable ["bmkhs_checkStartZulu",   ""];
 _heli setVariable ["bmkhs_checkBurnoutZulu", ""];
-_heli setVariable ["bmkhs_checkVFRZulu",     ""];
-_heli setVariable ["bmkhs_checkIFRZulu",     ""];
+_heli setVariable ["bmkhs_checkVfrZulu",     ""];
+_heli setVariable ["bmkhs_checkIfrZulu",     ""];
 
 // CHECK computed display values (lb/hr, seconds elapsed)
 _heli setVariable ["bmkhs_checkElapsedSec", 0];

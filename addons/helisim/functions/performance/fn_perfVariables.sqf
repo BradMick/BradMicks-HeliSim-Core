@@ -20,28 +20,28 @@ params ["_heli"];
 
 _heli setVariable ["bmkhs_perfDataChange",  ""];
 
-_heli setVariable ["bmkhs_maxTQ_CONT",    0.0];
-_heli setVariable ["bmkhs_maxTQ_DE",      0.0];
-_heli setVariable ["bmkhs_maxTQ_SE",      0.0];
+_heli setVariable ["bmkhs_maxTq_cont",    0.0];
+_heli setVariable ["bmkhs_maxTq_de",      0.0];
+_heli setVariable ["bmkhs_maxTq_se",      0.0];
 
-_heli setVariable ["bmkhs_maxGWT_DE_IGE", 0.0];
-_heli setVariable ["bmkhs_maxGWT_DE_OGE", 0.0];
-_heli setVariable ["bmkhs_maxGWT_SE_IGE", 0.0];
-_heli setVariable ["bmkhs_maxGWT_SE_OGE", 0.0];
+_heli setVariable ["bmkhs_maxGwt_de_ige", 0.0];
+_heli setVariable ["bmkhs_maxGwt_de_oge", 0.0];
+_heli setVariable ["bmkhs_maxGwt_se_ige", 0.0];
+_heli setVariable ["bmkhs_maxGwt_se_oge", 0.0];
 
-_heli setVariable ["bmkhs_goNoGoTQ_IGE",  0.0];
-_heli setVariable ["bmkhs_goNoGoTQ_OGE",  0.0];
+_heli setVariable ["bmkhs_goNoGoTq_ige",  0.0];
+_heli setVariable ["bmkhs_goNoGoTq_oge",  0.0];
 
-_heli setVariable ["bmkhs_hvrTQ_IGE",     0.0];
-_heli setVariable ["bmkhs_hvrTQ_OGE",     0.0];
+_heli setVariable ["bmkhs_hvrTq_ige",     0.0];
+_heli setVariable ["bmkhs_hvrTq_oge",     0.0];
 
-_heli setVariable ["bmkhs_TAS_vne",       0.0];
-_heli setVariable ["bmkhs_TAS_vsse",      0.0];
+_heli setVariable ["bmkhs_tas_vne",       0.0];
+_heli setVariable ["bmkhs_tas_vsse",      0.0];
 
-_heli setVariable ["bmkhs_TAS_rngTAS",    0.0];
-_heli setVariable ["bmkhs_TAS_rngTQ",     0.0];
-_heli setVariable ["bmkhs_TAS_rngFF",     0.0];
+_heli setVariable ["bmkhs_tas_rngTas",    0.0];
+_heli setVariable ["bmkhs_tas_rngTq",     0.0];
+_heli setVariable ["bmkhs_tas_rngFf",     0.0];
 
-_heli setVariable ["bmkhs_TAS_endTAS",    0.0];
-_heli setVariable ["bmkhs_TAS_endTQ",     0.0];
-_heli setVariable ["bmkhs_TAS_endFF",     0.0];
+_heli setVariable ["bmkhs_tas_endTas",    0.0];
+_heli setVariable ["bmkhs_tas_endTq",     0.0];
+_heli setVariable ["bmkhs_tas_endFf",     0.0];

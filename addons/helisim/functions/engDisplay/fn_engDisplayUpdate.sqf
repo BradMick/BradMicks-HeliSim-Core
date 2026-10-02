@@ -53,7 +53,7 @@ private _oil = _heli getVariable "bmkhs_engOilPsi";
 private _n = _heli getVariable "bmkhs_numEngines";
 _n = (_n min ED_MAX_ENG) max 1;
 
-private _nr = _heli getVariable "bmkhs_rtrRPM";
+private _nr = _heli getVariable "bmkhs_rtrRpm";
 (_heli getVariable "bmkhs_nrLimits") params ["_nrLow", "_nrHigh", "_nrHighRtr", "_nrMax"];
 
 private _engines = _heli getVariable "bmkhs_engines";
