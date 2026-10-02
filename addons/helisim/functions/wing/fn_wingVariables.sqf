@@ -63,3 +63,7 @@ for "_i" from 1 to _numWings do {
 
 _heli setVariable ["bmkhs_numWings", _numWings];
 _heli setVariable ["bmkhs_wings",    _wings];
+
+if (local _heli) then {
+    _heli setVariable ["bmkhs_stabilatorPosition", 0.0, true];
+};

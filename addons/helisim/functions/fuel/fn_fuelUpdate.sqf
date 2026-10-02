@@ -5,7 +5,6 @@ Description:
     Runs the fuel system for one frame and publishes the results.
 
     The work itself is split by concern:
-      fuelDraw         engine and APU consumption out of the mains
       fuelTransfer     XFER pump between mains, transfer cells feeding them
       fuelTransferAux  auxiliary tanks feeding the internal tanks
       fuelLeak         damaged tanks draining
@@ -84,9 +83,6 @@ private _auxArmed = false;
     };
 } forEach _auxTanks;
 
-([_heli, _fuelMass, _mains, _deltaTime] call bmkhs_fnc_fuelDraw)
-    params ["_eng1FuelAvail", "_eng2FuelAvail", "_apuFuelAvail"];
-
 //Every declared flow flag starts the frame false; whatever moved fuel marks its own.
 private _flowing = createHashMap;
 { _flowing set [_x, false] } forEach (_heli getVariable ["bmkhs_fuelFlowVars", []]);
@@ -100,29 +96,6 @@ private _auxPresent = [_heli, _fuelMass, _fuelMax, _auxMass, _auxTanks, _groupOn
 //Clamp every tank to its capacity.
 { _fuelMass set [_forEachIndex, 0 max _x min (_fuelMax param [_forEachIndex, 0])] } forEach _fuelMass;
 { _auxMass  set [_forEachIndex, 0 max _x min (_auxMax  param [_forEachIndex, 0])] } forEach _auxMass;
-
-//Starvation gets a grace period so a brief interruption does not cut an engine.
-{
-    _x params ["_avail", "_var", "_sinceVar"];
-    private _since = _heli getVariable [_sinceVar, -1];
-    private _out   = _avail;
-    if (!_avail) then {
-        if (_since < 0) then {
-            _since = CBA_missionTime;
-            _heli setVariable [_sinceVar, _since];
-        };
-        _out = (CBA_missionTime - _since) < FUEL_STARVE_GRACE_SEC;
-    } else {
-        _heli setVariable [_sinceVar, -1];
-    };
-    [_heli, _var, _out] call bmkhs_fnc_utilUpdateNetworkGlobal;
-} forEach [
-    [_eng1FuelAvail, "bmkhs_eng1FuelAvail", "bmkhs_eng1StarvedSince"],
-    [_eng2FuelAvail, "bmkhs_eng2FuelAvail", "bmkhs_eng2StarvedSince"]
-];
-
-//The APU gets no grace period - it cuts as soon as its tank is dry.
-[_heli, "bmkhs_apuFuelAvail", _apuFuelAvail] call bmkhs_fnc_utilUpdateNetworkGlobal;
 
 //Crew stations read these, so they are networked - and change-gated, so a flag only sends
 //when it flips.

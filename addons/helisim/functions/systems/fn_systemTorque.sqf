@@ -7,9 +7,9 @@ Description:
     the aircraft's, since a gearbox is rated for what it is rated for, and
     accruing damage past one is Core's.
 
-    Limits are declared worst-first as {torque, seconds}: how much it will take
-    and how long before that starts costing it. A zero duration damages
-    immediately.
+    Limits are declared low to high as {torque, seconds, divisor}: how much it
+    will take and how long before that starts costing it. A zero duration
+    damages immediately.
 
     A component already damaged degrades further on its own, faster the worse
     it is, which is what makes an overtorqued gearbox a problem that grows
@@ -35,15 +35,29 @@ if !(local _heli) exitWith {};
 private _torqued = _heli getVariable ["bmkhs_sysTorqued", []];
 if (_torqued isEqualTo []) exitWith {};
 
+private _engines  = _heli getVariable "bmkhs_engines";
+private _tqTimers = _engines apply {-1};
+private _driveDmg = _engines apply {0};
+
 {
     private _comp    = _x;
     private _role    = _x get "damageRole";
     private _index   = _x get "index";
-    //Single-engine ratings where the aircraft declares them, since one engine doing the
-    //work of two is a different case from both sharing it.
-    private _limits  = _x get "tqLimits";
-    private _seLimits = _x get "tqLimitsSE";
-    if (_seLimits isNotEqualTo [] && {_heli getVariable ["bmkhs_isSingleEng", false]}) then {
+
+    //The engine's limits - times the engine count where the component carries them all,
+    //except single engine, when one engine carries the sum.
+    private _fromEngine = {
+        params ["_key", "_single"];
+        if (_key == "") exitWith {[]};
+        if (_comp get "torqueSum") exitWith {
+            private _n = [count _engines, 1] select _single;
+            ((_engines select 0) get _key) apply {[(_x select 0) * _n, _x select 1, (_x param [2, 0]) * _n]}
+        };
+        (_engines select (_index min ((count _engines) - 1))) get _key
+    };
+    private _limits   = [_comp get "tqLimitsFrom", false] call _fromEngine;
+    private _seLimits = [_comp get "tqLimitsSeFrom", true] call _fromEngine;
+    if (_seLimits isNotEqualTo [] && {_heli getVariable "bmkhs_isSingleEng"}) then {
         _limits = _seLimits;
     };
 
@@ -86,16 +100,18 @@ if (_torqued isEqualTo []) exitWith {};
     //it leaves. Time spent higher up does not count toward a lower tier's grace, and a
     //brief excursion is not cumulative. Any tier whose clock has expired arms the damage.
     private _armed = false;
+    private _band  = -1;
     {
         _x params ["_limit", "_seconds"];
-        //Worst first, so a tier's ceiling is the limit above it; the top tier has none.
-        private _ceiling = if (_forEachIndex == 0) then {1e10}
-                                             else {(_limits select (_forEachIndex - 1)) select 0};
+        //Low to high, so a tier's ceiling is the next tier's limit; the top tier has none.
+        private _ceiling = if (_forEachIndex == ((count _limits) - 1)) then {1e10}
+                                             else {(_limits select (_forEachIndex + 1)) select 0};
         private _timerVar = format ["bmkhs_tqTimer_%1%2_%3", _role, _index, _forEachIndex];
 
         if (_running && {_tq > _limit} && {_tq <= _ceiling}) then {
             if (_seconds <= 0) then {
                 _armed = true;                     //no grace at all above this
+                _band  = 0;
             } else {
                 private _held = (_heli getVariable [_timerVar, 0]) + _deltaTime;
                 if (_held >= _seconds) then {
@@ -103,15 +119,24 @@ if (_torqued isEqualTo []) exitWith {};
                     _armed = true;
                 };
                 _heli setVariable [_timerVar, _held];
+                _band = _seconds - _held;
             };
         } else {
             _heli setVariable [_timerVar, 0];
         };
     } forEach _limits;
 
+    //The countdown each engine shows - the soonest of the parts its torque loads.
+    if (_band >= 0) then {
+        {
+            if ((_comp get "torqueSum") || {_forEachIndex == _index}) then {
+                _tqTimers set [_forEachIndex, [_band, _band min _x] select (_x >= 0)];
+            };
+        } forEach +_tqTimers;
+    };
+
     //Rate scales with HOW FAR past each limit it is, and the tiers stack - pulled harder,
-    //it comes apart faster. Each tier declares its own divisor; the deeper ones bite less
-    //per unit because they are already being counted by the tiers beneath them.
+    //it comes apart faster.
     if (_armed) then {
         {
             _x params ["_limit", "_seconds", ["_divisor", 0]];
@@ -121,9 +146,8 @@ if (_torqued isEqualTo []) exitWith {};
         } forEach _limits;
     };
 
-    //Damage feeds itself: the worse it is, the faster it worsens. The bands REPLACE each
-    //other rather than stacking, so the rate is the one band it is in.
-    if (_damage > 0.25) then {
+    //Damage feeds itself while turning - the bands REPLACE each other rather than stacking.
+    if (_running && {_damage > 0.25}) then {
         private _persistent = _damage / 600.0;
         if (_damage > 0.50) then { _persistent = _damage / 500.0 };
         if (_damage > 0.75) then { _persistent = _damage / 400.0 };
@@ -139,12 +163,13 @@ if (_torqued isEqualTo []) exitWith {};
         };
     };
 
-    //A damaged drive makes the torque needle wander, scaled by how bad it is. The
-    //component publishes its OWN, under its own variable, and whatever reads torque asks
-    //Core for the total - no shared array with a layout baked into it.
+    //The worst damage among the slipping parts each engine loads.
     if (_comp get "jitters") then {
-        _heli setVariable [(_comp get "varName") + "TqJitter",
-            if (_damage > 0.25) then {_damage * (random [-0.10, 0, 0.10])} else {0}];
+        {
+            if ((_comp get "torqueSum") || {_forEachIndex == _index}) then {
+                _driveDmg set [_forEachIndex, _x max _damage];
+            };
+        } forEach +_driveDmg;
     };
 
     //What a destroyed component takes with it. An entry naming a damage role destroys that
@@ -165,3 +190,47 @@ if (_torqued isEqualTo []) exitWith {};
         };
     } forEach (_comp get "breaksVar");
 } forEach _torqued;
+
+_heli setVariable ["bmkhs_engTqTimer", _tqTimers];
+
+//A damaged drive slips like a failing clutch - each engine on its own, the torque it passes
+//dropping and grabbing again, more often the worse the damage.
+{
+    private _i      = _forEachIndex;
+    private _slip   = 1.0;
+    private _t      = (_heli getVariable "bmkhs_engSlipT") select _i;
+    if (isEngineOn _heli && {_x > 0.25}) then {
+        if (_t < 0) then {
+            private _wait = ((_heli getVariable "bmkhs_engSlipWait") select _i) - _deltaTime;
+            if (_wait <= 0) then {
+                _t = 0;
+                [_heli, "bmkhs_engSlipDepth", _i, _x * SYS_SLIP_DEPTH * (0.5 + random 0.5)] call bmkhs_fnc_utilSetArrayVariable;
+                _wait = (linearConversion [0.25, 1.0, _x, SYS_SLIP_WAIT_LOW_DMG, SYS_SLIP_WAIT_HIGH_DMG, true])
+                      * (0.8 + random 0.4);
+            };
+            [_heli, "bmkhs_engSlipWait", _i, _wait] call bmkhs_fnc_utilSetArrayVariable;
+        } else {
+            _t = _t + _deltaTime;
+        };
+        if (_t >= 0) then {
+            private _d = (_heli getVariable "bmkhs_engSlipDepth") select _i;
+            if (_t < SYS_SLIP_DROP_SEC) then {
+                _slip = 1.0 - (_d * (_t / SYS_SLIP_DROP_SEC));
+            } else {
+                if (_t < SYS_SLIP_GRAB_SEC) then {
+                    _slip = 1.0 + linearConversion [SYS_SLIP_DROP_SEC, SYS_SLIP_GRAB_SEC, _t, -_d, _d * SYS_SLIP_OVERSHOOT];
+                } else {
+                    if (_t < SYS_SLIP_END_SEC) then {
+                        _slip = 1.0 + linearConversion [SYS_SLIP_GRAB_SEC, SYS_SLIP_END_SEC, _t, _d * SYS_SLIP_OVERSHOOT, 0];
+                    } else {
+                        _t = -1;
+                    };
+                };
+            };
+        };
+    } else {
+        _t = -1;
+    };
+    [_heli, "bmkhs_engSlipT", _i, _t] call bmkhs_fnc_utilSetArrayVariable;
+    [_heli, "bmkhs_engClutchSlip", _i, _slip] call bmkhs_fnc_utilSetArrayVariable;
+} forEach _driveDmg;

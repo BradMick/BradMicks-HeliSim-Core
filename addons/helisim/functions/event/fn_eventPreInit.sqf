@@ -183,6 +183,15 @@
 ] call CBA_fnc_addSetting;
 
 [
+    "bmkhs_engDisplay",
+    "CHECKBOX",
+    ["Enable Engine Display", "Engine readout - torque, Np, Nr, TGT, Ng, oil and the active rating. Always shown on an aircraft without a systems model; this adds it to one that has its own cockpit display, so the two can be compared."],
+    [BMKHS_SETTINGS_CATEGORY, "Testing"],
+    [false],
+    2
+] call CBA_fnc_addSetting;
+
+[
     "bmkhs_forcesDebug",
     "CHECKBOX",
     ["Enable Forces Readout", "Window listing every force the model applies each frame - what each rotor, panel and surface produces, and where it acts relative to the centre of mass. Needs FM Debugging on, which is what makes the contributors publish."],
@@ -242,6 +251,7 @@
 
 bmkhs_keyboardCollective         = true;
 bmkhs_keyboardCollectivePrevious = true;
+bmkhs_lastFrameGetIn             = false;
 
 //private _nonAnalogEvents = ["Activate", "Deactivate"];
 //

@@ -18,14 +18,7 @@ Author:
 ---------------------------------------------------------------------------- */
 params ["_heli"];
 
-//The frame handler keeps firing while the game is paused, and coreUpdate exits without
-//advancing the clock - so anything integrating here would spend the whole pause running on
-//the last live frame's delta.
-if (isGamePaused || CBA_missionTime < 0.1) exitWith {};
-//Per aircraft. BIS_fnc_deltaTime keys on a STRING, so a shared key gives the first
-//aircraft the whole frame and every other one nearly zero - with more than one aircraft
-//in the mission, nothing after the first would integrate at all.
-private _deltaTime = _heli getVariable ["bmkhs_deltaTime", 0];
+private _deltaTime = _heli getVariable "bmkhs_deltaTime";
 
 //The component graph - whatever this airframe declared. Hydraulics live here now,
 //as producers and storage rather than as functions Core wrote for them.
@@ -43,4 +36,4 @@ private _deltaTime = _heli getVariable ["bmkhs_deltaTime", 0];
 //exited if this aircraft models no systems.
 if !(_heli getVariable ["bmkhs_useSystems", false]) exitWith {};
 
-[_heli] call bmkhs_fnc_apu;
+[_heli, _deltaTime] call bmkhs_fnc_apu;

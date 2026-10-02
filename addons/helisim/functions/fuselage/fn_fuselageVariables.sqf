@@ -41,5 +41,4 @@ for "_i" from 1 to _numPanelSets do {
 _heli setVariable ["bmkhs_fuselagePosition",     getArray (_config >> "fuselagePosition")];
 _heli setVariable ["bmkhs_fuselageRotation",     getArray (_config >> "fuselageRotation")];
 _heli setVariable ["bmkhs_fuselageAirfoil",      getText  (_config >> "fuselageAirfoil")];
-_heli setVariable ["bmkhs_numFuselagePanels",    _numPanelSets];
 _heli setVariable ["bmkhs_fuselagePanels",       _panelSets];

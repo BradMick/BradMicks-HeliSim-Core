@@ -27,7 +27,7 @@ Author:
 ---------------------------------------------------------------------------- */
 params ["_heli"];
 
-if !(_heli getVariable ["bmkhs_repairPending", false]) exitWith {};
+if !(_heli getVariable "bmkhs_repairPending") exitWith {};
 _heli setVariable ["bmkhs_repairPending", false];
 
 //Stores come back full - fluid and charge are what a repair replaces. A store with no
@@ -54,11 +54,17 @@ _heli setVariable ["bmkhs_repairPending", false];
     };
 } forEach ((_heli getVariable ["bmkhs_sysProducers", []]) + (_heli getVariable ["bmkhs_sysConverters", []]));
 
-//Engines are not components, and their overspeed latch is what a repair clears.
-private _engines = [_heli, "engines"] call bmkhs_fnc_damageCount;
+//Engines are not components - a repair clears their latches.
+private _engines = _heli getVariable ["bmkhs_numEngines", 0];
 for "_i" from 0 to (_engines - 1) do {
     if (([_heli, "engines", _i] call bmkhs_fnc_damageGet) == 0) then {
-        [_heli, "bmkhs_engineOverspeed", _i, false, true] call bmkhs_fnc_utilSetArrayVariable;
+        [_heli, "bmkhs_engineOverspeed",  _i, false, true] call bmkhs_fnc_utilSetArrayVariable;
+        [_heli, "bmkhs_engChips",         _i, false, true] call bmkhs_fnc_utilSetArrayVariable;
+        [_heli, "bmkhs_engFailed",        _i, false, true] call bmkhs_fnc_utilSetArrayVariable;
+        [_heli, "bmkhs_lowOilPsiFailure", _i, false, true] call bmkhs_fnc_utilSetArrayVariable;
+        [_heli, "bmkhs_engOilPsiLow",     _i, false, true] call bmkhs_fnc_utilSetArrayVariable;
+        [_heli, "bmkhs_engOilHealth",     _i, 1.0] call bmkhs_fnc_utilSetArrayVariable;
+        if ((_heli getVariable "bmkhs_engFailureResult") == _i) then { _heli setVariable ["bmkhs_engFailureResult", -1] };
         [_heli, "engines", 0.000001, _i] call bmkhs_fnc_damageSet;
     };
 };

@@ -21,6 +21,7 @@ Author:
     BradMick
 ---------------------------------------------------------------------------- */
 params ["_heli", "_config"];
+#include "\bmkhs_helisim\functions\core\core.hpp"
 #include "\bmkhs_helisim\functions\systems\systems.hpp"
 
 //Field reference and the networking rules: \bmkhs_helisim\components.hpp
@@ -47,14 +48,17 @@ params ["_heli", "_config"];
     ["stateVar",     getText   (cfg >> "stateName")], \
     ["stateAbove",   getNumber (cfg >> "stateAbove")], \
     ["torqueFrom",   getText   (cfg >> "torqueFrom")], \
-    ["tqLimits",     getArray  (cfg >> "tqLimits")], \
+    ["tqLimitsFrom", getText   (cfg >> "tqLimitsFrom")], \
     ["breaksVar",    if (isArray (cfg >> "breaksOnFailure")) \
                         then {getArray (cfg >> "breaksOnFailure")} \
                         else {[getText (cfg >> "breaksOnFailure")] select {_x != ""}}], \
-    ["tqLimitsSE",   getArray  (cfg >> "tqLimitsSE")], \
+    ["tqLimitsSeFrom", getText (cfg >> "tqLimitsSeFrom")], \
     ["torqueSum",    getNumber (cfg >> "torqueSum") > 0], \
     ["jitters",      getNumber (cfg >> "jittersTorque") > 0], \
-    ["damages",      getArray  (cfg >> "damagesHitpoints")] \
+    ["damages",      getArray  (cfg >> "damagesHitpoints")], \
+    ["fuelSource",   getText   (cfg >> "fuelSource")], \
+    ["fuelTank",     ""], \
+    ["fuelFlow",     (getNumber (cfg >> "fuelFlow")) / KG_TO_LBS / 3600] \
 ]
 
 private _circuits = createHashMap;
@@ -199,21 +203,15 @@ private _consumers = [];
     { _circuits set [_x select 0, 0] } forEach (_c get "circuits");
 } forEach ("true" configClasses (_config >> "Consumers"));
 
-//Anything with torque limits, gathered from every kind - a gearbox is a converter and
-//the transmission is a producer, but both are rated for a torque.
-//Either set counts - a component rated only for the single-engine case declares just
-//tqLimitsSE, which is a nose gearbox: it carries enough to hurt it only when one engine
-//is doing the work of two.
+//Anything rated for a torque - the limits are the engines', looked up when used.
 private _torqued = (_producers + _converters + _storage)
-                        select {(count (_x get "tqLimits")) > 0 || {(count (_x get "tqLimitsSE")) > 0}};
+                        select {(_x get "tqLimitsFrom") != "" || {(_x get "tqLimitsSeFrom") != ""}};
 
-//An airframe that models no systems still has a drivetrain, and it does not get to ignore
-//what that is rated for. The top-level limits are for THAT CASE ONLY - with systems on, a
-//component carries its own ratings and these are not read at all.
+//No systems modelled - the drivetrain is still rated.
 if !(_heli getVariable ["bmkhs_useSystems", false]) then {
     _torqued = [];
     {
-        _x params ["_role", "_torqueVar", "_sums", "_limits", "_limitsSE", "_breaks"];
+        _x params ["_role", "_torqueVar", "_sums", "_limitsFrom", "_limitsSeFrom", "_breaks"];
         private _count = [_heli, _role] call bmkhs_fnc_damageCount;
         for "_i" from 0 to ((_count max 1) - 1) do {
             _torqued pushBack (createHashMapFromArray [
@@ -223,8 +221,8 @@ if !(_heli getVariable ["bmkhs_useSystems", false]) then {
                 ["jitters",    false],
                 ["torqueFrom", _torqueVar],
                 ["torqueSum",  _sums],
-                ["tqLimits",   _limits],
-                ["tqLimitsSE", _limitsSE],
+                ["tqLimitsFrom",   _limitsFrom],
+                ["tqLimitsSeFrom", _limitsSeFrom],
                 ["breaksVar",  _breaks],
                 //With no systems modelled the damage lands on the rotors themselves -
                 //Arma's own hitpoints, which every helicopter has - rather than on
@@ -235,16 +233,8 @@ if !(_heli getVariable ["bmkhs_useSystems", false]) then {
     } forEach [
         //The transmission carries both engines summed, and has no single-engine case -
         //one engine can never overtorque what is rated for two.
-        ["transmission",  "bmkhs_engPctTQ", true,  getArray (_config >> "xmsnTqLimits"),
-                          [], []],
-        //A nose gearbox carries its own engine, which is only enough to hurt it when that
-        //engine is doing the work of two - so it is rated single-engine and no other way.
-        //Nothing breaks anything else here: there are no systems to fail.
-        ["noseGearboxes", "bmkhs_engPctTQ", false, [],
-                          getArray (_config >> "ngbTqLimitsSE"), []]
+        ["transmission",  "bmkhs_engPctTq", true, "tqLimits", "tqLimitsSe", []]
     ];
-    //Only the ones the aircraft actually gave limits for.
-    _torqued = _torqued select {(count (_x get "tqLimits")) > 0 || {(count (_x get "tqLimitsSE")) > 0}};
 };
 _heli setVariable ["bmkhs_sysTorqued", _torqued];
 

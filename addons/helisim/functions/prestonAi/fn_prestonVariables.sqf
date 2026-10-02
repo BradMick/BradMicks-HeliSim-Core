@@ -68,6 +68,17 @@ _heli setVariable ["bmkhs_prestonLearnedIntX",    0.0];
 _heli setVariable ["bmkhs_prestonLearnedIntY",    0.5500];
 
 //Live regime weights - POS (hover) / VEL (transition) / ATT (cruise). Published for the readouts.
-_heli setVariable ["bmkhs_prestonWPos",           0.0];
-_heli setVariable ["bmkhs_prestonWVel",           0.0];
-_heli setVariable ["bmkhs_prestonWAtt",           0.0];
+_heli setVariable ["bmkhs_prestonPosWgt",           0.0];
+_heli setVariable ["bmkhs_prestonVelWgt",           0.0];
+_heli setVariable ["bmkhs_prestonAttWgt",           0.0];
+
+_heli setVariable ["bmkhs_prestonActive",         false];
+//Hover loop readouts.
+_heli setVariable ["bmkhs_dbgHovIntP",            0.0];
+_heli setVariable ["bmkhs_dbgHovIntR",            0.0];
+_heli setVariable ["bmkhs_dbgHovOutP",            0.0];
+_heli setVariable ["bmkhs_dbgHovOutR",            0.0];
+_heli setVariable ["bmkhs_dbgHovSetX",            0.0];
+_heli setVariable ["bmkhs_dbgHovSetY",            0.0];
+_heli setVariable ["bmkhs_dbgHovVelX",            0.0];
+_heli setVariable ["bmkhs_dbgHovVelY",            0.0];

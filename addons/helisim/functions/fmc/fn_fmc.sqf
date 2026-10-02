@@ -15,7 +15,7 @@ private _altHoldCollOut     = [_heli] call bmkhs_fnc_fmcAltitudeHold;
 //Heading Hold
 private _hdgHoldPedalYawOut = [_heli] call bmkhs_fnc_fmcHeadingHold;
 //Stability Augmentation System (SAS)
-([_heli] call bmkhs_fnc_fmcSAS)
+([_heli] call bmkhs_fnc_fmcSas)
     params ["_SASPitchOutput", "_SASRollOutput", "_SASYawOutput"];
 
 if (bmkhs_springlessPedals || bmkhs_autoPedal) then {

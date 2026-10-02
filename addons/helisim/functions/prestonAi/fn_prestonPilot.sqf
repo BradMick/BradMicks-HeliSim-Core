@@ -68,9 +68,9 @@ if (_active) then {
     _wAtt = (1.0 - _wPos) * (_wFast min _wHigh);
     _wVel = 1.0 - _wPos - _wAtt;
 
-    _heli setVariable ["bmkhs_prestonWPos", _wPos];
-    _heli setVariable ["bmkhs_prestonWVel", _wVel];
-    _heli setVariable ["bmkhs_prestonWAtt", _wAtt];
+    _heli setVariable ["bmkhs_prestonPosWgt", _wPos];
+    _heli setVariable ["bmkhs_prestonVelWgt", _wVel];
+    _heli setVariable ["bmkhs_prestonAttWgt", _wAtt];
 };
 
 if (_active) then {

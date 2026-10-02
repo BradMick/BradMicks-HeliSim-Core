@@ -51,9 +51,14 @@ class CfgFunctions
             class coreUpdate  {R;};
             class coreUpdateFlightModel {R;};
         };
+        class engDisplay {
+            file = "\bmkhs_helisim\functions\engDisplay";
+            class engDisplayUpdate {R;};
+        };
         class fmDebug {
             file = "\bmkhs_helisim\functions\fmDebug";
             class fmDebugUpdate {R;};
+            class fmDebugVariables {R;};
         };
         class ctrlVis {
             file = "\bmkhs_helisim\functions\ctrlVis";
@@ -74,15 +79,28 @@ class CfgFunctions
         };
         class engine {
             file = "\bmkhs_helisim\functions\engine";
-            class engine  {R;};
-            class engine2 {R;};
-            class engineBET {R;};
-            class engineController {R;};
+            class engineUpdate {R;};
+            class engineGovernor {R;};
+            class engineDamage {R;};
+            class engineFuelAvail {R;};
             class engineVariables {R;};
+        };
+        class engineGasTurbine {
+            file = "\bmkhs_helisim\functions\engine\gasTurbine";
+            class gasTurbineStarter {R;};
+            class gasTurbineCompressor {R;};
+            class gasTurbineCombustor {R;};
+            class gasTurbineCompressorTurbine {R;};
+        };
+        class engineTurboShaft {
+            file = "\bmkhs_helisim\functions\engine\turboShaftEngine";
+            class turboShaftEngine {R;};
+            class turboShaftPowerTurbine {R;};
         };
         class environment {
             file = "\bmkhs_helisim\functions\environment";
             class environment {R;};
+            class environmentVariables {R;};
         };
         class fmc  {
             file = "\bmkhs_helisim\functions\fmc";
@@ -99,7 +117,7 @@ class CfgFunctions
             class fmcSetChannel {R;};
             class fmcHeadingHold {R;};
             class fmcHoldModesDisable {R;};
-            class fmcSAS {R;};
+            class fmcSas {R;};
             class fmcVariables {R;};
         };
         class prestonAi {
@@ -110,7 +128,6 @@ class CfgFunctions
         };
         class fuel {
             file = "\bmkhs_helisim\functions\fuel";
-            class fuelDraw {R;};
             class fuelTankVarName {R;};
             class fuelLeak {R;};
             class fuelMgmtUpdate {R;};
@@ -160,8 +177,8 @@ class CfgFunctions
             file = "\bmkhs_helisim\functions\math";
             class mathBuildInterpGrid {R;};
             class mathGetArea {R;};
-            class mathIsINF {R;};
-            class mathIsNAN {R;};
+            class mathIsInf {R;};
+            class mathIsNan {R;};
             class mathLinearInterp {R;};
             class mathLinearInterp2D {R;};
             class mathLinearInterpFromCenter {R;};
@@ -237,7 +254,7 @@ class CfgFunctions
             class stateVariables {R;};
             class stateDeltaTime {R;};
             class stateAltitude {R;};
-            class stateRtrRPM {R;};
+            class stateRtrRpm {R;};
             class stateVelocities {R;};
             class stateOnGround {R;};
         };
@@ -251,7 +268,6 @@ class CfgFunctions
             class systemProducer {R;};
             class systemStorage {R;};
             class systemTorque {R;};
-            class systemTorqueJitter {R;};
             class systemsComponents {R;};
             class systemsDebug {R;};
             class systemsSolve {R;};
@@ -261,6 +277,7 @@ class CfgFunctions
         class systemsApu {
             file = "\bmkhs_helisim\functions\systems\apu";
             class apu {R;};
+            class apuVariables {R;};
         };
         class systemsRepair {
             file = "\bmkhs_helisim\functions\systems\repair";

@@ -1,5 +1,5 @@
 /* ----------------------------------------------------------------------------
-Function: bmkhs_fnc_engineController
+Function: bmkhs_fnc_engineUpdate
 
 Description:
     Monitors and controls engine states.
@@ -19,36 +19,19 @@ Author:
 params ["_heli"];
 #include "\bmkhs_helisim\functions\core\core.hpp"
 #include "\bmkhs_helisim\functions\systems\systems.hpp"
-
-private _config         = configOf _heli >> "BMKHS_HeliSim";
-private _configVehicles = configOf _heli;
+#include "\bmkhs_helisim\functions\engine\engine.hpp"
 
 //Starts run off bleed air, whatever is supplying it. True by default so an airframe that
 //models no pneumatics starts as before.
 private _pneuAvail = _heli getVariable ["bmkhs_pneuAvail", true];
-private _onGnd     = [_heli] call bmkhs_fnc_stateOnGround;
 
-private _engState  = _heli getVariable "bmkhs_engState";
-private _eng1State = _engState select 0;
-private _eng2State = _engState select 1;
-
-private _engPwrLvrState  = _heli getVariable "bmkhs_engPowerLeverState";
-private _eng1PwrLvrState = _engPwrLvrState select 0;
-private _eng2PwrLvrState = _engPwrLvrState select 1;
-
-private _eng1Np  = _heli getVariable "bmkhs_engPctNP" select 0;
-private _eng2Np  = _heli getVariable "bmkhs_engPctNP" select 1;
-private _rtrRPM  = _heli getVariable "bmkhs_rtrRPM";
-
-private _eng1TQ   = _heli getVariable "bmkhs_engPctTQ" select 0;
-private _eng2TQ   = _heli getVariable "bmkhs_engPctTQ" select 1;
-private _engPctTQ = _eng1TQ max _eng2TQ;
-private _eng1FuelAvail = _heli getVariable ["bmkhs_eng1FuelAvail", true];
-private _eng2FuelAvail = _heli getVariable ["bmkhs_eng2FuelAvail", true];
+private _engState       = _heli getVariable "bmkhs_engState";
+private _engPwrLvrState = _heli getVariable "bmkhs_engPowerLeverState";
+private _allOff         = (_engState findIf {_x != "OFF"}) < 0;
+private _rtrRPM         = _heli getVariable "bmkhs_rtrRpm";
 
 private _shiftLocked = _heli getVariable "bmkhs_shiftLocked";
 private _useSystems  = _heli getVariable ["bmkhs_useSystems", false];
-private _isSingleEng     = _heli getVariable "bmkhs_isSingleEng";
 //private _isAutorotating  = _heli getVariable "bmkhs_isAutorotating";
 
 
@@ -71,7 +54,7 @@ if (local _heli) then {
         _heli engineOn false;
     };
 
-    if (_eng1State == "OFF" && _eng2State == "OFF" && _rtrRPM < 0.5) then {
+    if (_allOff && _rtrRPM < 0.5) then {
         _heli engineOn false;
         [_heli, "mainRotor", 0.9] call bmkhs_fnc_damageSet;
     };
@@ -82,13 +65,14 @@ if (local _heli) then {
         //it. The power lever's own value is what the throttle follows, and FLY against a set
         //rotor brake is refused here - the switch moves, the engine declines to drive it.
         private _brakeOn = (_heli getVariable ["bmkhs_rotorBrakeVal", 0]) > 0;
+        private _failed  = _heli getVariable "bmkhs_engFailed";
         {
-            private _e   = _x;
-            private _st  = _engState select _e;
+            private _e   = _forEachIndex;
+            private _st  = _x;
             private _sw  = _heli getVariable [format ["bmkhs_eng%1StartSwVal", _e + 1], 0];
             private _lvr = _heli getVariable [format ["bmkhs_eng%1PwrLvrVal",  _e + 1], 0];
 
-            if (_sw > 0 && {_st == "OFF"}) then {
+            if (_sw > 0 && {_st == "OFF"} && {!(_failed select _e)}) then {
                 [_heli, "bmkhs_engState", _e, "STARTING", true] call bmkhs_fnc_utilSetArrayVariable;
                 //A start begun with the brake set latches its caution off until the brake
                 //comes off - a locked-rotor start is deliberate the whole way through.
@@ -111,27 +95,25 @@ if (local _heli) then {
                     [_heli, "bmkhs_engState", _e, "OFF", true] call bmkhs_fnc_utilSetArrayVariable;
                 };
             };
-        } forEach [0, 1];
+        } forEach _engState;
 
         //A running engine is a bleed air source. The aircraft gates its bleed component on
         //this; whether that matters is the airframe's business, not the engine's.
-        private _lvrState = _heli getVariable "bmkhs_engPowerLeverState";
-        [_heli, "bmkhs_engBleedAvail",
-            (_lvrState select 0) == "FLY" || {(_lvrState select 1) == "FLY"}]
-                call bmkhs_fnc_utilUpdateNetworkGlobal;
+        [_heli, "bmkhs_engBleedAvail", "FLY" in (_heli getVariable "bmkhs_engPowerLeverState")]
+            call bmkhs_fnc_utilUpdateNetworkGlobal;
 
         //With a start procedure, the engine runs when the procedure says so. Holding the
         //rotor off until then is what stops the player spinning it up with the throttle.
         if (([_heli, "mainRotor"] call bmkhs_fnc_damageGet) > 0.9) then {
             _heli engineOn false;
         } else {
-            if (_eng1State != "OFF" || _eng2State != "OFF" || _rtrRPM >= 0.5) then {
+            if (!_allOff || _rtrRPM >= 0.5) then {
                 _heli engineOn true;
             } else {
                 _heli engineOn false;
             };
         };
-        if (_eng1State == "OFF" && _eng2State == "OFF" && _rtrRPM < 0.1) then { //prevents player holding shift causing Rotor spinning
+        if (_allOff && _rtrRPM < 0.1) then { //prevents player holding shift causing Rotor spinning
             _heli engineOn false;
             [_heli, "mainRotor", 0.9] call bmkhs_fnc_damageSet;
             if (!_shiftLocked) then {
@@ -164,23 +146,39 @@ if (local _heli) then {
         if (_awake) then {
             //Through the control so the lever animates over its normal travel - setting the
             //state directly snaps it, and the rotor surges with it.
-            if (_eng1State == "OFF") then {
-                [_heli, "bmkhs_engState", 0, "STARTING", true] call bmkhs_fnc_utilSetArrayVariable;
-                [_heli, "bmkhs_engPowerLeverState", 0, "FLY", true] call bmkhs_fnc_utilSetArrayVariable;
-                ["eng1PwrLvr", 2, _heli] call bmkhs_fnc_controlSet;
-            };
-            if (_eng2State == "OFF") then {
-                [_heli, "bmkhs_engState", 1, "STARTING", true] call bmkhs_fnc_utilSetArrayVariable;
-                [_heli, "bmkhs_engPowerLeverState", 1, "FLY", true] call bmkhs_fnc_utilSetArrayVariable;
-                ["eng2PwrLvr", 2, _heli] call bmkhs_fnc_controlSet;
-            };
+            private _failed = _heli getVariable "bmkhs_engFailed";
+            {
+                if (_x == "OFF" && {!(_failed select _forEachIndex)}) then {
+                    [_heli, "bmkhs_engState", _forEachIndex, "STARTING", true] call bmkhs_fnc_utilSetArrayVariable;
+                    [_heli, "bmkhs_engPowerLeverState", _forEachIndex, "IDLE", true] call bmkhs_fnc_utilSetArrayVariable;
+                    [format ["eng%1PwrLvr", _forEachIndex + 1], 1, _heli] call bmkhs_fnc_controlSet;
+                };
+            } forEach _engState;
+
+            //Started at IDLE; to FLY once Ng has held at idle.
+            {
+                private _e = _forEachIndex;
+                if ((_engState select _e) == "ON" && {(_engPwrLvrState select _e) == "IDLE"}) then {
+                    private _since = _heli getVariable "bmkhs_engIdleSince" select _e;
+                    if ((_heli getVariable "bmkhs_engPctNg" select _e) < (GT_IDLE_STABLE_FRAC * (_x get "idleNg"))) then {
+                        _since = -1;
+                    } else {
+                        if (_since < 0) then { _since = time };
+                        if (time >= _since + GT_IDLE_TO_FLY_SEC) then {
+                            [_heli, "bmkhs_engPowerLeverState", _e, "FLY", true] call bmkhs_fnc_utilSetArrayVariable;
+                            [format ["eng%1PwrLvr", _e + 1], 2, _heli] call bmkhs_fnc_controlSet;
+                            _since = -1;
+                        };
+                    };
+                    [_heli, "bmkhs_engIdleSince", _e, _since] call bmkhs_fnc_utilSetArrayVariable;
+                };
+            } forEach (_heli getVariable "bmkhs_engines");
         } else {
-            if (_eng1State != "OFF") then {
-                [_heli, "bmkhs_engState", 0, "OFF", true] call bmkhs_fnc_utilSetArrayVariable;
-            };
-            if (_eng2State != "OFF") then {
-                [_heli, "bmkhs_engState", 1, "OFF", true] call bmkhs_fnc_utilSetArrayVariable;
-            };
+            {
+                if (_x != "OFF") then {
+                    [_heli, "bmkhs_engState", _forEachIndex, "OFF", true] call bmkhs_fnc_utilSetArrayVariable;
+                };
+            } forEach _engState;
         };
         if (_shiftLocked) then {
             _heli setVariable ["bmkhs_shiftLocked", false];
@@ -191,36 +189,27 @@ if (local _heli) then {
 
 
 if !_pneuAvail then {
-    if (_eng1State == "STARTING") then {
-		[_heli, "bmkhs_engState", 0, "OFF", true] call bmkhs_fnc_utilSetArrayVariable;
-    };
-    if (_eng2State == "STARTING") then {
-		[_heli, "bmkhs_engState", 1, "OFF", true] call bmkhs_fnc_utilSetArrayVariable;
-    };
+    {
+        if (_x == "STARTING") then {
+            [_heli, "bmkhs_engState", _forEachIndex, "OFF", true] call bmkhs_fnc_utilSetArrayVariable;
+        };
+    } forEach _engState;
 };
-
-// Single engine when: one engine is OFF/damaged, or one power lever is at IDLE
-// while the other is at FLY (lever-induced single engine operation).
-private _eng1Active = (_eng1State in ["STARTING","ON"]) && (_eng1PwrLvrState == "FLY");
-private _eng2Active = (_eng2State in ["STARTING","ON"]) && (_eng2PwrLvrState == "FLY");
-_isSingleEng = !(_eng1Active && _eng2Active);
-_heli setVariable ["bmkhs_isSingleEng", _isSingleEng];
 
 if (isMultiplayer && (currentPilot _heli == player || local _heli) && (_heli getVariable "bmkhs_lastTimePropagated") + 0.1 < time) then {
     {
         _heli setVariable [_x, _heli getVariable _x, true];
     } forEach [
-        "bmkhs_apuRPM_pct",
-        "bmkhs_engFF",
-        "bmkhs_engPctNG",
-        "bmkhs_engPctNP",
-        "bmkhs_engPctTQ",
-        "bmkhs_engBaseTGT",
-        "bmkhs_engTGT",
-        "bmkhs_engBaseOilPSI",
-        "bmkhs_engOilPSI",
+        "bmkhs_apuRpm_pct",
+        "bmkhs_engFuelFlow",
+        "bmkhs_engPctNg",
+        "bmkhs_engPctNp",
+        "bmkhs_engPctTq",
+        "bmkhs_engTgt",
+        "bmkhs_engOilPsi",
+        "bmkhs_engLimitTimers",
+        "bmkhs_engTqTimer",
         "bmkhs_engState",
-        "bmkhs_engFF",
         "bmkhs_collectiveOutput",
         "bmkhs_xmsnOutputRpm",
         "bmkhs_xmsnDeltaRpm"
@@ -228,26 +217,41 @@ if (isMultiplayer && (currentPilot _heli == player || local _heli) && (_heli get
     _heli setVariable ["bmkhs_lastTimePropagated", time, true];
 };
 
+[_heli, _heli getVariable "bmkhs_deltaTime"] call bmkhs_fnc_engineFuelAvail;
+
 if (currentPilot _heli == player || local _heli) then {
-    [_heli, 0] call bmkhs_fnc_engine;
-    [_heli, 1] call bmkhs_fnc_engine;
+    //Config names the assembly, so a new engine type is a folder and a config string.
+    {
+        private _fnc = missionNamespace getVariable [format ["bmkhs_fnc_%1", _x get "engineType"], {}];
+        [_heli, _forEachIndex, _x] call _fnc;
+    } forEach (_heli getVariable "bmkhs_engines");
+};
 
-    if (bmkhs_rotorModel == 1) then {
-        [_heli, 0] call bmkhs_fnc_engineBET;
-        [_heli, 1] call bmkhs_fnc_engineBET;
-    } else {
-        [_heli, 0] call bmkhs_fnc_engine2;
-        [_heli, 1] call bmkhs_fnc_engine2;
+if (local _heli) then {
+    [_heli, _heli getVariable "bmkhs_deltaTime"] call bmkhs_fnc_engineDamage;
+};
+
+private _engFailed = _heli getVariable "bmkhs_engFailed";
+private _fuelAvail = _heli getVariable "bmkhs_engFuelAvail";
+
+{
+    if (_x || {!(_fuelAvail select _forEachIndex)}) then {
+        [_heli, "bmkhs_engState", _forEachIndex, "OFF", true] call bmkhs_fnc_utilSetArrayVariable;
     };
-};
+} forEach _engFailed;
 
-private _no1EngDmg = [_heli, "engines", 0] call bmkhs_fnc_damageGet;
-private _no2EngDmg = [_heli, "engines", 1] call bmkhs_fnc_damageGet;
-
-if (_no1EngDmg > SYS_ENG_DMG_THRESH || !_eng1FuelAvail) then {
-	[_heli, "bmkhs_engState", 0, "OFF", true] call bmkhs_fnc_utilSetArrayVariable;
-};
-
-if (_no2EngDmg > SYS_ENG_DMG_THRESH || !_eng2FuelAvail) then {
-	[_heli, "bmkhs_engState", 1, "OFF", true] call bmkhs_fnc_utilSetArrayVariable;
+//Oil pressure low - running or failed, the lever out of OFF, below the minimum. Latched until a repair.
+if (local _heli) then {
+    private _state = _heli getVariable "bmkhs_engState";
+    private _lever = _heli getVariable "bmkhs_engPowerLeverState";
+    private _oil   = _heli getVariable "bmkhs_engOilPsi";
+    private _low   = _heli getVariable "bmkhs_engOilPsiLow";
+    {
+        private _isLow = ((_state select _forEachIndex) == "ON" || {_engFailed select _forEachIndex})
+            && {(_lever select _forEachIndex) != "OFF"}
+            && {(_oil select _forEachIndex) < ((_x get "oilPsiLimits") select 0)};
+        if (_isLow && {!(_low select _forEachIndex)}) then {
+            [_heli, "bmkhs_engOilPsiLow", _forEachIndex, true, true] call bmkhs_fnc_utilSetArrayVariable;
+        };
+    } forEach (_heli getVariable "bmkhs_engines");
 };

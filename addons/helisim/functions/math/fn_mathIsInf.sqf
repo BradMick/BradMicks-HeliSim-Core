@@ -1,8 +1,8 @@
 /* ----------------------------------------------------------------------------
-Function: bmkhs_fnc_mathIsNAN
+Function: bmkhs_fnc_mathIsInf
 
 Description:
-    Returns true or false if a value is not a number
+    Returns true or false if a value is infinite
 
 Parameters:
     _val - The value that needs to be checked.
@@ -18,5 +18,5 @@ Author:
 ---------------------------------------------------------------------------- */
 params ["_val"];
 
-if (_val isEqualType "SCALAR" || _val isEqualType "NAN") exitWith { true };
+if (not finite _val) exitWith { true };
 false;

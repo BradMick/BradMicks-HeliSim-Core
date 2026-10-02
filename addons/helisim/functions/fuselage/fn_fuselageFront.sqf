@@ -52,7 +52,7 @@ for "_i" from 0 to (_count - 1) do {
 
     private _velFwd     = (_heli getVariable "bmkhs_velModelSpace") select 1;
     private _v          = [_velFwd, -VEL_VNE, VEL_VNE] call BIS_fnc_clamp;
-    private _pa         = _heli getVariable "bmkhs_PA";
+    private _pa         = _heli getVariable "bmkhs_pa";
     private _CD         = [_dragCoefTable, _pa] call bmkhs_fnc_mathLinearInterp select 1;
     private _area       = [_a, _b, _c, _d] call bmkhs_fnc_mathGetArea;
     private _drag       = _CD * 0.5 * _rho * _area * (_v * _v);
@@ -67,7 +67,7 @@ for "_i" from 0 to (_count - 1) do {
     //Applied AT the CoM, so the arm is zero and this makes no moment - published
     //with a zero arm so the readout says that rather than implying one.
     if (BMKHS_FORCES_DEBUG) then {
-        private _acc = _heli getVariable ["bmkhs_dbgForces", []];
+        private _acc = _heli getVariable "bmkhs_dbgForces";
         _acc pushBack ["fuse front", _dragVector, [0,0,0]];
         _heli setVariable ["bmkhs_dbgForces", _acc];
     };

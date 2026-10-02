@@ -57,7 +57,8 @@ if (_isTank) then {
     private _rounds = 0;
     {
         if ((_pylonMagazines param [_x - 1, ""]) != "") then {
-            _rounds = _rounds + (_heli ammoOnPylon format ["pylons%1", _x]);
+            //By index, as getPylonMagazines - every mod names its pylons its own way.
+            _rounds = _rounds + (_heli ammoOnPylon _x);
         };
     } forEach _pylons;
     _stationMass = _stationMass + (_rounds * _massPerRound);

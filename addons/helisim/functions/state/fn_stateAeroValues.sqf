@@ -36,7 +36,7 @@ private _alpha_deg   = if (_totVelY == 0) then { 0.0; } else { atan (_totVelZ / 
 //Beta (sideslip): airflow angle in the yaw plane (lateral vs total velocity).
 private _beta_deg    = if ((vectorMagnitude _totVel) == 0.0) then { 0.0; } else { asin (_totVelX / (vectorMagnitude _totVel)); };
 //Beta (sideslip): lateral specific force in G - the trim ball.
-private _bodyAccel   = _heli getVariable ["bmkhs_bodyAccel", [0.0, 0.0, 0.0]];
+private _bodyAccel   = _heli getVariable "bmkhs_bodyAccel";
 private _accel_x     = _bodyAccel # 0;
 private _beta_g_raw  = _accel_x / GRAVITY;
 _beta_g_raw = [_beta_g_raw, -1.0, 1.0] call BIS_fnc_clamp;

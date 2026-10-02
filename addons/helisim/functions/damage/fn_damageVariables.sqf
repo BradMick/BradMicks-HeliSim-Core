@@ -19,8 +19,7 @@ Description:
 
 Parameters:
     _heli   - The helicopter to get information from [Unit].
-    _config - The aircraft's HeliSim config [Config]. Unused - hitpoints live
-              on the vehicle class itself, not under BMKHS_HeliSim.
+    _config - The aircraft's HeliSim config [Config]. Read for numEngines only.
 
 Returns:
     Nothing
@@ -55,6 +54,13 @@ private _damage = createHashMap;
     _sorted sort true;
     _damage set [_x, _sorted apply {_x select 1}];
 } forEach (keys _damage);
+
+//No engine hitpoints - every engine shares Arma's hitengine.
+if ((_damage getOrDefault ["engines", []]) isEqualTo []) then {
+    private _shared = [];
+    for "_i" from 1 to (getNumber (_config >> "numEngines")) do { _shared pushBack "hitengine" };
+    if (_shared isNotEqualTo []) then { _damage set ["engines", _shared] };
+};
 
 {
     if ((_damage getOrDefault [_x, []]) isEqualTo []) then {

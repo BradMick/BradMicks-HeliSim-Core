@@ -2,8 +2,6 @@
 
 params ["_heli"];
 
-if (isGamePaused || CBA_missionTime < 0.1) exitWith {};
-
 if (bmkhs_rotorModel == 1) then {
     [_heli] call bmkhs_fnc_rotorUpdate;
 } else {

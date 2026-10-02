@@ -52,8 +52,8 @@ private _flag = {
 //What the dirty walk cost - components run this frame, and the worst seen recently. A
 //settled aircraft should sit at 0 and only spike when something actually changes; the peak
 //decays so it shows the last burst rather than the highest ever.
-private _cost = _heli getVariable ["bmkhs_sysWalkCost", 0];
-private _peak = ((_heli getVariable ["bmkhs_sysWalkPeak", 0]) - 1) max _cost max 0;
+private _cost = _heli getVariable "bmkhs_sysWalkCost";
+private _peak = ((_heli getVariable "bmkhs_sysWalkPeak") - 1) max _cost max 0;
 _heli setVariable ["bmkhs_sysWalkPeak", _peak];
 
 private _txt = format ["<t size='0.75'>walk %1  peak %2<br/><t color='#88ccff'>CIRCUITS</t><br/>",
