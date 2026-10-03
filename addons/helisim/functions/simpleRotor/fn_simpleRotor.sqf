@@ -129,8 +129,8 @@ for "_i" from 0 to 3 do {
     //Local right and forward vectors
     private _locRVec   = [_rVec, _uVec, _psi] call bmkhs_fnc_mathVectorRotateAroundAxis;
     private _locFVec   = [_fVec, _uVec, _psi] call bmkhs_fnc_mathVectorRotateAroundAxis;
-    //Flap back angles
-    private _fbRoll    = _flapBackRollAngle  * (cos (_psi - _windAzimuth));
+    //Flap back angles - the lateral tilt follows the advancing side, so a clockwise rotor's is mirrored
+    private _fbRoll    = _flapBackRollAngle  * (cos (_psi - _windAzimuth)) * ([1.0, -1.0] select (_dir == CW));
     private _fbPitch   = _flapBackPitchAngle * (sin (_psi - _windAzimuth));
     //Blade flap angles
     private _rollFlap  = (_flapLat * (cos _psi)) + _fbRoll;

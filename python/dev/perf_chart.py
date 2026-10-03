@@ -1,8 +1,8 @@
 """Max torque available, FAT against %Q, one line per pressure altitude - the rig's answer laid out
 like the AH-64D's Maximum Torque Available charts.
 
-Run it:  python python/engine.py perf results.json
-         python python/perf_chart.py results.json chart.html
+Run it:  python python/dev/engine.py perf results.json
+         python python/dev/perf_chart.py results.json chart.html
 """
 import json
 import sys

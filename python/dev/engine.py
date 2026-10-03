@@ -1,6 +1,6 @@
 """The HeliSim engine, drivetrain and simple rotors, outside Arma. A 1:1 port of Core.
 
-Run it:  python python/engine.py
+Run it:  python python/dev/engine.py
 
 Every function below is named after the SQF function it ports and carries its inputs, outputs
 and expressions line for line. The frame runs in fn_coreUpdate's order: environment ->
@@ -17,7 +17,8 @@ import math
 import random
 import re
 
-AH64_CONFIG = r'E:\AH-64D\addons\fza_ah64_helisim\config\bmkhs_config'
+import os
+AH64_CONFIG = os.environ.get('BMKHS_CONFIG', r'E:\AH-64D\addons\fza_ah64_helisim\config\bmkhs_config')
 
 #core.hpp
 ISA_STD_DAY_AIR_DENSITY = 1.225
@@ -207,7 +208,8 @@ ROTOR_NUM_FIELDS = ['numBlades', 'mastLength', 'gearRatio', 'torqueTau', 'bladeR
                     'bladeChord', 'bladeMass', 'reacTqScalar', 'autoTorque']
 
 
-#fn_engineVariables' compressor map: Ng / maxNg (corrected), PR / design, flow / design, efficiency,
+#fn_engineVariables' compressor map, the T700-701C - the default for any engine that declares no
+#compressorMap[] of its own. Ng / maxNg (corrected), PR / design, flow / design, efficiency,
 #compressor turbine expansion as ln(expansion) / ln(design PR).
 COMPRESSOR_MAP = [
     [0.0000, 0.0588, 0.0000, 0.544, 0.4781],
@@ -252,10 +254,10 @@ def engine_variables(H, cfg, overrides=None):
         eng['starterGates'] = e['Starter']['gate']
         eng['governorGates'] = e['Governor']['gate']
         eng['refTq'] = (eng['powerKw'] * 1000) / (eng['designRpm'] * eng['npFly'] * 0.10472)
-        eng['compressorMap'] = COMPRESSOR_MAP
+        eng['compressorMap'] = e['Compressor'].get('compressorMap') or COMPRESSOR_MAP
         eng['airflowTable'] = e['Compressor']['airflowTable']
         eng.update(overrides or {})
-        _, prFrac, flowFrac, eff, _ = math_linear_interp(COMPRESSOR_MAP, 1.0 / eng['maxNg'])
+        _, prFrac, flowFrac, eff, _ = math_linear_interp(eng['compressorMap'], 1.0 / eng['maxNg'])
         pr = eng['pressureRatio'] * prFrac
         t3 = GT_STD_TEMP_K * (1 + ((pr ** ((GT_GAMMA_COLD - 1) / GT_GAMMA_COLD)) - 1) / eff)
         eng['spoolUnitKw'] = eng['massFlow'] * flowFrac * GT_CP_COLD * (t3 - GT_STD_TEMP_K) / GT_SPOOL_UNIT_LOAD

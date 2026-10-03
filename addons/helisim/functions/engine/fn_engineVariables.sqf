@@ -54,8 +54,9 @@ private _textFields = ["name", "engineType", "damageRole"];
 private _numEngines = [_heli, "engines"] call bmkhs_fnc_damageCount;
 if (_numEngines == 0) then { _numEngines = getNumber (_config >> "numEngines") };
 
-//Compressor map, every engine's - Ng / maxNg (corrected), PR / design, flow / design,
-//efficiency, compressor turbine expansion as ln(expansion) / ln(design PR).
+//Compressor map, the T700-701C - the default for any engine that declares no compressorMap[] of
+//its own. Ng / maxNg (corrected), PR / design, flow / design, efficiency, compressor turbine
+//expansion as ln(expansion) / ln(design PR).
 private _compressorMap =
 [
      [0.0000, 0.0588, 0.0000, 0.544, 0.4781]
@@ -128,12 +129,15 @@ for "_i" from 1 to _numEngines do {
     _engine set ["refTq", ((_engine get "powerKw") * 1000)
                         / ((_engine get "designRpm") * (_engine get "npFly") * 0.10472)];
 
-    _engine set ["compressorMap", _compressorMap];
+    //The engine's own map if it declares one, Core's T700-701C if not.
+    private _map = getArray (_e >> "Compressor" >> "compressorMap");
+    if (_map isEqualTo []) then { _map = _compressorMap };
+    _engine set ["compressorMap", _map];
     //Airflow trim by FAT, {FAT, multiplier} - the one table that dials the engine onto its charts.
     _engine set ["airflowTable", getArray (_e >> "Compressor" >> "airflowTable")];
 
     //The spool's torque scale: compressor power at Ng 1.0 on a standard day, untrimmed.
-    ([_compressorMap, 1.0 / (_engine get "maxNg")] call bmkhs_fnc_mathLinearInterp)
+    ([_map, 1.0 / (_engine get "maxNg")] call bmkhs_fnc_mathLinearInterp)
         params ["", "_prFrac", "_flowFrac", "_eff"];
     private _pr = (_engine get "pressureRatio") * _prFrac;
     private _t3 = GT_STD_TEMP_K * (1 + (((_pr ^ ((GT_GAMMA_COLD - 1) / GT_GAMMA_COLD)) - 1) / _eff));
