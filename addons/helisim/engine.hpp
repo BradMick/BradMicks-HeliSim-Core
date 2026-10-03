@@ -130,6 +130,10 @@
 //  airflowTable[]      {FAT, multiplier} pairs, clamped at the ends. THE ONE TUNING TABLE -
 //                      see TUNING. Must read 1.0 at 15 so a standard day is the untrimmed
 //                      engine.
+//  compressorMap[]     OPTIONAL. The engine's own compressor map; declare none and Core's
+//                      T700-701C map is used. Rows {Ng / maxNg (corrected), PR / pressureRatio,
+//                      flow / massFlow, efficiency, ln(compressor turbine expansion) /
+//                      ln(pressureRatio)}, low to high.
 //  lightOffNg          Ng at which fuel is introduced.
 //  selfSustNg          Ng at which the starter cuts out and the engine reads ON.
 //  idleNg              Ng the idle fuel settles at. Also where the start fuel ramp reaches
@@ -193,8 +197,8 @@
 /////////////////////////////////////////////////////////////////////////////////////////////
 //
 //  compressor map      PR, airflow, efficiency and compressor turbine expansion against
-//                      corrected Ng, normalised - every engine's, scaled by its own
-//                      pressureRatio, massFlow and maxNg
+//                      corrected Ng, normalised - the T700-701C's, scaled by each engine's
+//                      own pressureRatio, massFlow and maxNg, unless it declares compressorMap[]
 //  gas properties      gamma and cp, cold air and hot gas
 //  corrected speed     Ng / sqrt(T2 / 288.15) - the hot-day / cold-day behaviour
 //  ram                 total T2 and P2 from flight Mach

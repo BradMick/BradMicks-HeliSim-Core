@@ -295,8 +295,10 @@ template; copy it rather than starting from nothing.
 **The engine is physics worked from Ng, not a schedule.** You declare what a
 data sheet gives you - pressure ratio, airflow, power, limits - and Core works
 the compressor, combustor and both turbines every frame. Starts, idle, spool-up,
-hot and cold days and altitude all come out of that. Core carries the compressor
-map, normalised, and scales it by your engine's numbers.
+hot and cold days and altitude all come out of that. Core carries the T700-701C's
+compressor map, normalised, and scales it by your engine's numbers. An engine
+that is not a T700 can declare its own `Compressor >> compressorMap[]`; see
+`engine.hpp`.
 
 Set it up in this order:
 
@@ -312,6 +314,34 @@ Set it up in this order:
    a standard day is the untrimmed engine. The Ng and TGT limiters then decide
    which limit holds, as on the real engine.
 
+**An engine that is not a T700 - build its compressor map.** If you have the
+engine's limitations table (N1, T45 and torque for each rating, at sea level and
+a stated temperature), Core's release ships a generator in `@bmkhs/python/`. It
+needs Python 3 and nothing else.
+
+1. Fill in the spec numbers in your `helisim_engine.hpp` first (step 1 above).
+2. Write a ratings file, one rating per line, fractions for N1 and torque:
+
+       #name  FAT_C  N1     T45_C  torque
+       MCP    5      0.950  894    0.940
+       TOP    5      0.968  928    1.006
+       MAX    5      0.987  962    1.085
+       SUP    5      1.015  1036   1.339
+
+3. Run it against your pack's config folder:
+
+       python compressor_map.py path\to\yourPack\addons\...\config\bmkhs_config ratings.txt
+
+4. Paste the printed `compressorMap[] = {...};` into your engine's
+   `class Compressor`, and set `fuelIdle` to the value it reports.
+
+It also flies every rating in its own copy of the engine and prints what it
+reached against what you asked for. Every line should land on its target.
+Rows below your lowest rating (start, idle, flat pitch) come from Core's T700
+map scaled to your pressure ratio, and rows above your highest rating carry on
+along your last two. The checks fly your `helisim_simpleRotor.hpp`, and assume
+two engines declared as `Engine01` and `Engine02`.
+
 **`maxNg` is also the compressor map's scale.** The map's Ng axis runs 0 to 1 as
 a fraction of it, so set it to the true mechanical maximum.
 
@@ -322,6 +352,85 @@ the gauge.
 **The governor never pulls Ng below idle in flight.** A power-on autorotation
 holds Ng at `idleNg` while the clutch releases and the rotor runs free - an
 engine below `ngMin` is an engine out.
+
+### Mass and balance - converting the CG
+
+`bmkhs_config/helisim_mass.hpp`. Three coordinate frames are involved, and
+every number has to go into the right one.
+
+| Frame | What it is | Which config values |
+|---|---|---|
+| **Model** | Object Builder (p3d) coordinates, metres. x right, **y toward the nose**, z up. | `fsDatum`, `fwdCgLimit`, `aftCgLimit`, every `arm[]` (seats, tanks, stations, magazines) |
+| **Fuselage station (FS)** | The flight manual's. Distance **aft** of the datum, in inches or metres. | `emptyMom` and each `EmptyMassVariants` `moment` |
+| **Arma** | What `getCenterOfMass` / `setCenterOfMass` use. The model frame shifted by the model's `boundingCenter`. | None. Core converts to it. Never enter a number from it. |
+
+Only the longitudinal (y) position is computed. Lateral comes from the item arms,
+with the empty airframe on the centreline. Vertical is not computed: the z of
+`comCorrection` sets it.
+
+**1. Place the datum.** Find FS 0 on the model and read its y in Object Builder.
+That y is `fsDatum`. If the manual gives the datum relative to something on the
+model, add the distances. The Tiger's datum is 7.04 m forward of the main rotor
+hub, which sits at y 1.555, so `fsDatum = 1.555 + 7.04 = 8.595`.
+
+**2. Convert a station to a model y.** Stations run aft and model y runs forward,
+so:
+
+    model y = fsDatum - FS (metres)        FS (m) = FS (in) x 0.0254
+
+**3. CG limits.** Convert each limit station with step 2. The forward limit is
+the larger y.
+
+    fwdCgLimit = fsDatum - FS of the forward limit
+    aftCgLimit = fsDatum - FS of the aft limit
+
+If you already have the limits as model positions, enter them as they are.
+
+**4. Empty moment.** `emptyMom` is the empty mass times the empty CG's station,
+in kg x m:
+
+    emptyMom = emptyMass x FS of the empty CG (metres)
+
+If you have the empty CG as a model position instead:
+
+    emptyMom = emptyMass x (fsDatum - empty CG model y)
+
+Check it by going back the other way: `fsDatum - emptyMom / emptyMass` must give
+the empty CG's model y. The same applies to every `EmptyMassVariants` `mass` and
+`moment` pair.
+
+**5. Item arms.** Seats, tanks, wing stations and magazines are model positions
+`{x, y, z}`. Read them in Object Builder, or convert a manual station with step 2
+for y.
+
+**6. What Core does with them, every frame** (`fn_massUpdate`):
+
+    longMom = emptyMass x fsDatum - emptyMom          (the empty airframe, model frame)
+            + sum of (mass x arm y) over every item aboard
+    CG y    = longMom / total mass
+    CG x    = sum of (mass x arm x) / total mass
+    setCenterOfMass [CG x - boundingCenter x + comCorrection x,
+                     CG y - boundingCenter y + comCorrection y,
+                        - boundingCenter z + comCorrection z]
+
+An empty seat, an uninstalled removable tank and an empty pylon add nothing.
+Fuel moves the CG as it burns, because each tank's mass sits at its own arm.
+Casual mode skips all of this and sets `casualModeCom` directly, in the Arma frame.
+
+**7. Reading it back.** Core publishes the CG in the model frame as `bmkhs_cg`.
+Compare that against your limits. The FM debug overlay's `_centerOfMass` is Arma's
+`getCenterOfMass`, in the Arma frame. To compare it with the limits, convert it
+back:
+
+    model y = overlay y + boundingCenter y - comCorrection y
+
+(`boundingCenter vehicle player` in the debug console gives the offset.) The
+overlay's gross weight is in pounds. Every mass in the config is in kg.
+
+**Worked example, AH-64D.** `fsDatum = 6.4`. Empty CG at FS 205.00 in = 5.207 m,
+so `emptyMom = 6314 x 5.207 = 32877`, which puts the empty CG at model y
+6.4 - 5.207 = 1.193. CG limits FS 201 in (5.105 m) and 207 in (5.258 m) give
+`fwdCgLimit = 1.295` and `aftCgLimit = 1.142`.
 
 ---
 

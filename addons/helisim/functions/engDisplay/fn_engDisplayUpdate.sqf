@@ -69,13 +69,28 @@ private _band = {
     private _lims = _engine get _key;
     [(_lims # 0) # 0, (_lims # ((count _lims) - 1)) # 0]
 };
-//{idc, limit} for every line of a set - a mid control left over reads 0 and is hidden.
+//{control, limit} for every line of a set. Lines between the first and last use the fixed
+//controls, then ones made here when the set has more - a control left over reads 0 and is hidden.
 private _lines = {
-    params ["_engine", "_key", "_first", "_mids", "_last"];
-    private _lims = _engine get _key;
-    private _k    = count _lims;
-    private _out  = [[_first, (_lims # 0) # 0], [_last, (_lims # (_k - 1)) # 0]];
-    { _out pushBack [_x, [0, (_lims # ((_forEachIndex + 1) min (_k - 1))) # 0] select (_forEachIndex + 1 < _k - 1)] } forEach _mids;
+    params ["_engine", "_key", "_first", "_mids", "_last", "_tag"];
+    private _lims  = _engine get _key;
+    private _k     = count _lims;
+    private _need  = (_k - 2) max 0;
+    private _extra = _display getVariable [_tag, []];
+    private _out   = [[_display displayCtrl _first, (_lims # 0) # 0], [_display displayCtrl _last, (_lims # (_k - 1)) # 0]];
+    for "_m" from 0 to ((_need max ((count _mids) + (count _extra))) - 1) do {
+        private _c = if (_m < count _mids) then { _display displayCtrl (_mids # _m) } else {
+            private _e = _m - (count _mids);
+            if (_e >= count _extra) then {
+                private _new = _display ctrlCreate ["RscText", -1];
+                _new ctrlSetBackgroundColor [0.95, 0.75, 0.10, 0.85];
+                _extra pushBack _new;
+            };
+            _extra # _e
+        };
+        _out pushBack [_c, if (_m < _need) then { (_lims # (_m + 1)) # 0 } else { 0 }];
+    };
+    _display setVariable [_tag, _extra];
     _out
 };
 private _colour = {
@@ -203,10 +218,9 @@ private _drawTape = {
     //Limit ticks - a line across the tape at each threshold, not a filled band.
     private _tickH = (_tapeH * 0.012) max 0.0015;
     {
-        _x params ["_idc", "_at"];
-        private _c = _display displayCtrl _idc;
+        _x params ["_c", "_at"];
         if (!isNull _c) then {
-            if (_idc > 0 && {_fs > 0} && {_at > 0} && {_at < _fs}) then {
+            if (_fs > 0 && {_at > 0} && {_at < _fs}) then {
                 _c ctrlSetPosition [_tx, _yTape + (_tapeH * (1 - (_at / _fs))) - (_tickH / 2),
                                     _tapeW, _tickH];
                 _c ctrlCommit 0;
@@ -275,7 +289,7 @@ for "_i" from 0 to (ED_MAX_ENG - 1) do {
 
         private _xT = [_xTq, _i] call _tapeX;
         [5310 + _i, 5320 + _i, _xT, _tqV, _tqFs, _tqAmb, _tqRed,
-            [_eng, _tqKey, 5440 + _i, [5570 + _i], 5450 + _i] call _lines] call _drawTape;
+            [_eng, _tqKey, 5440 + _i, [5570 + _i], 5450 + _i, format ["bmkhs_edTqLines%1", _i]] call _lines] call _drawTape;
         [5330 + _i, (_tqV * 100) toFixed 0, _xT, _yNum, _tapeW, _numH,
             [_tqV, _tqAmb, _tqRed] call _colour, _gapT * 0.5] call _setText;
         [5400 + _i, str (_i + 1), _xT, _yEng, _tapeW, _lblH] call _setText;
@@ -284,14 +298,14 @@ for "_i" from 0 to (ED_MAX_ENG - 1) do {
         private _slot = [_i, _i + 1] select (_i >= (_nTach / 2) - 0.5);
         private _xN = [_xTach, _slot] call _tapeX;
         [5340 + _i, 5350 + _i, _xN, _npV, _npFs, _npAmb, _npRed,
-            [_eng, "npLimits", 5490 + _i, [], 5500 + _i] call _lines] call _drawTape;
+            [_eng, "npLimits", 5490 + _i, [], 5500 + _i, format ["bmkhs_edNpLines%1", _i]] call _lines] call _drawTape;
         [5360 + _i, (_npV * 100) toFixed 0, _xN, _yNum, _tapeW, _numH,
             [_npV, _npAmb, _npRed] call _colour, _gapT * 0.5] call _setText;
         [5470 + _i, str (_i + 1), _xN, _yEng, _tapeW, _lblH] call _setText;
 
         private _xG = [_xTgt, _i] call _tapeX;
         [5370 + _i, 5380 + _i, _xG, _tgV, _tgtFs, _tgtAmb, _tgtRedE,
-            [_eng, _tgtKey, 5510 + _i, [5580 + _i, 5590 + _i, 5600 + _i], 5520 + _i] call _lines] call _drawTape;
+            [_eng, _tgtKey, 5510 + _i, [5580 + _i, 5590 + _i, 5600 + _i], 5520 + _i, format ["bmkhs_edTgtLines%1", _i]] call _lines] call _drawTape;
         [5390 + _i, _tgV toFixed 0, _xG, _yNum, _tapeW, _numH,
             [_tgV, _tgtAmb, _tgtRedE] call _colour, _gapT * 0.5] call _setText;
         [5540 + _i, str (_i + 1), _xG, _yEng, _tapeW, _lblH] call _setText;
@@ -314,7 +328,8 @@ for "_i" from 0 to (ED_MAX_ENG - 1) do {
 private _nrSlot = floor (_nTach / 2);
 private _xNr    = [_xTach, _nrSlot] call _tapeX;
 [5304, 5305, _xNr, _nr, _npFs, _nrHigh, _nrMax,
-    [[5530, _nrLow], [5650, _nrHigh], [5651, _nrHighRtr], [5531, _nrMax]], _nrLow] call _drawTape;
+    [[5530, _nrLow], [5650, _nrHigh], [5651, _nrHighRtr], [5531, _nrMax]] apply {[_display displayCtrl (_x # 0), _x # 1]},
+    _nrLow] call _drawTape;
 [5306, (_nr * 100) toFixed 0, _xNr, _yNum, _tapeW, _numH,
     [0.80, 1.00, 0.80, 1.00], _gapT * 0.5] call _setText;
 [5309, "R", _xNr, _yEng, _tapeW, _lblH] call _setText;
