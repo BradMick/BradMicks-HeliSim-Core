@@ -30,6 +30,9 @@ private _textFields = ["name", "facing", "airfoil"];
 
 private _wings = [];
 
+//Panels are Object Builder positions; Arma's model frame is offset from those by boundingCenter.
+private _modelOffset = boundingCenter _heli;
+
 {
     private _w = _x;
     private _i = _forEachIndex + 1;
@@ -42,6 +45,7 @@ private _wings = [];
     { _wing set [_x, getArray  (_w >> _x)]; } forEach _arrFields;
     { _wing set [_x, getText   (_w >> _x)]; } forEach _textFields;
     _wing set ["facing", toLower (_wing get "facing")];
+    _wing set ["panels", (_wing get "panels") apply { _x apply { _x vectorDiff _modelOffset } }];
 
     //The surface NAMES itself, so a table or a readout says "vertical fin" rather than
     //wing 3.

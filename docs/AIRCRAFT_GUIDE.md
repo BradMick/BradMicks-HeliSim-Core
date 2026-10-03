@@ -8,7 +8,7 @@ reads declarations. Everything specific to your aircraft lives in your own
 addon, which this guide calls the PACK. The AH-64's pack is
 `fza_ah64_helisim`, and it is the worked example throughout.
 
-Two field references sit beside this one and are the authority on what each
+Three field references sit beside this one and are the authority on what each
 field means:
 
 - `addons/helisim/components.hpp` - systems: producers, converters,
@@ -179,7 +179,18 @@ class Extended_Init_EventHandlers {
         };
     };
 };
+
+class Extended_GetIn_EventHandlers {
+    class yourAircraftBase {
+        class yourAircraft_helisim_getin_eh {
+            getIn = "_this call bmkhs_fnc_eventGetIn";
+        };
+    };
+};
 ```
+
+The GetIn handler restarts the aircraft's frame clock when the player climbs
+in, so the first frame does not see the whole time the aircraft sat empty.
 
 `fn_setup.sqf`:
 
@@ -207,7 +218,7 @@ with no guarantee about what else has run, so a variable `coreConfig` reads with
 no default has to be written in the lines above the call, not by some other
 addon's init.
 
-### The per-frame scheduler and your event handler
+### The per-frame tick and your event handler
 
 `XEH_preInit.sqf`, copied from the AH-64's:
 
@@ -232,27 +243,35 @@ yourAircraft_helisim_frameHandler = addMissionEventHandler ["EachFrame", {
 }];
 ```
 
-This runs for every LOCAL aircraft of your declared base class - AI included, so
-an unoccupied aircraft still burns fuel and overtorques its gearboxes.
+**Each aircraft runs on its own.** Every frame, the handler ticks each aircraft
+of your base class that is local to this machine, one at a time - the one you
+are flying, and any AI or empty ones this machine owns. Each keeps its own state;
+nothing is shared between them. An aircraft owned by another machine is ticked
+on that machine, not this one.
 
-**Schedule your own base class and nothing else.** Every installed pack runs its
-own frame handler. One that ticks every pack's aircraft runs each of them twice a
-frame - once from its own pack, once from yours - doubling every force.
+An empty aircraft is still ticked: it still burns fuel, and its engines and
+gearboxes still take damage.
 
-**Register your handler; never assign a global.** Core hands each event to the
-handler registered for the aircraft's base class, so two packs never hear each
-other's aircraft. A shared global would give every aircraft's events to whichever
-pack loaded last.
+**Use your own base class and nothing else.** Every installed pack has its own
+handler for its own aircraft type. If yours also ticked another pack's aircraft,
+they would be ticked twice a frame and every force on them doubled.
 
-`fn_perFrame.sqf` calls Core in this order:
+**Register your event handler; never assign a global.** Core hands each event to
+the handler registered for that aircraft's base class, so two packs never hear
+each other's aircraft. A shared global would give every aircraft's events to
+whichever pack loaded last.
+
+`fn_perFrame.sqf` makes one call:
 
 ```sqf
+params ["_heli"];
+
 [_heli] call bmkhs_fnc_coreUpdate;
-[_heli] call bmkhs_fnc_systemsUpdate;
-[_heli] call bmkhs_fnc_coreUpdateFlightModel;
-[_heli] call bmkhs_fnc_ctrlVisUpdate;
-[_heli] call bmkhs_fnc_repair;
 ```
+
+`coreUpdate` runs the whole frame for that aircraft. Do not call any other Core
+function from here - it is already run, and a second call runs it twice. Work
+of your own aircraft's goes after the call.
 
 ---
 
@@ -265,6 +284,10 @@ the declarations one file per domain under `bmkhs_config/`:
 class BMKHS_HeliSim {
     //Systems are ALL OR NOTHING. Start with 0 and fly it before turning it on.
     useSystems = 0;
+
+    //How many engines, when no hitpoints declare them (Step 4). With engine hitpoints,
+    //the count comes from those and this is ignored.
+    numEngines = 2;
 
     //The drivetrain is rated by each engine's tqLimits / tqLimitsSe in helisim_engine.hpp.
 
@@ -353,6 +376,215 @@ the gauge.
 holds Ng at `idleNg` while the clutch releases and the rotor runs free - an
 engine below `ngMin` is an engine out.
 
+### The fuselage and wings - model them, do not type them
+
+You do not write `helisim_fuselage.hpp` or `helisim_wings.hpp` by hand. You
+model every aerodynamic surface as flat four-sided faces in a small model,
+`fm.p3d`, and a generator in Core's release writes both files from it. The old
+wing fields - `span`, `chord`, `sweep`, `twist`, `tipWidthScalar`, `pos`,
+`pitch`, `roll`, `isStabilator` - are gone; the geometry is the model.
+
+**What the surfaces do.** Each quad is a surface's outline; the airfoil it is
+given supplies the section. Core works the airflow over it every frame and
+applies the forces:
+
+- **Fuselage** - three sets. Each top and side panel makes lift and drag from
+  `fuselageAirfoil`, applied at the panel's centre. The front makes drag only,
+  against forward airspeed, applied at the centre of mass.
+- **Wings** - wings, fins and stabilisers. Each face is cut into strips along its
+  span and every strip makes lift and drag from its airfoil at its own angle of
+  attack, including the airflow from the aircraft rotating, applied at
+  `chordLinePos` on the strip.
+
+#### 1. Make fm.p3d
+
+Create a new model in Object Builder and save it as `fm.p3d` in your pack's
+addon folder, beside your `config.cpp` (the Tiger's is
+`addons/helisim/fm.p3d`). Keep it there: it is the source for every regeneration.
+It is never loaded or referenced in game - it is only read by the tool.
+
+- **Save it unbinarized** - the normal Object Builder save. The tool cannot read
+  a binarized p3d. Your build packs it into the PBO like any other file in the
+  folder; that is harmless, nothing uses the packed copy.
+- **One LOD.** Everything goes in the first resolution LOD, `0.000`. The tool
+  reads only that LOD. No Memory LOD, no named points.
+- **Same space as your aircraft.** Build the faces over your aircraft's model -
+  in your modeller of choice, from the model or from blueprints - and import them
+  into fm.p3d, so they sit on the airframe in Object Builder where they act. The
+  tool writes the coordinates exactly as they are in fm.p3d, and Core moves them
+  into Arma's frame by your model's `boundingCenter` when the aircraft starts.
+  Copying your aircraft's model into the LOD as a reference is the easiest way to
+  check; delete it before running the tool, because every named selection left in
+  the LOD must be a surface.
+
+#### 2. Model each surface as quads
+
+Every face must be a **quad** - exactly four vertices. Triangles and faces with
+more corners are rejected.
+
+**A quad is the surface's outline, not its shape.** Do not model an airfoil
+section, camber or thickness - the section comes from the `airfoil` the surface
+is given (section 6), and Core works its lift and drag from that. Model the
+quad's planform, place it where the surface is, and set its angle:
+
+- **Incidence and dihedral** - tilt the quad.
+- **Taper and sweep** - shape the outline.
+- **Twist (washout)** - twist the quad: move the tip's corners so it is no
+  longer flat. Each strip of the quad (`numElements`) takes its incidence from
+  its own part of the leading and trailing edges, so the twist carries along
+  the span.
+
+A surface can have more than one quad where its outline changes along the span
+- the Tiger's wings are two each, inboard and outboard. Each quad is cut into
+`numElements` strips of its own.
+
+Give **every quad its own named selection**: select the face (its four vertices
+come with it) and name the selection. The selection must hold that one face and
+its four vertices and nothing else.
+
+The selection's name is the surface it belongs to, from this list, exactly as
+written (it is case-sensitive):
+
+| Name | Kind | What Core does with it |
+|---|---|---|
+| `fuselageTop` | Fuselage | Lift and drag across the top of the body |
+| `fuselageSide` | Fuselage | Lift and drag across the side - the weathervane |
+| `fuselageFront` | Fuselage | Drag against airspeed |
+| `leftWing`, `rightWing` | Wing | Lift and drag |
+| `horizontalStabilizer` | Wing | Lift and drag; **fixed** |
+| `stabilator` | Wing | Lift and drag; **moves** - Core schedules its incidence from `heliSimStabTable`, it is damaged through the `"stabilator"` damage role, and it animates `Hstab` |
+| `verticalFin` | Wing | Lift and drag - the side force |
+| `leftVerticalFin`, `rightVerticalFin` | Wing | Lift and drag - end-plate fins |
+
+**Number the quads of a surface** - `fuselageSide01`, `fuselageSide02`, ...
+`fuselageSide14`. The number only keeps the selections apart; all of a
+surface's quads become one surface. A surface with one quad needs no number
+(`verticalFin`).
+
+**All three fuselage surfaces are required.** Wings are optional - declare only
+the ones your aircraft has, or none.
+
+#### 3. Point each face the way its force acts
+
+Every face points one way - the order its corners run in decides which. That
+direction is its **facing**. You do not type it; the tool reads it from the
+face, and reversing the face in Object Builder reverses it.
+
+**Each face's lift is reckoned from the face itself**: Core takes the normal of
+every quad, every fuselage panel included, from its corners, and `facing` only
+says which side of it is the front. A quad you tilt 5° acts 5° tilted.
+
+The tool prints each surface's facing when it runs (section 5) as one of `up`,
+`down`, `left`, `right`, `forward`, `backward` - the axis the face points along
+most. **Check that list**: a surface showing the wrong direction is a face to
+reverse.
+
+- **Wings, stabilisers:** point them where their lift goes. A wing lifts `up`.
+  A horizontal stabiliser that holds the tail down (a cambered section mounted
+  upside down) faces `down`.
+- **Fins:** point them to the side their cambered side faces.
+- **Fuselage:** `fuselageTop` must face `up` or `down`, `fuselageSide` `left` or
+  `right`, `fuselageFront` `forward` or `backward`. The fuselage's section is
+  symmetric, so which of the pair makes no difference to the force.
+
+**Every quad of a surface should face the same way.** If most of them agree and
+a few face exactly the opposite way, the tool turns those few to match and
+tells you which - `fuselageSide04 was flipped to conform to its neighbours`. Fix
+them in the model when you next touch it. If there is no majority (two up, two
+down) the tool stops.
+
+#### 4. Corner order does not matter
+
+Place the four corners in any order. The tool sorts them itself: it winds them
+around the face and starts each quad at its **leading edge** - of the two edges
+running across the airflow, the one further forward. The leading edge is what
+the chord line is measured from, where the force acts (`chordLinePos`), and the
+hinge a stabilator turns about.
+
+#### 5. Run the generator
+
+Core's release ships it in `@bmkhs/python/tools/`. It needs Python 3 and nothing
+else. From `@bmkhs/python/`:
+
+    python tools\fm_generateAeroSurfacePoints.py path\to\yourPack\addons\yourAddon\fm.p3d path\to\yourPack\addons\yourAddon\config\bmkhs_config
+
+The first path is your `fm.p3d`; the second is the folder that holds your
+`helisim_fuselage.hpp` and `helisim_wings.hpp`. It checks the whole model
+first, then lists what it found:
+
+      fuselageTop            up       5 quads
+      fuselageSide           right    14 quads
+      fuselageFront          forward  18 quads
+      leftWing               up       2 quads
+      ...
+
+    All data will be reset to default. Continue? (y/n)
+
+Answer `y` to write both files. Anything else writes nothing. **Both files are
+rewritten in full every time** - geometry, facing, and every other value back
+at its default. Any value you tuned by hand is lost: note your changes before
+you regenerate, and put them back after.
+
+If the model has a problem, the tool writes nothing and says what:
+
+| Message | Fix |
+|---|---|
+| `you didn't name X correctly - it must be one of: ...` | Rename the selection to a name from the table, with or without a number |
+| `X must be exactly one 4-sided face` | The selection holds a triangle, more than one face, or stray vertices - reselect just the quad |
+| `quad facing mismatch, please ensure all quads are facing the same direction on surface X` | The surface's quads split evenly between two directions, or one faces along a different axis - reverse the wrong ones |
+| `X faces Y - it must face ...` | A fuselage surface faces the wrong axis - reverse or remodel it |
+| `the fuselage needs all three surfaces - X missing` | Model the missing fuselage surface |
+| `... is not an unbinarized (MLOD) .p3d` | Point it at the Object Builder save, not a binarized copy |
+| `... has no 0.000 LOD` | Put the quads in the first resolution LOD |
+
+#### 6. What it writes
+
+Both files are included from `class BMKHS_HeliSim` (see the top of this step).
+
+**`helisim_fuselage.hpp`:**
+
+| Field | Written as | What it is |
+|---|---|---|
+| `fuselageAirfoil` | `"NACA 0012"` | Section every fuselage panel uses for lift and drag, by name from `helisim_airfoils.hpp` |
+| `class FuselagePanels` | three classes | One per fuselage surface |
+| ... `name` | the surface | `fuselageTop`, `fuselageSide`, `fuselageFront` - Core finds each set by it |
+| ... `facing` | from the model | See section 3 |
+| ... `dragCoefTable[]` | `{altitude ft, CD}` rows | Drag coefficient against pressure altitude. Top and side: 0.200 at sea level rising to 0.750 at 8,000 ft; front: 0.800 rising to 3.000 |
+| ... `panels[]` | from the model | Each quad's four corners `{right, forward, up}` in m, leading edge first |
+
+**`helisim_wings.hpp`:**
+
+| Field | Written as | What it is |
+|---|---|---|
+| `class Wings` | one class per surface | Core reads every class inside |
+| ... `name` | the surface | `stabilator` is the one that moves |
+| ... `facing` | from the model | See section 3 |
+| ... `numElements` | `4` | Strips each quad is cut into along its span. More strips follow the airflow across a rolling or yawing surface more closely |
+| ... `airfoil` | `"NACA 4418"`; `"NACA 0012"` for `stabilator` and `horizontalStabilizer` | Section, by name from `helisim_airfoils.hpp` |
+| ... `chordLinePos` | `0.25` | Where along the chord the force acts, as a fraction back from the leading edge |
+| ... `panels[]` | from the model | Each quad's four corners `{right, forward, up}` in m, leading edge first |
+| `heliSimStabTable[]` | only with a `stabilator` | The stabilator's incidence, deg: rows are collective 0 to 1, columns 30 to 180 kts |
+
+Tune `airfoil`, `numElements`, `chordLinePos`, the drag tables and the
+stabilator schedule in the written files once the geometry is right. Remember
+the next regeneration resets them.
+
+#### 7. Check it in game
+
+Turn on **Enable FM Debugging** (CBA settings, *BradMick's HeliSim* > *Testing*)
+and look at the aircraft. Every quad is drawn where Core has it:
+
+- The outline of each wing quad, its **leading edge in red** and the other
+  three edges white. A red edge anywhere but the front is a quad the tool could
+  not read the way you meant - check that surface in the model.
+- Each wing strip's chord line in blue and its facing in white; the airflow in
+  red; lift in green and drag in red, scaled.
+- The fuselage quads outlined red and white.
+
+The quads should lie on the airframe. If they sit off it, the faces in fm.p3d
+do not overlay your aircraft's model in Object Builder - paste the model in and
+compare.
+
 ### Mass and balance - converting the CG
 
 `bmkhs_config/helisim_mass.hpp`. Three coordinate frames are involved, and
@@ -362,7 +594,7 @@ every number has to go into the right one.
 |---|---|---|
 | **Model** | Object Builder (p3d) coordinates, metres. x right, **y toward the nose**, z up. | `fsDatum`, `fwdCgLimit`, `aftCgLimit`, every `arm[]` (seats, tanks, stations, magazines) |
 | **Fuselage station (FS)** | The flight manual's. Distance **aft** of the datum, in inches or metres. | `emptyMom` and each `EmptyMassVariants` `moment` |
-| **Arma** | What `getCenterOfMass` / `setCenterOfMass` use. The model frame shifted by the model's `boundingCenter`. | None. Core converts to it. Never enter a number from it. |
+| **Arma** | Where Arma places everything in game - the centre of mass, forces, debug lines: the model frame minus the model's `boundingCenter` (`boundingCenter vehicle player` in the debug console). | None. Core converts every config position to it. Never enter a number from it. |
 
 Only the longitudinal (y) position is computed. Lateral comes from the item arms,
 with the empty airframe on the centreline. Vertical is not computed: the z of
@@ -467,7 +699,7 @@ Rules worth knowing before you write them:
 `bmkhs_config/helisim_components.hpp`. This is where systems come from, and
 `components.hpp` in Core is the field reference.
 
-The six kinds:
+The five kinds:
 
 | kind | is |
 |---|---|

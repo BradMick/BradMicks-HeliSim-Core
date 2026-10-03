@@ -21,12 +21,15 @@ params ["_heli", "_config"];
 
 private _panelSets = createHashMap;
 
+//Panels are Object Builder positions; Arma's model frame is offset from those by boundingCenter.
+private _modelOffset = boundingCenter _heli;
+
 {
     private _p = _x;
 
     private _name   = getText (_p >> "name");
     private _facing = toLower getText (_p >> "facing");
-    private _panels = getArray (_p >> "panels");
+    private _panels = (getArray (_p >> "panels")) apply { _x apply { _x vectorDiff _modelOffset } };
 
     //Keyed by what the set IS, so nothing downstream assumes set 0 is the top.
     _panelSets set [_name, createHashMapFromArray [
@@ -38,7 +41,5 @@ private _panelSets = createHashMap;
     ]];
 } forEach ("true" configClasses (_config >> "FuselagePanels"));
 
-_heli setVariable ["bmkhs_fuselagePosition",     getArray (_config >> "fuselagePosition")];
-_heli setVariable ["bmkhs_fuselageRotation",     getArray (_config >> "fuselageRotation")];
 _heli setVariable ["bmkhs_fuselageAirfoil",      getText  (_config >> "fuselageAirfoil")];
 _heli setVariable ["bmkhs_fuselagePanels",       _panelSets];
