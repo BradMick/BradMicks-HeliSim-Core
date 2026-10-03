@@ -2,7 +2,7 @@
 Function: bmkhs_fnc_wingVariables
 
 Description:
-    Loads the per-wing configuration. Core loops over numWings, so an aircraft
+    Loads the per-wing configuration: every class in Wings, so an aircraft
     declares as many lifting surfaces as it has - wings, fins, stabilators - or
     none at all.
 
@@ -22,25 +22,17 @@ params ["_heli", "_config"];
 //Fields read straight off the surface's class. The key a reader asks for IS the config
 //property name, so grepping a knob finds the config, this list and every use of it.
 private _numFields = [
-     "isStabilator"
-   , "pitch"
-   , "roll"
-   , "span"
-   , "chord"
-   , "sweep"
-   , "twist"
-   , "tipWidthScalar"
-   , "numElements"
+     "numElements"
    , "chordLinePos"
 ];
-private _arrFields  = ["pos"];
-private _textFields = ["name", "airfoil"];
+private _arrFields  = ["panels"];
+private _textFields = ["name", "facing", "airfoil"];
 
-private _numWings = getNumber (_config >> "numWings");
-private _wings    = [];
+private _wings = [];
 
-for "_i" from 1 to _numWings do {
-    private _w = (_config >> "Wings") >> format ["Wing%1%2", ["0", ""] select (_i > 9), _i];
+{
+    private _w = _x;
+    private _i = _forEachIndex + 1;
 
     //Hashmap, not a positional array: adding or removing a field cannot silently shift
     //what every reader sees.
@@ -49,6 +41,7 @@ for "_i" from 1 to _numWings do {
     { _wing set [_x, getNumber (_w >> _x)]; } forEach _numFields;
     { _wing set [_x, getArray  (_w >> _x)]; } forEach _arrFields;
     { _wing set [_x, getText   (_w >> _x)]; } forEach _textFields;
+    _wing set ["facing", toLower (_wing get "facing")];
 
     //The surface NAMES itself, so a table or a readout says "vertical fin" rather than
     //wing 3.
@@ -59,9 +52,9 @@ for "_i" from 1 to _numWings do {
     _wing set ["airfoilTable", [_heli, _wing get "airfoil", _name] call bmkhs_fnc_airfoilGet];
 
     _wings pushBack _wing;
-};
+} forEach ("true" configClasses (_config >> "Wings"));
 
-_heli setVariable ["bmkhs_numWings", _numWings];
+_heli setVariable ["bmkhs_numWings", count _wings];
 _heli setVariable ["bmkhs_wings",    _wings];
 
 if (local _heli) then {

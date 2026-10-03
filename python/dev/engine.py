@@ -1,6 +1,6 @@
 """The HeliSim engine, drivetrain and simple rotors, outside Arma. A 1:1 port of Core.
 
-Run it:  python python/engine.py
+Run it:  python python/dev/engine.py
 
 Every function below is named after the SQF function it ports and carries its inputs, outputs
 and expressions line for line. The frame runs in fn_coreUpdate's order: environment ->

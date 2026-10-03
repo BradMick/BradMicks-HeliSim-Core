@@ -13,7 +13,7 @@ private _heliCom        = getCenterOfMass _heli;
 private _rho            = _heli getVariable "bmkhs_rho";
 private _debugLineScale = 1.0 / 30.0;
 
-private _panelSet       = (_heli getVariable "bmkhs_fuselagePanels") get "front";
+private _panelSet       = (_heli getVariable "bmkhs_fuselagePanels") get "fuselageFront";
 private _position       = _heli getVariable "bmkhs_fuselagePosition";
 private _rotation       = _heli getVariable "bmkhs_fuselageRotation";
 private _dragCoefTable  = _panelSet get "dragCoefTable";

@@ -1,6 +1,6 @@
 """Compressor map generator - builds an engine's compressorMap[] from its ratings table.
 
-Run it:  python python/compressor_map.py <bmkhs_config folder> <ratings file>
+Run it:  python python/tools/compressor_map.py <bmkhs_config folder> <ratings file>
 
 The config folder is the aircraft's bmkhs_config/ - its helisim_engine.hpp gives the engine's
 spec (pressureRatio, massFlow, maxNg, powerKw, efficiencies) and helisim_simpleRotor.hpp the
@@ -25,7 +25,8 @@ if len(sys.argv) < 3:
     print(__doc__)
     sys.exit(1)
 os.environ['BMKHS_CONFIG'] = os.path.abspath(sys.argv[1])
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+#The rating check flies the rig, which lives in dev/ beside this folder.
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'dev'))
 import engine as E
 
 XC = (E.GT_GAMMA_COLD - 1) / E.GT_GAMMA_COLD

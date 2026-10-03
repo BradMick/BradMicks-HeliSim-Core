@@ -316,8 +316,8 @@ Set it up in this order:
 
 **An engine that is not a T700 - build its compressor map.** If you have the
 engine's limitations table (N1, T45 and torque for each rating, at sea level and
-a stated temperature), Core's release ships a generator in `@bmkhs/python/`. It
-needs Python 3 and nothing else.
+a stated temperature), Core's release ships a generator in `@bmkhs/python/tools/`.
+It needs Python 3 and nothing else.
 
 1. Fill in the spec numbers in your `helisim_engine.hpp` first (step 1 above).
 2. Write a ratings file, one rating per line, fractions for N1 and torque:
@@ -330,7 +330,7 @@ needs Python 3 and nothing else.
 
 3. Run it against your pack's config folder:
 
-       python compressor_map.py path\to\yourPack\addons\...\config\bmkhs_config ratings.txt
+       python tools\compressor_map.py path\to\yourPack\addons\...\config\bmkhs_config ratings.txt
 
 4. Paste the printed `compressorMap[] = {...};` into your engine's
    `class Compressor`, and set `fuelIdle` to the value it reports.

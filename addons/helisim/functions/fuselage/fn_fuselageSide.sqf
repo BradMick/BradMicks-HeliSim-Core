@@ -12,7 +12,8 @@ private _heliCom        = getCenterOfMass _heli;
 private _rho            = _heli getVariable "bmkhs_rho";
 private _debugLineScale = 1.0 / 30.0;
 
-private _panelSet       = (_heli getVariable "bmkhs_fuselagePanels") get "side";
+private _panelSet       = (_heli getVariable "bmkhs_fuselagePanels") get "fuselageSide";
+private _sign           = [1.0, -1.0] select ((_panelSet get "facing") == "left");
 private _position       = _heli getVariable "bmkhs_fuselagePosition";
 private _rotation       = _heli getVariable "bmkhs_fuselageRotation";
 private _dragCoefTable  = _panelSet get "dragCoefTable";
@@ -49,7 +50,7 @@ for "_i" from 0 to (_count - 1) do {
 	private _chordLine = _vecFwd;
 	_chordLine         = vectorNormalized _chordLine;
 
-    private _up 	   = _vecRight;
+    private _up 	   = _vecRight vectorMultiply _sign;
     _up         	   = vectorNormalized _up;
 
 	private _right	   = _vecUp vectorMultiply -1.0;
@@ -77,7 +78,7 @@ for "_i" from 0 to (_count - 1) do {
 
     private _relWindNormalized = vectorNormalized _relWind;
 
-	private _aoa = (_relWindNormalized select 0) atan2 (_relWindNormalized select 1);
+	private _aoa = ((_relWindNormalized select 0) * _sign) atan2 (_relWindNormalized select 1);
 
     //Lift coefficient
     private _area        = [_a, _b, _c, _d] call bmkhs_fnc_mathGetArea;
