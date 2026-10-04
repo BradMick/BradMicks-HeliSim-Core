@@ -51,7 +51,7 @@ private _numFields = [
    , "reacTqScalar"
    , "autoTorque"
 ];
-private _arrFields   = ["pivot", "rotation"];
+private _arrFields   = ["pivot", "rotation", "controlMap"];
 private _gridFields  = ["liftCoefTable", "dragCoefTable"];
 
 private _numSimpleRotors = getNumber (_config >> "numSimpleRotors");

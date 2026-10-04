@@ -174,12 +174,25 @@ private _driveDmg = _engines apply {0};
 
     //What a destroyed component takes with it. An entry naming a damage role destroys that
     //role outright - a transmission is what holds the rotors, the generators and the pumps
-    //up, so losing it loses all of them. An entry naming a variable sets it at this
-    //member's index instead, which is how a nose gearbox that has come apart overspeeds
-    //the engine driving it.
+    //up, so losing it loses all of them. An entry naming a variable latches it true for the
+    //engines this component carries - its own engine for a nose gearbox, every engine for a
+    //component that sums them (a transmission). Unloaded, an engine overspeeds and trips.
+    //Set on destruction only; repair clears it.
     {
         if ((_x select [0, 6]) == "bmkhs_") then {
-            [_heli, _x, _index, _damage >= 1.0, false] call bmkhs_fnc_utilSetArrayVariable;
+            if (_damage >= 1.0) then {
+                private _var = _x;
+                private _members = [_index];
+                if (_comp get "torqueSum") then {
+                    _members = [];
+                    for "_e" from 0 to ((count _engines) - 1) do { _members pushBack _e };
+                };
+                {
+                    if !((_heli getVariable [_var, []]) param [_x, false]) then {
+                        [_heli, _var, _x, true, true] call bmkhs_fnc_utilSetArrayVariable;
+                    };
+                } forEach _members;
+            };
         } else {
             if (_damage >= 1.0) then {
                 private _n = [_heli, _x] call bmkhs_fnc_damageCount;

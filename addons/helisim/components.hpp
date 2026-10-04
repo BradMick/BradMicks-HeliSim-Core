@@ -121,8 +121,11 @@
 //  breaksOnFailure[]  what a destroyed component takes with it. An entry naming a damage
 //                role destroys that role outright - a transmission is what holds the
 //                rotors, the generators and the pumps up. An entry naming a bmkhs_
-//                variable sets it true at this member's index instead, which is how a
-//                nose gearbox that has come apart overspeeds its engine
+//                variable latches it true for the engines this component carries
+//                instead - its own engine for a per-engine part (a nose gearbox), every
+//                engine for one with torqueSum (a transmission). {"bmkhs_engineOverspeed"}
+//                is how a drive that has come apart unloads and trips its engines.
+//                Set on destruction only; repair clears it
 //  networked     see above
 //
 //A COMPONENT IS A PHYSICAL THING - the APU, a generator, a pump, the accumulator. What it

@@ -2,11 +2,9 @@ params ["_heli"];
 #include "\bmkhs_helisim\functions\core\core.hpp"
 #include "\bmkhs_helisim\functions\systems\systems.hpp"
 
-private _mechanicalMixing = false;
-
-//Control mixing
+//Control mixing - mechanical mixes always apply; electronic ones carry their own gates
 ([_heli] call bmkhs_fnc_fmcControlMixing)
-    params ["_collToPitchOut", "_collToRollOut", "_collToYawOut", "_yawToPitchOut", "_yawToRollOut", "_collAirspeedToYawOut"];
+    params ["_mixPitchOut", "_mixRollOut", "_mixYawOut"];
 //Attitude Hold
 ([_heli] call bmkhs_fnc_fmcAttitudeHold)
     params ["_attHoldCycPitchOut", "_attHoldCycRollOut"];
@@ -25,28 +23,16 @@ if (bmkhs_springlessPedals || bmkhs_autoPedal) then {
 if (!(_heli getVariable "bmkhs_fmcPitchOn")) then {
     _attHoldCycPitchOut = 0.0;
     _SASPitchOutput     = 0.0;
-    if (!_mechanicalMixing) then {
-        _collToPitchOut = 0.0;
-        _yawToPitchOut  = 0.0;
-    };
 };
 
 if (!(_heli getVariable "bmkhs_fmcRollOn")) then {
     _attHoldCycRollOut = 0.0;
     _SASRollOutput     = 0.0;
-    if (!_mechanicalMixing) then {
-        _collToRollOut = 0.0;
-        _yawToRollOut  = 0.0;
-    };
 };
 
 if (!(_heli getVariable "bmkhs_fmcYawOn")) then {
     _hdgHoldPedalYawOut = 0.0;
     _SASYawOutput       = 0.0;
-    if (!_mechanicalMixing) then {
-        _collToYawOut         = 0.0;
-        _collAirspeedToYawOut = 0.0;
-    };
 };
 
 if (!(_heli getVariable "bmkhs_fmcCollOn")) then {
@@ -70,10 +56,9 @@ if (_priHydLost) then {
 };
 
 //Control mixing outputs
-_heli setVariable ["bmkhs_fmcCollectiveToPitch",         0.0];//_collToPitchOut];
-_heli setVariable ["bmkhs_fmcYawToPitch",                0.0];//_yawToPitchOut];
-_heli setVariable ["bmkhs_fmcCollectiveToRoll",          0.0];//_collToRollOut];
-_heli setVariable ["bmkhs_fmcYawToRoll",                 0.0];//_yawToRollOut];
+_heli setVariable ["bmkhs_mixPitchOut",                  _mixPitchOut];
+_heli setVariable ["bmkhs_mixRollOut",                   _mixRollOut];
+_heli setVariable ["bmkhs_mixYawOut",                    _mixYawOut];
 //Flight Management Computer (FMC) outputs
 _heli setVariable ["bmkhs_fmcAttHoldCycPitchOut",        _attHoldCycPitchOut];
 _heli setVariable ["bmkhs_fmcAttHoldCycRollOut",         _attHoldCycRollOut];
@@ -84,4 +69,3 @@ _heli setVariable ["bmkhs_fmcSasPitchOut",               _SASPitchOutput];
 _heli setVariable ["bmkhs_fmcSasRollOut",                _SASRollOutput];
 _heli setVariable ["bmkhs_fmcSasYawOut",                 _SASYawOutput];
 
-//systemChat format ["%1 -- %2 -- %3 -- %4 -- %5", _collToPitchOut toFixed 2, _yawToPitchOut toFixed 2, _collToRollOut toFixed 2, _yawToRollOut toFixed 2, _collToYawOut toFixed 2];

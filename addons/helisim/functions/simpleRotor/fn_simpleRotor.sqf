@@ -33,6 +33,10 @@ private _gearRatio        = _rotor get "gearRatio";
 private _pivot            = _rotor get "pivot";
 private _mastLength       = _rotor get "mastLength";
 private _rot              = _rotor get "rotation";
+//Casual sets a tail rotor upright - no cant, so it yaws without pitching or rolling the aircraft.
+if (bmkhs_helisimRealismSetting != REALISTIC && {_type == TAIL}) then {
+    _rot = [0.0, [90.0, -90.0] select ((_rot select 1) < 0), _rot select 2];
+};
 private _flapLonMin       = _rotor get "pitchFlapMin";
 private _flapLonMid       = _rotor get "pitchFlapMid";
 private _flapLonMax       = _rotor get "pitchFlapMax";
@@ -52,6 +56,7 @@ private _rollLiftCoef     = _rotor get "rollLiftCoef";
 private _pitchLiftCoef    = _rotor get "pitchLiftCoef";
 private _coneAngle        = _rotor get "coneAngle";
 private _autoTorque       = _rotor get "autoTorque";
+private _controlMap       = _rotor get "controlMap";
 
 //Delta time
 private _deltaTime          = _heli getVariable "bmkhs_deltaTime";
@@ -106,6 +111,12 @@ private _bladeVel_75    = _omega * _bladeRad_75;
 //Rotor cone angle
 private _collCone       = _collOutput * _coneAngle;
 
+//Table key - the control through the rotor's optional controlMap, which shapes the response
+//between the table's rows. Cone, autorotation and mixing still see the control itself.
+private _tableKey       = if (_controlMap isEqualTo []) then { _collOutput } else {
+    ([_controlMap, _collOutput] call bmkhs_fnc_mathLinearInterp) select 1
+};
+
 //Dissymetry of lift - casual has none, the disc does not tilt with speed
 if (bmkhs_helisimRealismSetting != REALISTIC) then {
     _flapBackRollMax  = 0.0;
@@ -144,7 +155,7 @@ for "_i" from 0 to 3 do {
     //Because the model is 4 fixed points, we have to scale based on the number of blades
     private _bladeScalar    = _numBlades / 4;
     //Blade lift
-    private _liftCoef       = [_liftCoefTable, _collOutput, _velXY] call bmkhs_fnc_mathLinearInterp2D;
+    private _liftCoef       = [_liftCoefTable, _tableKey, _velXY] call bmkhs_fnc_mathLinearInterp2D;
     //Blade lift
     private _bladeLift      = _liftCoef * 0.5 * _dryAirDensity * _bladeArea * (_bladeVel_75 * _bladeVel_75);
     _bladeLift              = _bladeLift * _bladeScalar;
@@ -154,7 +165,7 @@ for "_i" from 0 to 3 do {
     private _bladeLiftDelta = _liftCoefDelta * 0.5 * _dryAirDensity * _bladeArea * (_bladeVel_75 * _bladeVel_75);
     _bladeLiftDelta         = _bladeLiftDelta * _bladeScalar;
     //Blade drag
-    private _dragCoef       = [_dragCoefTable, _collOutput, _velXY] call bmkhs_fnc_mathLinearInterp2D;
+    private _dragCoef       = [_dragCoefTable, _tableKey, _velXY] call bmkhs_fnc_mathLinearInterp2D;
     private _bladeDrag      = _dragCoef * 0.5 * _dryAirDensity * _bladeArea * (_bladeVel_75 * _bladeVel_75);
     _bladeDrag              = _bladeDrag * _bladeScalar;
     //Total rotor torque - drag brakes the rotor, upflow in a descent drives it

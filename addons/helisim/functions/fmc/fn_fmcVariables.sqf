@@ -52,10 +52,31 @@ _heli setVariable ["bmkhs_fmcHdgHoldPedalYawOut", 0.0];
 _heli setVariable ["bmkhs_fmcSasYawOut",          0.0];
 _heli setVariable ["bmkhs_fmcAltHoldCollOut",     0.0];
 _heli setVariable ["bmkhs_fmcAttHoldCycRollOut",  0.0];
-_heli setVariable ["bmkhs_fmcCollectiveToPitch",  0.0];
-_heli setVariable ["bmkhs_fmcCollectiveToRoll",   0.0];
-_heli setVariable ["bmkhs_fmcYawToPitch",         0.0];
-_heli setVariable ["bmkhs_fmcYawToRoll",          0.0];
+_heli setVariable ["bmkhs_mixPitchOut",           0.0];
+_heli setVariable ["bmkhs_mixRollOut",            0.0];
+_heli setVariable ["bmkhs_mixYawOut",             0.0];
+
+//Control mixing - the aircraft's declared mixes, read once. A mix with no table or an
+//unknown source or target is skipped.
+private _mixes = [];
+{
+    private _target = ["pitch", "roll", "yaw"] find toLower getText (_x >> "target");
+    private _source = toLower getText (_x >> "source");
+    private _table  = getArray (_x >> "table");
+    if (_target >= 0 && {_source in ["collective", "pedal"]} && {_table isNotEqualTo []}) then {
+        _mixes pushBack (createHashMapFromArray [
+            ["name",     configName _x],
+            ["source",   _source],
+            ["target",   _target],
+            ["table",    _table],
+            ["airspeed", getArray (_x >> "airspeed")],
+            ["gate",     getArray (_x >> "gate")]
+        ]);
+    } else {
+        diag_log format ["[BMKHS] MIXING CONFIG ERROR: %1 needs source, target and table[]. Skipped.", configName _x];
+    };
+} forEach ("true" configClasses (_config >> "ControlMixing"));
+_heli setVariable ["bmkhs_mixes", _mixes];
 
 //Modes and holds - networked, so only the machine the aircraft is local to sets them.
 if (local _heli) then {

@@ -70,6 +70,18 @@ private _crew = fullCrew _heli;
     };
 } forEach (_heli getVariable ["bmkhs_seats", []]);
 
+//Fitted equipment - counts while its source is on the same side of 0.5 as installedPhase
+{
+    private _phase = _heli animationSourcePhase (_x get "animation");
+    if ((_phase >= 0.5) isEqualTo ((_x get "installedPhase") >= 0.5)) then {
+        private _arm  = _x get "arm";
+        private _mass = _x get "mass";
+        _curMass = _curMass + _mass;
+        _latMom  = _latMom  + (_mass * (_arm select 0));
+        _longMom = _longMom + (_mass * (_arm select 1));
+    };
+} forEach (_heli getVariable ["bmkhs_equipment", []]);
+
 //Internal fuel. Each tank carries its own arm, so a tank is a mass at a position.
 //A removable tank that is not fitted contributes nothing. Auxiliary tanks are counted
 //with their wing station instead.

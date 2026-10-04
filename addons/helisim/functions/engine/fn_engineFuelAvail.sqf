@@ -29,6 +29,7 @@ if ((_heli getVariable "bmkhs_numFuelTanks") == 0) exitWith {
 private _state = _heli getVariable "bmkhs_engState";
 private _since = _heli getVariable "bmkhs_engStarvedSince";
 private _tanks = (_heli getVariable "bmkhs_crossfeedSources") getOrDefault [_heli getVariable "bmkhs_crossfeedMode", []];
+private _selectors = _heli getVariable "bmkhs_engFuelSelectors";
 private _ctrls = _heli getVariable "bmkhs_ctrlIndex";
 private _dcOn  = _heli getVariable "bmkhs_dcBusOn";
 
@@ -36,7 +37,11 @@ private _avail    = [];
 private _newSince = [];
 {
     private _e    = _forEachIndex;
-    private _tank = _tanks param [_e, ""];
+    //Its own selector's position if it has one, else the crossfeed position's source
+    private _sel  = _selectors param [_e, []];
+    private _tank = if (_sel isEqualTo []) then {_tanks param [_e, ""]} else {
+        (_sel select 1) param [_heli getVariable [format ["bmkhs_%1Idx", _sel select 0], 0], ""]
+    };
     //An armed fire handle closes this engine's fuel while DC is up.
     private _handle = format ["eng%1FireHandle", _e + 1];
     private _shut   = _dcOn && {_handle in _ctrls} && {_heli getVariable (format ["bmkhs_%1On", _handle])};

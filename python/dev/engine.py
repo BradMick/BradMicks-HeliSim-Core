@@ -293,6 +293,7 @@ def simple_rotor_variables(H, cfg):
         rot['dir'] = CW if r['direction'].lower() == 'cw' else CCW
         rot['dragCoefTable'] = math_build_interp_grid(r['dragCoefTable'])
         rot['liftCoefTable'] = math_build_interp_grid(r['liftCoefTable'])
+        rot['controlMap'] = r.get('controlMap', [])
         rotors.append(rot)
     H['bmkhs_simpleRotors'] = rotors
     H['bmkhs_reqEngTorque'] = [0.0, 0.0]
@@ -620,7 +621,7 @@ def simple_rotor(H, idx, rotor):
 
     rotorTorque = 0.0
     bladeScalar = rotor['numBlades'] / 4
-    dragCoef = math_linear_interp_2d(rotor['dragCoefTable'], collOutput, velXY)
+    dragCoef = math_linear_interp_2d(rotor['dragCoefTable'], simple_rotor_table_key(rotor, collOutput), velXY)
     for _ in range(4):
         bladeDrag = dragCoef * 0.5 * rho * bladeArea * (bladeVel75 * bladeVel75) * bladeScalar
         rotorTorque += bladeDrag * bladeRad75
@@ -653,9 +654,15 @@ def simple_rotor_thrust(H, rotor):
     velZ = H['hubVelZ']
     viScalarDenom = linear_conversion(-7.62, -19.30, velZ, VEL_VRS, VEL_VRS * 0.1, True)
     viScalar = 0.0 if (velZ < -VEL_VRS and velXY < VEL_ETL) else 1 - (velZ / viScalarDenom)
-    liftCoef = math_linear_interp_2d(rotor['liftCoefTable'], collOutput, velXY)
+    liftCoef = math_linear_interp_2d(rotor['liftCoefTable'], simple_rotor_table_key(rotor, collOutput), velXY)
     bladeLift = liftCoef * 0.5 * rho * (rotor['bladeRadius'] * rotor['bladeChord']) * (bladeVel75 * bladeVel75)
     return 4 * bladeLift * (rotor['numBlades'] / 4) * viScalar
+
+
+def simple_rotor_table_key(rotor, control):
+    """fn_simpleRotor's _tableKey - the control through the rotor's optional controlMap."""
+    m = rotor.get('controlMap') or []
+    return control if not m else math_linear_interp(m, control)[1]
 
 
 def simple_rotor_update(H):

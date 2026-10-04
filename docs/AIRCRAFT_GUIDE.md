@@ -18,6 +18,9 @@ field means:
 
 This guide is the ORDER. Those are the DETAIL.
 
+Those three cover what you DECLARE. What Core PUBLISHES back - every variable, event and
+read function a pack can use - is the **Reference** at the end of this guide.
+
 ---
 
 ## Step 0 - What you need before starting
@@ -585,6 +588,83 @@ The quads should lie on the airframe. If they sit off it, the faces in fm.p3d
 do not overlay your aircraft's model in Object Builder - paste the model in and
 compare.
 
+### Rotor control map
+
+A simple rotor reads its `liftCoefTable` and `dragCoefTable` by its control - collective for a
+main rotor, pedal for a tail rotor. `controlMap[]` (optional) reshapes that control into the
+table's key, so the table carries the MAGNITUDES and the map carries the SHAPE between them:
+
+```cpp
+controlMap[] = {             //{control, table key}
+    {-1.0, -1.0},
+    { 1.0,  1.0}
+};
+liftCoefTable[] = {
+     {"A/S", 0.00,   10.29,  ...}
+    ,{-1.00, 0.6293, 0.6917, ...}   //full left pedal
+    ,{ 0.00, 0.0000, 0.0000, ...}   //centred
+    ,{ 1.00,-0.0629,-0.0692, ...}   //full right pedal
+};
+```
+
+A tail rotor set this way is three rows - left, mid, right - and a map, rather than a dense
+table that has to encode the curve in its rows. Sparse rows WITHOUT a map interpolate in straight
+segments, and a corner between two rows is felt in the pedals.
+
+Set the magnitudes so hover trim sits where the pilot should hold it. Hover torque against
+full-pedal authority decides it: full left at many times hover torque puts trim near centre,
+however the map is shaped. `python/dev/forces.py` (the rig) solves hover trim at every collective
+for a pack's config.
+
+No map: the control is the key, as before. Cone angle, autorotation and control mixing read
+the control itself, not the mapped key.
+
+Outside REALISTIC Core sets every tail rotor upright - pitch 0, roll 90 - so a canted tail rotor
+yaws without pitching or rolling the aircraft. Nothing to declare.
+
+### Control mixing
+
+For an airframe whose controls are mixed - the UH-60's mixing unit, compensating its canted
+tail rotor - declare `class ControlMixing` beside the flight control gains. An airframe with
+none declares nothing.
+
+Each mix adds control travel to one rotor axis from one control's position:
+
+```cpp
+class ControlMixing {
+    class YawToPitch {
+        source  = "pedal";       //"collective" (0..1) or "pedal" (-1..1, + right)
+        target  = "pitch";       //"pitch" (+ fwd), "roll" (+ left) or "yaw" (+ right pedal)
+        table[] = {              //{source position, added travel}
+            {-1.0, -0.060},
+            { 1.0,  0.060}
+        };
+    };
+    class CollectiveAirspeedToYaw {
+        source     = "collective";
+        target     = "yaw";
+        table[]    = {
+            {0.0, 0.000},
+            {1.0, -0.050}
+        };
+        airspeed[] = {           //optional scale by airspeed, {knots, scale}
+            {  0, 1.0},
+            { 40, 1.0},
+            {100, 0.0}
+        };
+        gate[]     = {"bmkhs_fmcYawOn", "bmkhs_dcBusOn"};
+    };
+};
+```
+
+**No gate means mechanical** - linkage, always applied. **A gate makes it electronic**: every
+entry must hold, in the same form as a component gate. Gate an FCC-driven mix on its FMC
+channel and the bus that powers the computer, so it drops out with either.
+
+Mixes apply in REALISTIC only - casual has none. The per-axis totals are published as `bmkhs_mix<Axis>Out` and
+added to the rotor's control sum (see the Reference). Use the signs above - they are Core's
+control conventions, not the aircraft manual's.
+
 ### Mass and balance - converting the CG
 
 `bmkhs_config/helisim_mass.hpp`. Three coordinate frames are involved, and
@@ -592,7 +672,7 @@ every number has to go into the right one.
 
 | Frame | What it is | Which config values |
 |---|---|---|
-| **Model** | Object Builder (p3d) coordinates, metres. x right, **y toward the nose**, z up. | `fsDatum`, `fwdCgLimit`, `aftCgLimit`, every `arm[]` (seats, tanks, stations, magazines) |
+| **Model** | Object Builder (p3d) coordinates, metres. x right, **y toward the nose**, z up. | `fsDatum`, `fwdCgLimit`, `aftCgLimit`, every `arm[]` (seats, tanks, stations, magazines, equipment) |
 | **Fuselage station (FS)** | The flight manual's. Distance **aft** of the datum, in inches or metres. | `emptyMom` and each `EmptyMassVariants` `moment` |
 | **Arma** | Where Arma places everything in game - the centre of mass, forces, debug lines: the model frame minus the model's `boundingCenter` (`boundingCenter vehicle player` in the debug console). | None. Core converts every config position to it. Never enter a number from it. |
 
@@ -631,9 +711,41 @@ Check it by going back the other way: `fsDatum - emptyMom / emptyMass` must give
 the empty CG's model y. The same applies to every `EmptyMassVariants` `mass` and
 `moment` pair.
 
-**5. Item arms.** Seats, tanks, wing stations and magazines are model positions
-`{x, y, z}`. Read them in Object Builder, or convert a manual station with step 2
-for y.
+**5. Item arms.** Seats, tanks, wing stations, magazines and equipment are model
+positions `{x, y, z}`. Read them in Object Builder, or convert a manual station
+with step 2 for y.
+
+**Fitted equipment.** Parts the aircraft fits and removes by showing and hiding
+them - a probe, a hoist, pylon wings, doors, seats - are declared in
+`class Equipment`, one numbered class each, `numEquipment` of them. Make
+`emptyMass` the airframe with none of them fitted; each adds its weight while it
+is aboard.
+
+    numEquipment = 2;
+    class Equipment {
+        class Equipment01 {  //ESSS
+            animation      = "ESSS_show";            //the source, as the aircraft defines it
+            installedPhase = 1;                      //the phase at which the part is fitted
+            mass           = 198;                    //kg
+            arm[]          = {0.000, 1.000, -0.500};
+        };
+        class Equipment02 {  //Rescue hoist
+            animation      = "Hoist_hide";
+            installedPhase = 0;                      //the source hides it, so 0 is installed
+            mass           = 50;
+            arm[]          = {1.100, 1.800, 0.900};
+        };
+    };
+
+`installedPhase` is the one thing to get right: an airframe's sources read either
+way round, so each item names its source exactly as the aircraft defines it and
+the phase at which the part is fitted - 1 for a `_show` source, 0 for a `_hide`
+one. A part counts while its source is on the same side of halfway as
+`installedPhase`. Equipment reads the aircraft's own sources live, so whatever
+fits or removes a part - an Eden attribute, an ACE action, a script - changes the
+mass with no other wiring.
+`EmptyMassVariants` is for the one case equipment cannot express: a fitted part
+that replaces the whole empty mass and moment rather than adding to them.
 
 **6. What Core does with them, every frame** (`fn_massUpdate`):
 
@@ -645,7 +757,8 @@ for y.
                      CG y - boundingCenter y + comCorrection y,
                         - boundingCenter z + comCorrection z]
 
-An empty seat, an uninstalled removable tank and an empty pylon add nothing.
+An empty seat, an uninstalled removable tank, an empty pylon and a removed
+piece of equipment add nothing.
 Fuel moves the CG as it burns, because each tank's mass sits at its own arm.
 Casual mode skips all of this and sets `casualModeCom` directly, in the Arma frame.
 
@@ -841,6 +954,29 @@ Core raises events to the handler your pack registers for its base class, in
 **One handler per base class.** Registering again for the same class replaces
 it; another pack's aircraft never reach it.
 
+### When the cockpit framework animates
+
+Some interaction frameworks (Hatchet's lever interactions) animate a control
+themselves when it is clicked. Then the framework, not `controlMoved`, is the
+animator, and these hold:
+
+- **One animator.** The framework moves every cockpit control - clicks,
+  keybinds and linked controls alike. The pack never animates one as well, or the
+  two run on different clocks.
+- **Tell Core when the move starts, not when it ends.** Call `controlSet` from
+  the framework's start hook, so the engine and the lever move together.
+- **Refuse before moving.** Check the control's `enabledBy[]` / `inhibitedBy[]`
+  in the framework's pre-move condition, so a refused control never moves rather
+  than snapping back.
+- **`controlSet` runs where the aircraft is local.** A click from another seat is
+  forwarded to the owner.
+- **Linked controls go through the framework too.** Two power levers advancing
+  together are both moved by the framework, at one rate.
+- **Match the framework's rate to Core's.** A lever's travel time is the
+  engine's `leverTravelTime`.
+
+The H-60's `docs/HATCHET.md` is the worked example.
+
 ---
 
 ## Step 8 - Verify
@@ -903,3 +1039,550 @@ defect has recurred repeatedly in this codebase.
 **A gate that reads a variable published later in the same solve is a frame
 stale**, and that can deadlock a start. Gates can name a circuit instead, which
 reads the live value.
+
+---
+
+## Reference - what Core publishes
+
+Everything below is an output a pack can read: its type and units, whether it reaches other
+machines, and what it means. Inputs are the config field references
+(`components.hpp`, `controls.hpp`, `engine.hpp`); this is the other half.
+
+### How to read it
+
+- **Where it lives.** Every variable is on the aircraft - `_heli getVariable "bmkhs_..."` - except
+  the CBA settings, which are globals.
+- **Where it exists.** Core does not schedule itself; the pack calls `bmkhs_fnc_coreUpdate`, on
+  the machine where the aircraft is local (see Step 2). **local** means the value is written only
+  there; every other machine sees its init seed or nil. Anything another crew station displays
+  must be **net**.
+- **net** means Core publishes it. *On change* - sent when the value changes (through
+  `bmkhs_fnc_utilUpdateNetworkGlobal` / `bmkhs_fnc_utilSetArrayVariable`). *10 Hz* - engine
+  values `engine/fn_engineUpdate.sqf` re-broadcasts every 0.1 s in multiplayer. *Every frame* -
+  written with a public `setVariable` each update.
+- **Per engine / per rotor** means an array with one slot each, in `Engine01`, `Engine02`... order.
+- **Fractions**: 1.0 = 100%.
+- **`useSystems`**: many values are only solved with `useSystems = 1`, and some only exist if the
+  config declares that component, tank or control. Each row says so.
+- **Latched** means it stays set until repair or reset.
+- Read plainly, as "Things that will catch you" says - but a value marked *only if declared* is
+  nil on an aircraft that does not declare it.
+- Paths in parentheses are under `addons/helisim/functions/`.
+
+
+### Engines
+
+| Variable | Type / units | Net | Meaning |
+|---|---|---|---|
+| `bmkhs_numEngines` | number | local | Engine count. Taken from the `engines` hitpoint role count, or from config `numEngines` if there are none. Set at config load (set in `engine/fn_engineVariables.sqf`). |
+| `bmkhs_engines` | array of hashmaps, per engine | local | Each engine's config. Keys are the config property names (e.g. `name`, `idleNg`, `maxTgt`, `maxTgtSe`, `startTgt`, `startMinTgt`, `npFly`, `designRpm`, `maxNg`, `maxNp`, `oilPsiLimits`, `ngLimits`, `npLimits`, `tqLimits`, `tgtLimits`, `tqLimitsSe`, `tgtLimitsSe`, `ngMin`), plus the derived `refTq` (Nm, 100% torque). Read limits from here (set in `engine/fn_engineVariables.sqf`). |
+| `bmkhs_engDesignRpm` | number, rpm | local | Power turbine rpm at 100% Np, from Engine01 `designRpm`. This is the shaft reference for `bmkhs_xmsnOutputRpm`. Only set if there is at least one engine (set in `engine/fn_engineVariables.sqf`). |
+| `bmkhs_engState` | array of strings, per engine: `"OFF"`, `"STARTING"`, `"ON"` | net on change + 10 Hz | Engine run state. Goes `STARTING` on a start (start switch at +1 with useSystems = 1, or Arma engine-on with useSystems = 0). Goes `ON` when Ng reaches `selfSustNg`. Goes `OFF` on ignition override (-1) during a start, lever to OFF while ON, an engine failure, fuel starvation, or no bleed air (`bmkhs_pneuAvail` false) during a start (set in `engine/fn_engineUpdate.sqf`, `engine/gasTurbine/fn_gasTurbineStarter.sqf`). |
+| `bmkhs_engPowerLeverState` | array of strings, per engine: `"OFF"`, `"IDLE"`, `"FLY"` | net on change | Power lever detent. With useSystems = 1 it follows `bmkhs_eng<N>PwrLvrVal` (>= 1 FLY, > 0 IDLE, else OFF). With useSystems = 0 Core moves it to IDLE on Arma engine-on, then to FLY once Ng has held idle for 1 s (set in `engine/fn_engineUpdate.sqf`). |
+| `bmkhs_engPctNg` | array of numbers, per engine, fraction (1.0 = 100% Ng) | 10 Hz | Gas generator speed. Clamped 0 to 1.1 (set in `engine/turboShaftEngine/fn_turboShaftEngine.sqf`). |
+| `bmkhs_engPctNp` | array of numbers, per engine, fraction of `designRpm` (1.0 = 100%) | 10 Hz | Power turbine speed as the gauge reads it. Governed Np shows `npFly` (e.g. 1.01 = 101%) (set in `engine/turboShaftEngine/fn_turboShaftEngine.sqf`). |
+| `bmkhs_engPctTq` | array of numbers, per engine, fraction (1.0 = 100%) | 10 Hz | Engine torque against `refTq` (torque at `powerKw` at `designRpm * npFly`). Includes clutch slip (set in `engine/turboShaftEngine/fn_turboShaftEngine.sqf`). |
+| `bmkhs_engOutputTq` | array of numbers, per engine, Nm | local | Power turbine output torque, after clutch slip. Same value as `bmkhs_engPctTq` but in Nm. Not broadcast (set in `engine/turboShaftEngine/fn_turboShaftEngine.sqf`). |
+| `bmkhs_engTgt` | array of numbers, per engine, °C | 10 Hz | Turbine gas temperature as the gauge reads it (lagged). Starts at free air temperature (set in `engine/turboShaftEngine/fn_turboShaftEngine.sqf`). |
+| `bmkhs_engOilPsi` | array of numbers, per engine, gauge fraction (not psi) | 10 Hz | Oil pressure = Ng × 0.90 × oil health. Same units as config `oilPsiLimits[] = {min, max}` (e.g. {0.23, 1.20}) (set in `engine/turboShaftEngine/fn_turboShaftEngine.sqf`). |
+| `bmkhs_engFuelFlow` | array of numbers, per engine, kg/s | 10 Hz | Fuel flow = commanded fuel units × config `maxFuelFlow`. Also what the fuel pump draws from the tank (set in `engine/turboShaftEngine/fn_turboShaftEngine.sqf`). |
+| `bmkhs_engClutch` | array of booleans, per engine | local | True while the freewheel is engaged and the turbine is driving the rotor (set in `engine/turboShaftEngine/fn_turboShaftEngine.sqf`). |
+| `bmkhs_isSingleEng` | boolean | local | True when any engine's torque is below 51% of the highest. Switches the TGT limiter to `maxTgtSe` and the TGT book limits to `tgtLimitsSe` (set in `engine/fn_engineGovernor.sqf`). |
+| `bmkhs_engFuelAvail` | array of booleans, per engine | net on change | Engine has fuel. False once its selected tank (via crossfeed) has been empty for 2 s, or the engine's fire handle (`eng<N>FireHandle`) is armed with DC on. Always true if the aircraft has no fuel tanks. False forces the engine OFF (set in `engine/fn_engineFuelAvail.sqf`). |
+| `bmkhs_engineOverspeed` | array of booleans, per engine | net on change | Latched. Set when Ng >= `maxNg` (fly-weight trip) or Np >= `maxNp` (electrical trip). Cuts fuel and locks out the starter. Cleared only by repair (set in `engine/turboShaftEngine/fn_turboShaftEngine.sqf`). |
+| `bmkhs_engChips` | array of booleans, per engine | net on change | Latched chip detector. useSystems = 1: engine hitpoint damage >= 0.50. useSystems = 0: a random engine at shared damage >= 0.25 (50% chance, else oil failure), and any healthy engine at >= 0.75. Cleared by repair (set in `engine/fn_engineDamage.sqf`). |
+| `bmkhs_engFailed` | array of booleans, per engine | net on change | Latched engine failure. useSystems = 1: engine hitpoint damage reaches 1.0. useSystems = 0: one engine at shared damage >= 0.50, all at 1.0. Forces the engine OFF and blocks restarts. Cleared by repair (set in `engine/fn_engineDamage.sqf`). |
+| `bmkhs_lowOilPsiFailure` | array of booleans, per engine | net on change | Latched oil system failure. useSystems = 1: oil health reaches 0 while the engine is STARTING/ON. useSystems = 0: the oil branch of the random fault. Cleared by repair (set in `engine/fn_engineDamage.sqf`). |
+| `bmkhs_engOilPsiLow` | array of booleans, per engine | net on change | Latched low-oil-pressure indication. Set when the engine is ON (or failed), its lever is not OFF, and `bmkhs_engOilPsi` < `oilPsiLimits[0]`. Cleared by repair (set in `engine/fn_engineUpdate.sqf`). |
+| `bmkhs_engOilHealth` | array of numbers, per engine, fraction (1.0 = full) | local | Oil remaining. useSystems = 1: drains with engine damage above 0.65, faster above 0.75, 0 at 0.85. useSystems = 0: set to 0 by the oil fault. Already folded into `bmkhs_engOilPsi`. Reset to 1.0 by repair (set in `engine/fn_engineDamage.sqf`). |
+| `bmkhs_engLimitTimers` | array per engine of `[np, ng, tgt]`, seconds | 10 Hz | Exceedance countdowns against `npLimits`, `ngLimits`, `tgtLimits` (`tgtLimitsSe` when single engine). -1 = inside limits; > 0 = seconds left in the current band; 0 = time used up and damage accruing (or a zero-second band). Only counts while the engine is STARTING/ON (set in `engine/fn_engineDamage.sqf`). |
+| `bmkhs_engTqTimer` | array of numbers, per engine, seconds | 10 Hz | Same convention as `bmkhs_engLimitTimers`, for the drivetrain torque limits. Seeded to -1 in `engine/fn_engineVariables.sqf`; updated in `systems/fn_systemTorque.sqf`. |
+| `bmkhs_engClutchSlip` | array of numbers, per engine, fraction (1.0 = no slip) | local | Share of torque the clutch passes. Already applied to `bmkhs_engOutputTq` and `bmkhs_engPctTq`. Seeded in `engine/fn_engineVariables.sqf`; updated in `systems/fn_systemTorque.sqf`. |
+| `bmkhs_engBleedAvail` | boolean | net on change | True when any power lever is at FLY. useSystems = 1 only (set in `engine/fn_engineUpdate.sqf`). |
+| `bmkhs_acBusOn`, `bmkhs_dcBusOn`, `bmkhs_battBusOn` | boolean | net on change | useSystems = 0 only: all follow Arma `isEngineOn`. With useSystems = 1 these belong to the systems model (set in `engine/fn_engineUpdate.sqf`). |
+| `bmkhs_priHydPsi`, `bmkhs_utilHydPsi` | number, psi | net on change | useSystems = 0 only: 3000 when Arma engine is on, 0 when off. With useSystems = 1 these belong to the systems model (set in `engine/fn_engineUpdate.sqf`). |
+
+### Drivetrain
+
+| Variable | Type / units | Net | Meaning |
+|---|---|---|---|
+| `bmkhs_xmsnOutputRpm` | number, rpm at the engine shaft | 10 Hz | Drivetrain speed referred to the engine shaft. Rotor rpm = this / rotor `gearRatio`. Nr as a fraction = this / `bmkhs_engDesignRpm`. Rotor brake: BRAKE drags it down, LOCK holds it at 0 (below a max Nr). Computed only on the machine where the aircraft is local and the player is pilot (set in `transmission/fn_transmissionUpdate.sqf`). |
+| `bmkhs_xmsnDeltaRpm` | number, rpm per frame | 10 Hz | Change in `bmkhs_xmsnOutputRpm` over the last frame. Depends on frame time (set in `transmission/fn_transmissionUpdate.sqf`). |
+| `bmkhs_rtrBrkStartLatch` | number, 0 or 1 | net on change | 1 when a start was begun with the rotor brake on (useSystems = 1). Cleared to 0 only when `bmkhs_rotorBrakeVal` returns to 0. Meant to suppress the brake caution during a locked-rotor start (set in `engine/fn_engineUpdate.sqf`, cleared in `transmission/fn_transmissionUpdate.sqf`). |
+
+### Rotor
+
+| Variable | Type / units | Net | Meaning |
+|---|---|---|---|
+| `bmkhs_numSimpleRotors` | number | local | Rotor count, from config `numSimpleRotors` (set in `simpleRotor/fn_simpleRotorVariables.sqf`). |
+| `bmkhs_simpleRotors` | array of hashmaps, per rotor | local | Each simple rotor's config, keyed by config property name (`type`, `dir`, `gearRatio`, `numBlades`, `bladeRadius`, ...). `gearRatio` converts `bmkhs_xmsnOutputRpm` to rotor rpm (set in `simpleRotor/fn_simpleRotorVariables.sqf`). |
+| `bmkhs_nrLimits` | array of 4 numbers, fraction | local | From config `nrLimits[]`: {normal low, normal high, high rotor, maximum} (e.g. {0.96, 1.05, 1.06, 1.10}). Core only stores it (set in `simpleRotor/fn_simpleRotorVariables.sqf`). |
+| `bmkhs_reqEngTorque` | array of numbers, per rotor, Nm at the engine shaft | net on change (effectively every frame) | Rotor torque demand referred to the engine shaft, filtered. Sum it for total load. Seeded as 2 slots (set in `simpleRotor/fn_simpleRotorTorque.sqf`, or `rotor/fn_rotor.sqf` with the BET model). |
+| `bmkhs_rtrThrust` | array of numbers, per rotor, N | net on change | Rotor thrust. Only written by the BET rotor model (`bmkhs_rotorModel` = 1). With the Simple model (default) it stays 0 (set in `rotor/fn_rotor.sqf`). |
+
+### Controls - named by your config
+
+Each class under the aircraft's `Controls` gives one control. `variableName` names it, and Core adds the `bmkhs_` prefix. A control with no `Positions` is skipped. Positions are indexed 0..n-1 in the order they are declared.
+
+| Variable | Type / units | Net | Meaning |
+|---|---|---|---|
+| `bmkhs_<variableName>Idx` | Number, 0-based position index | net if the control's `networked = 1`, else local to the machine that moved it | The current position, and the one value Core treats as canonical. Seeded at `rest` on every machine that runs coreConfig, with a plain local setVariable. After that it is published only when it changes. (set in `controls/fn_controlsVariables.sqf`, `controls/fn_controlPublish.sqf`) |
+| `bmkhs_<variableName>Val` | Number, the position's config `value` | same as Idx | The declared `value` of the current position. (set in `controls/fn_controlPublish.sqf`) |
+| `bmkhs_<variableName>On` | Bool, `Val != 0` | same as Idx | This is what component `gate[]` entries normally read. Example: `batt1Switch` publishes `bmkhs_batt1SwitchOn`. Code outside Core may also write it. On the owner, with `useSystems = 1`, Core then moves Idx to a position that matches. It prefers `rest`, and raises `controlMoved`. If no position matches, it leaves Idx alone. (reconciled in `controls/fn_controlsUpdate.sqf`) |
+
+Notes:
+- A move goes through `bmkhs_fnc_controlSet`. This runs on whichever machine calls it, and the default target is `vehicle player`. It respects `enabledBy[]` / `inhibitedBy[]` on the control and on the position. A control blocked by an interlock does not move.
+- A position with `springsBack = 1` stays thrown for one systems solve, then returns to `rest` (`controls/fn_controlsRelease.sqf`). The release runs only inside the systems solve, so it happens only on the owner and only with `useSystems = 1`. With `useSystems = 0`, nothing in Core returns a sprung position to rest.
+- Two control names are hard-coded in Core. `apuBtn` is forced to index 0 when the APU stops or runs out of fuel (see APU). `apuFireHandle`, if declared, is read through `bmkhs_apuFireHandleOn`.
+
+### Components - named by your config
+
+Names are built in `systems/fn_systemsComponents.sqf`. A component with a `damageRole` gets one member for each hitpoint claiming that role (see `bmkhs_fnc_damageCount`). Members are numbered 1..n **only when there is more than one**. Example: `gen` with 2 members gives `bmkhs_gen1` and `bmkhs_gen2`, but `priHydPsi` alone gives `bmkhs_priHydPsi`. A role that no hitpoint claims gives zero members, so no variable exists. An empty `damageRole` gives one member that cannot be damaged.
+
+Seeding: on the local machine at init, every declared variable that is still nil is seeded. The seed is broadcast if the component is `networked`. Values are solved and updated only with `useSystems = 1`, on the owner. With `useSystems = 0` the seed is final: producers/converters read `nominal`, and circuit/consumer/state flags read `true`.
+
+| Variable | Type / units | Net | Meaning |
+|---|---|---|---|
+| `bmkhs_<variableName>[n]` (Producer) | Number, in the config's own unit (psi, fraction, or 1 for on/off). No `nominal`: carries the `drivenBy` circuit's value (e.g. Nr fraction) | net if `networked = 1`, else local (owner only) | Current output. It is `nominal` (or the drive value), times the `requires` level scaling. It is 0 if the component is damaged > 0.85, any gate is off, or the drive is at or below its `drivenBy` threshold. It ramps over `rampSeconds` and is rounded to `increment`. Seeded 0 with systems. (set in `systems/fn_systemProducer.sqf`) |
+| `bmkhs_<variableName>[n]` (Converter) | Number, config unit | net if `networked = 1`, else local (owner only) | Output: `nominal`, or input × `ratio`. It is 0 without input above `input[]`'s threshold, when damaged > 0.85, or when a gate is off. Never ramps. Rounded to `increment`. (set in `systems/fn_systemConverter.sqf`) |
+| `bmkhs_<variableName>[n]` (Storage) | Number, `charge × nominal` (charge is 0..1). E.g. psi for an accumulator, fraction for a battery | net if `networked = 1`, else local (owner only) | Stored amount. It drains at `emerDischarge` while live and not covered, and refills over `startRecharge` from `rechargedBy`. It leaks from `leakStartDmg`, and is 0 when destroyed. A `startedBy` start drops it to `stopBelow`. Seeded full. (set in `systems/fn_systemStorage.sqf`) |
+| `bmkhs_<stateName>` | Bool | net (always, whatever `networked` says) | Running flag for a producer, converter or store that declares `stateName`. True when its output is at or above `stateAbove` (for storage, `charge × nominal`). Example: the H-60 APU publishes `bmkhs_apuOn`. Seeded `!useSystems` (producers/converters). (set in `systems/fn_systemProducer.sqf`, `fn_systemConverter.sqf`, `fn_systemStorage.sqf`) |
+| `bmkhs_<variableName>[n]StartOk` | Bool | net (sent every time it is written, not change-gated) | Exists only for storage with `startedBy`. **Latched**: when the `startedBy` variable goes true, Core checks once whether `charge × nominal >= startAbove`. The result holds until `startedBy` goes false, which resets it to true. The H-60 gates its APU on `bmkhs_accHydPsiStartOk`. (set in `systems/fn_systemStorage.sqf`) |
+| `bmkhs_<variableName>` (Circuit) | Bool | net if `networked = 1`, else local (owner only) | True while the named `circuit` is at or above `minValue`. Republished every solve. Examples: `bmkhs_acBusOn`, `bmkhs_pneuAvail`. (set in `systems/fn_systemCircuitState.sqf`) |
+| `bmkhs_<variableName>` (Consumer) | Bool | net if `networked = 1`, else local (owner only) | True when supplied. By default any one `suppliedBy[]` circuit at or above its threshold is enough; with `needsAll = 1` all of them must be. Example: `bmkhs_fltCtrlsSupplied`. (set in `systems/fn_systemConsumer.sqf`) |
+
+### Core-named system variables
+
+Core seeds these by name, whether or not the config declares them (`systems/fn_systemsVariables.sqf`). The first block is seeded once, on the local machine. A declared component with the same name then overwrites it.
+
+| Variable | Type / units | Net | Meaning |
+|---|---|---|---|
+| `bmkhs_battSwitchOn` | Bool | net | Seeded false. Core writes nothing else. A control named `battSwitch` would drive it. The H-60 uses `batt1Switch` / `batt2Switch` instead. |
+| `bmkhs_battBusOn` | Bool | net | Seeded false. With `useSystems = 0`, set to `isEngineOn` (`engine/fn_engineUpdate.sqf`). With systems, it changes only if a Circuit declares this name (the H-60 does). |
+| `bmkhs_acBusOn` | Bool | net | As battBusOn. |
+| `bmkhs_dcBusOn` | Bool | net | As battBusOn. Core also reads it: an armed APU fire handle shuts APU fuel only while DC is up. |
+| `bmkhs_apuBtnOn` | Bool | net | Seeded false. It is the `On` of a control named `apuBtn`. |
+| `bmkhs_apuRpm_pct` | Number, 0..1 fraction (H-60 `nominal = 1.0`) | net | Seeded 0. Changes only if a producer declares this name (H-60: `apuRPM_pct`). Also re-broadcast every 0.1 s in multiplayer by `engine/fn_engineUpdate.sqf`. |
+| `bmkhs_apuOn` | Bool | net | Seeded false. Changes only if a component declares `stateName = "apuOn"`. |
+| `bmkhs_pneuAvail` | Bool | net | Seeded `!useSystems`, so true without systems. With systems, changes only if a Circuit declares it. |
+| `bmkhs_priHydPsi` | Number, psi | net | Seeded 0. With `useSystems = 0`: 3000 when `isEngineOn`, else 0. With systems, only if a producer declares it. |
+| `bmkhs_utilHydPsi` | Number, psi | net | As priHydPsi. |
+| `bmkhs_accHydPsi` | Number, psi | net | Seeded 3000. Changes only if a store declares it. |
+| `bmkhs_emerHydOn` | Bool | net | Seeded false. It is re-seeded and broadcast on every machine that runs coreConfig. Input: Core's flight-control input reads it, and the H-60 accumulator gates on it. Core never sets it true. |
+
+### APU
+
+Runs only with `useSystems = 1` (`systems/apu/fn_apu.sqf`). Running state and RPM come from the components above.
+
+| Variable | Type / units | Net | Meaning |
+|---|---|---|---|
+| `bmkhs_apuFuelAvail` | Bool | net (on change), seeded locally true | True when the APU's tank (`fuelSource`) has fuel above ~0, and the fire handle is not closing it. The handle closes it when DC is up, an `apuFireHandle` control is declared, and `bmkhs_apuFireHandleOn` is true. It is updated only if a producer has `damageRole = "apu"` and the aircraft has fuel tanks. Otherwise it stays true. When it goes false, or the APU stops, Core forces control `apuBtn` to index 0. The APU also burns `fuelFlow` (lb/h in config, kg/s internally) from `bmkhs_<tank>Mass` while `bmkhs_apuOn`. |
+
+### Fuel
+
+Tanks come from `FuelTanks` / `AuxTanks` (`FuelTank01`...). `variableName` names each tank, and Core adds `bmkhs_` (`fuel/fn_fuelTankVarName.sqf`). A missing or duplicate name falls back to `bmkhs_fueltank<n>` / `bmkhs_auxtank<n>` and logs an error. Fuel update runs wherever the pack calls coreUpdate (the H-60 does this on the owner only). It needs `maxTotFuelMass > 0`. It does not depend on `useSystems`.
+
+| Variable | Type / units | Net | Meaning |
+|---|---|---|---|
+| `bmkhs_<tank>Mass` | Number, kg | local (owner only) | Fuel in the tank. On init and whenever Arma `fuel` drifts > 1 %, it is set from `fuel _heli`: internal tanks are filled first, split by capacity. Each frame it is updated by transfer, leak (tank damage > 0.5), engine and APU burn. Clamped 0..Max. Not networked: remote machines keep their init value. (`fuel/fn_fuelSet.sqf`, `fuel/fn_fuelUpdate.sqf`) |
+| `bmkhs_<tank>Max` | Number, kg | local (every machine that runs coreConfig) | Config `capacity`. Static. (`fuel/fn_fuelVariables.sqf`) |
+| `bmkhs_<tank>Low` | Number, kg | local (every machine that runs coreConfig) | Config `lowFuelKg`. Static. Internal tanks only. Used by AUTO transfer. |
+| `bmkhs_<tank>Installed` | Bool | local seed. The aircraft may write it, networked | Internal tanks only. Fixed tanks are seeded true. Removable tanks keep any value the aircraft set before coreConfig, else false. Input for the aircraft (H-60: `bmkhs_erfsTankInstalled`). An uninstalled removable tank does not leak or transfer, and its capacity is excluded. |
+| `bmkhs_<tank>XferOn` | Bool | net when Core clears it | Input for `role = "xfer"` cells. The aircraft sets it true to gravity-feed the cell's `Outputs` (default: all mains). Core sets it false (broadcast) when the cell runs dry. Transfer is held off while any armed aux tank still has more than 10 kg. |
+| `bmkhs_<auxTank>Mass` | Number, kg | local (owner only) | Fuel in an aux tank. Forced to 0 when no `auxTank` magazine is on that station's pylons. |
+| `bmkhs_<auxTank>Max` | Number, kg | local | Config `capacity`. |
+| `bmkhs_<auxTank>EmptyArmed` | Bool | local (owner only) | Re-arm flag for an "empty" advisory. Set true while the tank is absent or holds 10 kg or more. Set false while it holds less than 10 kg **and** `bmkhs_fuelPageOpen` is true. Seeded false. |
+| `bmkhs_<flowingVar>` | Bool | net (on change), seeded locally false on every machine | Named by `flowingVar` on a tank `Outputs` entry or an aux tank, or by `xferFlowingVars[]` (one per main, in main order). True on any frame where fuel moved along a path with that name. Several paths may share one name. |
+| `bmkhs_totFuelMass` | Number, kg | local (owner only) | Total fuel in all internal and aux tanks. Core also calls `setFuel` with total / max. |
+| `bmkhs_maxTotFuelMass` | Number, kg | local | Capacity of the tanks currently fitted (internal and aux). Updated on resync. |
+| `bmkhs_numFuelTanks` | Number | local | Config `numFuelTanks`. 0 means no tank model, so engines and APU are always fuelled. |
+| `bmkhs_checkRunning` | Bool | net when Core clears it | Input: the aircraft sets it true to start a FUEL CHECK. Core sets it false when the check ends. |
+| `bmkhs_checkDone` | Bool | net | Set true when a check completes. Core never clears it, so the aircraft must. |
+| `bmkhs_checkPendingAdvisory` | Bool | net | Set true on completion if neither `bmkhs_checkActivePlt` nor `bmkhs_checkActiveCpg` is true. Core never clears it. |
+| `bmkhs_checkBurnRate` | Number, lb/h | net | Average burn over the check: `(checkStartFuel - totFuelMass)` per elapsed time. Written only on completion. |
+| `bmkhs_checkBurnoutZulu` | String, `"H:MML"` (e.g. `"9:05L"`, hour not padded) | net | In-game `dayTime` at which fuel runs out at that burn rate. Written on completion. |
+| `bmkhs_checkVfrZulu` | String, `"H:MML"` | net | Burnout minus 20 min. |
+| `bmkhs_checkIfrZulu` | String, `"H:MML"` | net | Burnout minus 30 min. |
+
+Fuel inputs Core seeds or reads (the aircraft writes these):
+
+| Variable | Type / units | Net | Meaning |
+|---|---|---|---|
+| `bmkhs_xferMode` | String | local seed `"AUTO"` | XFER pump selection. `"AUTO"`, or one of the `xferDestinations[]` labels (upper case) to pump into that main. Anything else is off. Needs exactly two mains. AUTO also needs bleed air (`bmkhs_pneuAvail`) or a running engine. |
+| `bmkhs_crossfeedMode` | String | local seed = first `CrossfeedModes` `position` | Picks which tank each engine draws from (`engSources[]`), for engines without their own selector. An entry of `"off"` is a deliberate no-fuel source and the engine starves and shuts down. Read in `engine/fn_engineFuelAvail.sqf`. |
+| `bmkhs_<control>Idx` of an engine's `fuelSelector` | Number | as the control | An engine that declares `fuelSelector` and `fuelSources[]` (engine config) draws from `fuelSources[]` at that control's position instead - one lever per engine, no crossfeed table. `"off"` there is no fuel. |
+| `bmkhs_<group>AuxOn` | Bool | local seed (`bmkhs_lAuxOn`, `bmkhs_rAuxOn`) | Arms the aux tanks whose `group` matches. The group name is lower-cased in the variable name. |
+| `bmkhs_checkStartTime` | Number, seconds of `CBA_missionTime` | local seed 0 | When the check started. The check does nothing while this is 0 or less. |
+| `bmkhs_checkStartFuel` | Number, kg | local seed 0 | `totFuelMass` at the start of the check. |
+| `bmkhs_checkMinutes` | Number, minutes | local seed 15 | How long the check runs. |
+| `bmkhs_checkActivePlt` / `bmkhs_checkActiveCpg` | Bool | local seed false | A crew station is viewing the check. Suppresses `checkPendingAdvisory`. |
+| `bmkhs_fuelPageOpen` | Bool | not seeded | Read only. See `EmptyArmed`. |
+
+### Damage and repair
+
+Damage is read through `bmkhs_fnc_damageGet` (see Read functions), by role - not by hitpoint name.
+
+`systems/repair/fn_repair.sqf` runs on the owner, after a HandleDamage event shows a hitpoint going down. It writes no new outputs. It does these things:
+
+| Variable | Type / units | Net | Meaning |
+|---|---|---|---|
+| storage `bmkhs_<variableName>[n]` | as above | as above | An undamaged or role-less store is refilled (internal charge set to 1.0). The published value follows on the next solve. |
+| `bmkhs_engineOverspeed`, `bmkhs_engChips`, `bmkhs_engFailed`, `bmkhs_lowOilPsiFailure`, `bmkhs_engOilPsiLow` | Array of Bool per engine (engine outputs) | net | Each repaired engine (damage 0) has its entry cleared to false. These are engine-owned outputs, documented with the engine. |
+
+### State and air data
+
+| Variable | Type / units | Net | Meaning |
+|---|---|---|---|
+| `bmkhs_vel2D` | Number, knots, integer, clamped 0 to 180 | local (owner only) | Indicated-style airspeed. Forward (y) component of the air-relative model-space velocity, rounded. Never negative. (set in `state/fn_stateVelocities.sqf`) |
+| `bmkhs_vel3D` | Number, knots, integer | local (owner only) | Magnitude of the air-relative model-space velocity, rounded. (set in `state/fn_stateVelocities.sqf`) |
+| `bmkhs_gndSpeed` | Number, knots, integer | local (owner only) | Ground speed. Magnitude of model-space x and y ground velocity (no wind). Body axes, so it reads low when pitched or rolled. (set in `state/fn_stateVelocities.sqf`) |
+| `bmkhs_velClimb` | Number, ft/min, not rounded | local (owner only) | Vertical speed. World z of smoothed velocity. Positive = climbing. Wind has no vertical part, so this is ground-referenced. (set in `state/fn_stateVelocities.sqf`) |
+| `bmkhs_velModelSpace` | Array [x, y, z], m/s, model space | local (owner only) | Smoothed air-relative velocity (ground velocity minus wind). Wind is rotated by heading only, not pitch or roll. (set in `state/fn_stateVelocities.sqf`) |
+| `bmkhs_velModelSpaceNoWind` | Array [x, y, z], m/s, model space | local (owner only) | Smoothed ground-relative velocity in body axes. (set in `state/fn_stateVelocities.sqf`) |
+| `bmkhs_velWorldSpace` | Array [x, y, z], m/s, world space | local (owner only) | Smoothed air-relative velocity in world axes (velocity minus wind). (set in `state/fn_stateVelocities.sqf`) |
+| `bmkhs_velWorldSpaceNoWind` | Array [x, y, z], m/s, world space | local (owner only) | Smoothed ground-relative velocity in world axes. (set in `state/fn_stateVelocities.sqf`) |
+| `bmkhs_velWindModelSpace` | Array [x, y, 0], m/s, model space | local (owner only) | Wind velocity rotated into body x/y by heading only. z is always 0. (set in `state/fn_stateVelocities.sqf`) |
+| `bmkhs_angVelModelSpace` | Array [x, y, z], rad/s (Arma `angularVelocityModelSpace`), model space | local (owner only) | Smoothed body angular rates. Sign follows Arma's `angularVelocityModelSpace`. (set in `state/fn_stateVelocities.sqf`) |
+| `bmkhs_worldAccel` | Array [x, y, z], m/s², world space | local (owner only) | Raw kinematic acceleration: frame difference of `bmkhs_velWorldSpaceNoWind`. Gravity not included. Not smoothed. (set in `state/fn_stateAccelerations.sqf`) |
+| `bmkhs_worldAccelFiltered` | Array [x, y, z], m/s², world space | local (owner only) | `bmkhs_worldAccel` smoothed per axis. Source for the ball terms and body accel. (set in `state/fn_stateAccelerations.sqf`) |
+| `bmkhs_bodyAccel` | Array [right, forward, up], m/s², body axes | local (owner only) | Specific force (what an accelerometer reads): filtered world accel plus 1 g up, projected onto the body right, forward and up vectors. Level and still reads about [0, 0, +9.806]. Element 0 equals `bmkhs_ballTerms # 2`. (set in `state/fn_stateAccelerations.sqf`) |
+| `bmkhs_ballTerms` | Array [kLat, gLat, sum], m/s² | local (owner only) | Lateral ball breakdown along the body right axis. `# 0` kLat = filtered kinematic acceleration toward the right. `# 1` gLat = 9.806 × (z component of the body right vector); negative when the right side is low. `# 2` = kLat + gLat = lateral specific force, positive to the right. A physical ball deflects opposite to this: sum positive = ball LEFT, sum negative = ball RIGHT (e.g. right side low in a hover gives a negative sum, ball right). Not clamped or filtered beyond the accel smoothing. (set in `state/fn_stateAccelerations.sqf`) |
+| `bmkhs_aero_beta_g` | Number, g, clamped -1 to +1 | net | Trim-ball value: `bmkhs_bodyAccel # 0` / 9.806, then first-order low-pass (tau 0.60 s). Positive = lateral specific force to the right, so a physical ball sits LEFT; negative = ball RIGHT. Core autopilot code relies on this raw sign; flip it only in your display. The AH-64D pack also blends the display sign with speed (`fn_avionicsSlipIndicator.sqf`). (set in `state/fn_stateAeroValues.sqf`) |
+| `bmkhs_aero_beta_deg` | Number, degrees | net | Aerodynamic sideslip: asin(x / |v|) of `bmkhs_velModelSpace`. Positive = aircraft moving right through the air (relative wind from the right). 0 when the velocity is zero. (set in `state/fn_stateAeroValues.sqf`) |
+| `bmkhs_accelX` | Number, m/s², body x (right) | local (owner only) | Smoothed time derivative of `bmkhs_velModelSpaceNoWind # 0`. Gravity not included. Derivative of a body-axis velocity, so rotation terms are included as they fall. (set in `state/fn_stateAccelerations.sqf`) |
+| `bmkhs_accelY` | Number, m/s², body y (forward) | local (owner only) | Same as above for the forward axis. (set in `state/fn_stateAccelerations.sqf`) |
+| `bmkhs_accelZ` | Number, m/s², body z (up) | local (owner only) | Same as above for the up axis. (set in `state/fn_stateAccelerations.sqf`) |
+| `bmkhs_barAlt` | Number, feet | local (owner only) | Copy of `bmkhs_pa` (pressure altitude, rounded to 10 ft) clamped 0 to 20000. (set in `state/fn_stateAltitude.sqf`) |
+| `bmkhs_radAlt` | Number, metres | local (owner only) | Radar altimeter display value. Height from `getPos`; above 15.24 m (50 ft) rounded to 3.048 m (10 ft) steps; clamped 0 to 432.816 m (1420 ft). Convert to feet yourself. (set in `state/fn_stateAltitude.sqf`) |
+| `bmkhs_radAltRaw` | Number, metres | local (owner only) | Unrounded, unclamped `getPos _heli # 2`. (set in `state/fn_stateAltitude.sqf`) |
+| `bmkhs_rtrRpm` | Number, ratio (1.0 = 100 % Nr) | local (owner only) | Rotor speed: `bmkhs_xmsnOutputRpm` / `bmkhs_engDesignRpm`. Forced to 0 when main rotor damage is 1.0. (set in `state/fn_stateRtrRpm.sqf`) |
+
+Ground contact is not a variable. Call `[_heli] call bmkhs_fnc_stateOnGround`. It returns true when `isTouchingGround` is true or `bmkhs_radAltRaw` < 0.15 m (`state/fn_stateOnGround.sqf`). It works only where `bmkhs_radAltRaw` is updated (the owner).
+
+### Environment
+
+| Variable | Type / units | Net | Meaning |
+|---|---|---|---|
+| `bmkhs_pa` | Number, feet, rounded to 10 ft | local (owner only) | Pressure altitude. MSL height in feet plus a base altitude set by the CBA setting `bmkhs_helisimEnvironment` (ISA 0, Europe 800, Middle East 1800, Central Asia 5000, Asia 3100 ft). Altimeter setting is fixed at 29.92 inHg; mission weather does not change it. (set in `environment/fn_environment.sqf`) |
+| `bmkhs_fat` | Number, °C, integer steps | local (owner only) | Free air temperature. Base temperature of the selected environment (ISA 15, Europe summer 20 / winter 0, Middle East 30, Central Asia summer 30 / winter -5, Asia 25) minus round(2 °C per 1000 ft of MSL height). (set in `environment/fn_environment.sqf`) |
+| `bmkhs_rho` | Number, kg/m³ | local (owner only) | Dry air density from barometric pressure at `bmkhs_pa` and `bmkhs_fat` (p / (287.05 × T)). Init value is 1.225. (set in `environment/fn_environment.sqf`) |
+| `bmkhs_windSpeedKts` | Number, knots, integer | local (owner only) | Mission wind speed (`vectorMagnitude wind`). 0 when `bmkhs_windDisabled` is set. (set in `environment/fn_environment.sqf`) |
+| `bmkhs_windDirFrom` | Number, degrees 0-359, integer | local (owner only) | Wind direction for display, computed as `(windDir + 180) mod 360`. 0 when `bmkhs_windDisabled` is set. (set in `environment/fn_environment.sqf`) |
+| `bmkhs_velWindWorldSpace` | Array [east, north, 0], m/s | local (owner only) | Wind velocity vector (direction the air moves toward). [0,0,0] unless `bmkhs_rotorModel == 0`; also zero when wind is disabled. (set in `environment/fn_environment.sqf`) |
+
+Pressure (hPa) and density altitude are computed in `fn_environment.sqf` but not stored.
+
+### Mass and balance
+
+| Variable | Type / units | Net | Meaning |
+|---|---|---|---|
+| `bmkhs_gwt` | Number, kg | net | Gross mass: empty mass (or matching `EmptyMassVariants` entry), occupied seats, fitted equipment, internal fuel, internal magazine rounds, and wing-station stores and external fuel. Written only by the owner. When the CBA test-GWT option is on, replaced by that weight clamped between empty and `maxGrossMass`. All contributors come from config. (set in `mass/fn_massUpdate.sqf`) |
+| `bmkhs_cg` | Number, metres, longitudinal only | net | Longitudinal CG: total forward moment / mass, in the same frame as the config arms (H-60 config: arm = {right, forward, up} m; larger = further forward). Compare directly with `bmkhs_fwdCgLimit` / `bmkhs_aftCgLimit`. Not a fuselage station; convert with `bmkhs_fsDatum` if needed. In test-GWT mode it is real moments divided by the test mass. Lateral CG is not published. (set in `mass/fn_massUpdate.sqf`) |
+| `bmkhs_fwdCgLimit` | Number, metres, same frame as `bmkhs_cg` | local (owner only) | Forward CG limit, read from config `fwdCgLimit`. Static. (set in `mass/fn_massVariables.sqf`) |
+| `bmkhs_aftCgLimit` | Number, metres, same frame as `bmkhs_cg` | local (owner only) | Aft CG limit, read from config `aftCgLimit`. Static. (set in `mass/fn_massVariables.sqf`) |
+| `bmkhs_fsDatum` | Number, metres | local (owner only) | Fuselage-station 0 reference, config `fsDatum`. Empty-airframe arm = fsDatum − emptyMom/emptyMass. Static. (set in `mass/fn_massVariables.sqf`) |
+| `bmkhs_emptyMass` | Number, kg | local (owner only) | Config `emptyMass`. Does not reflect `EmptyMassVariants`; the variant is only applied inside the gross-weight sum. Static. (set in `mass/fn_massVariables.sqf`) |
+| `bmkhs_maxGrossMass` | Number, kg | local (owner only) | Config `maxGrossMass`. Used to bound the test weight. Static. (set in `mass/fn_massVariables.sqf`) |
+
+### Performance
+
+All values are recomputed only when rounded GWT (kg), `bmkhs_pa`, `bmkhs_fat` or the environment setting changes. They are interpolated from the aircraft's config tables by PA (ft) and FAT (°C, rows -40/-20/0/20/40). Units are whatever the pack's tables hold; the H-60 units are given as the example. All are local (owner only), set in `performance/fn_perfData.sqf`.
+
+| Variable | Type / units | Net | Meaning |
+|---|---|---|---|
+| `bmkhs_maxTq_cont` | Number, config units (H-60: torque fraction, 1.0 = 100 %) | local (owner only) | Max continuous torque, `perfTable*` column 1. |
+| `bmkhs_maxTq_de` | Number, config units (H-60: torque fraction) | local (owner only) | Max torque available, dual engine, column 2. |
+| `bmkhs_maxTq_se` | Number, config units (H-60: torque fraction) | local (owner only) | Max torque available, single engine, column 3. |
+| `bmkhs_maxGwt_de_ige` | Number, config units (H-60 table values look like lb; units unclear) | local (owner only) | Max gross weight, dual engine, in ground effect, column 4. H-60 config notes this column is AH-64D data. |
+| `bmkhs_maxGwt_de_oge` | Number, config units (units unclear) | local (owner only) | Max gross weight, dual engine, out of ground effect, column 5. Same caveat. |
+| `bmkhs_maxGwt_se_ige` | Number, config units (units unclear) | local (owner only) | Max gross weight, single engine, IGE, column 6. Same caveat. |
+| `bmkhs_maxGwt_se_oge` | Number, config units (units unclear) | local (owner only) | Max gross weight, single engine, OGE, column 7. Same caveat. |
+| `bmkhs_goNoGoTq_ige` | Number, config units (H-60: torque fraction) | local (owner only) | Go/no-go torque IGE, column 8. AH-64D data in H-60 config. |
+| `bmkhs_goNoGoTq_oge` | Number, config units (H-60: torque fraction) | local (owner only) | Go/no-go torque OGE, column 9. AH-64D data in H-60 config. |
+| `bmkhs_hvrTq_ige` | Number, config units (H-60: torque fraction) | local (owner only) | Hover torque IGE at current GWT. `hoverTable*` interpolated by PA, FAT, then GWT over fixed breakpoints 6804/7711/8618/9525 kg (15/17/19/21k lb; hard-coded in Core). |
+| `bmkhs_hvrTq_oge` | Number, config units (H-60: torque fraction) | local (owner only) | Hover torque OGE, same method. |
+| `bmkhs_tas_vne` | Number, knots TAS | local (owner only) | Never-exceed speed, `TASTable*` column 1. Not GWT-dependent (H-60 tables are for 18000 lb). |
+| `bmkhs_tas_vsse` | Number, knots TAS | local (owner only) | Minimum single-engine speed, column 2. 0 in the table means not achievable. |
+| `bmkhs_tas_rngTas` | Number, knots TAS | local (owner only) | Max-range airspeed, column 3. |
+| `bmkhs_tas_rngTq` | Number, config units (H-60: torque fraction) | local (owner only) | Torque at max-range speed, column 4. |
+| `bmkhs_tas_rngFf` | Number, lb/hr total (if `engFFTable` is kg/s per engine, as in the H-60) | local (owner only) | Fuel flow at max-range torque: `engFFTable`(rngTq) × `bmkhs_numEngines` × 7936.64. |
+| `bmkhs_tas_endTas` | Number, knots TAS | local (owner only) | Max-endurance airspeed, column 5. |
+| `bmkhs_tas_endTq` | Number, config units (H-60: torque fraction) | local (owner only) | Torque at max-endurance speed, column 6. |
+| `bmkhs_tas_endFf` | Number, lb/hr total (same condition as rngFf) | local (owner only) | Fuel flow at max-endurance torque. |
+
+Cruise tables (`cruiseTable**`) are interpolated but the result is not stored.
+
+### Stabilator
+
+| Variable | Type / units | Net | Meaning |
+|---|---|---|---|
+| `bmkhs_stabilatorPosition` | Number, degrees (per config `heliSimStabTable`) | local (owner only) for live value | Stabilator incidence. Moves toward the `heliSimStabTable` value (by collective and `bmkhs_vel2D`) at a lerp rate of (1/1.5) × dt. Frozen when stabilator damage ≥ `SYS_STAB_DMG_THRESH` or `bmkhs_dcBusOn` is false. Only the init 0 is broadcast; per-frame updates are not. Sign is that of the config table; the same value drives the `Hstab` animation source. Only updated for a wing named "stabilator". (set in `wing/fn_wing.sqf`, init in `wing/fn_wingVariables.sqf`) |
+
+Fuselage and airfoil folders publish no designer-facing values.
+
+### Flight management computer and hold modes
+
+| Variable | Type / units | Net | Meaning |
+|---|---|---|---|
+| `bmkhs_fmcPitchOn` | Bool, default true | net | FMC pitch channel on. When false, the pitch SAS and attitude hold pitch outputs are zeroed, and the actuator also uses this flag for its lag model. Set with `bmkhs_fnc_fmcSetChannel [heli,"pitch",bool]`. (set in `fmc/fn_fmcVariables.sqf`, `fmc/fn_fmcSetChannel.sqf`) |
+| `bmkhs_fmcRollOn` | Bool, default true | net | FMC roll channel on. Same as pitch, for the roll SAS and attitude hold roll outputs. (set in `fmc/fn_fmcVariables.sqf`, `fmc/fn_fmcSetChannel.sqf`) |
+| `bmkhs_fmcYawOn` | Bool, default true | net | FMC yaw channel on. When false, the yaw SAS and heading hold outputs are zeroed. (set in `fmc/fn_fmcVariables.sqf`, `fmc/fn_fmcSetChannel.sqf`) |
+| `bmkhs_fmcCollOn` | Bool, default true | net | FMC collective channel on. When false, the altitude hold output is zeroed. (set in `fmc/fn_fmcVariables.sqf`, `fmc/fn_fmcSetChannel.sqf`) |
+| `bmkhs_fmcTrimOn` | Bool, default true | net | Trim channel flag. Core stores it but never reads it, so it changes nothing in Core. A pack can use it as a switch state. (set in `fmc/fn_fmcVariables.sqf`, `fmc/fn_fmcSetChannel.sqf`) |
+| `bmkhs_forceTrimInterupted` | Bool | net | True while the force-trim (trim release) button is held. While true, attitude hold does nothing and heading hold drops out. On release it goes false and new hold references are captured. Note the spelling ("Interupted"). (set in `fmc/fn_fmcForceTrimHold.sqf`, `fmc/fn_fmcForceTrimRelease.sqf`) |
+| `bmkhs_attHoldActive` | Bool | net | Attitude/position/velocity hold engaged. Toggled by the `bmkhs_holdModeAttitude` key. Cleared by `bmkhs_holdModesOff`. This is the mode state only. It stays true even when the pitch/roll channel is off or primary hydraulics have failed, and both of those zero the output. (set in `fmc/fn_fmcAttitudeHoldEnable.sqf`, `fmc/fn_fmcHoldModesDisable.sqf`) |
+| `bmkhs_attHoldSubMode` | String `"pos"` / `"vel"` / `"att"` | net | Which attitude hold law applies. Chosen every frame from ground speed, even when the hold is off: `pos` at 5 kt GS or less, `vel` above 5 and up to 40 kt, `att` above 40 kt. (set in `fmc/fn_fmcAttitudeHold.sqf`, `fmc/fn_fmcAttitudeHoldEnable.sqf`) |
+| `bmkhs_attHoldDesiredPos` | Array `getPos` [x,y,z], m | net | Position hold reference. Captured on engage in `pos`, and again on force-trim release. (set in `fmc/fn_fmcAttitudeHoldEnable.sqf`, `fmc/fn_fmcForceTrimRelease.sqf`) |
+| `bmkhs_attHoldDesiredVel` | Array [x, y], m/s, body axes | net | Velocity hold reference. x is the NEGATED model-space lateral velocity, so + = left. y is forward velocity, + = forward. Reset to [0,0] by hold-modes-off. (set in `fmc/fn_fmcAttitudeHoldEnable.sqf`, `fmc/fn_fmcForceTrimRelease.sqf`, `fmc/fn_fmcHoldModesDisable.sqf`) |
+| `bmkhs_attHoldDesiredAtt` | Array [pitch, bank], deg | net | Attitude hold reference, as returned by `BIS_fnc_getPitchBank`. When turn coordination ends, heading hold sets bank to 0. (set in `fmc/fn_fmcAttitudeHoldEnable.sqf`, `fmc/fn_fmcForceTrimRelease.sqf`, `fmc/fn_fmcHeadingHold.sqf`, `fmc/fn_fmcHoldModesDisable.sqf`) |
+| `bmkhs_altHoldActive` | Bool | net | Altitude hold engaged. Toggled by the `bmkhs_holdModeAltitude` key, which only engages if vertical speed is within ±200 fpm. It drops out on its own when collective moves more than ±5 % from `altHoldCollRef`, or when the highest engine torque (`bmkhs_engPctTq`) reaches 0.98 or more. (set in `fmc/fn_fmcAltitudeHold.sqf`, `fmc/fn_fmcAltitudeHoldEnable.sqf`, `fmc/fn_fmcHoldModesDisable.sqf`) |
+| `bmkhs_altHoldSubMode` | String `"rad"` / `"bar"` | net | Radar or barometric altitude hold. While engaged it is `rad` below 1428 ft AGL and under 40 kt GS, and `bar` otherwise. It is only re-evaluated while the hold is engaged. (set in `fmc/fn_fmcAltitudeHold.sqf`, `fmc/fn_fmcAltitudeHoldEnable.sqf`) |
+| `bmkhs_altHoldDesiredAlt` | Number, m (AGL in `rad`, ASL in `bar`) | net | Altitude hold reference, rounded to the metre on engage. It is 0 when the hold is off. Engage chooses AGL or ASL once. The sub-mode can switch later without the reference being re-captured. (set in `fmc/fn_fmcAltitudeHoldEnable.sqf`, `fmc/fn_fmcHoldModesDisable.sqf`) |
+| `bmkhs_altHoldCollRef` | Number 0..1 (collective) | net | Collective position captured when altitude hold engaged. Used for the ±5 % disengage band. (set in `fmc/fn_fmcAltitudeHoldEnable.sqf`) |
+| `bmkhs_hdgHoldActive` | Bool | net | Heading hold engaged. There is no button for it. It is true whenever the aircraft is off the ground, force trim is not held, and pedal input is inside the breakout (0.05 in `pos`, 0.10 in `vel`, 0.20 in `att`). The heading is re-captured each time it re-engages. (set in `fmc/fn_fmcHeadingHold.sqf`) |
+| `bmkhs_hdgHoldSubMode` | String `"hdg"` / `"trn"` / `"yaw"` / `"aut"` | net | Heading hold law, only updated while engaged. `hdg` = hold heading, below 5 kt GS. `trn` = turn coordination: attitude hold on and bank over 7° (drops at under 3°). `yaw` = ball-centring yaw damping. `aut` = the auto-pedal assist owns the yaw axis. (set in `fmc/fn_fmcHeadingHold.sqf`) |
+| `bmkhs_hdgHoldDesiredHdg` | Number, deg 0..360 (`getDir`) | net | Heading hold reference. Captured when the hold engages, when it re-enters `hdg`, and on force-trim release. (set in `fmc/fn_fmcHeadingHold.sqf`, `fmc/fn_fmcForceTrimRelease.sqf`) |
+| `bmkhs_hdgHoldDesiredSideslip` | Number, lateral g | net | Sideslip (ball) reference. Core always sets it to 0. (set in `fmc/fn_fmcForceTrimRelease.sqf`) |
+| `bmkhs_mixPitchOut` | Number, cyclic fraction, + = forward | local (owner only) | Sum of the aircraft's `ControlMixing` mixes targeting pitch, added to the cyclic pitch at the rotor. 0 with no mixes, while a mix's gate is shut, or outside REALISTIC. (set in `fmc/fn_fmc.sqf`, from `fmc/fn_fmcControlMixing.sqf`) |
+| `bmkhs_mixRollOut` | Number, cyclic fraction, + = left | local (owner only) | As above, for roll. |
+| `bmkhs_mixYawOut` | Number, pedal fraction, + = right | local (owner only) | As above, for the pedals. |
+| `bmkhs_fmcSasPitchOut` | Number, ±0.2 cyclic fraction | local (owner only) | Pitch SAS rate-damping command added to the cyclic pitch. Same sign as `cyclicFwdAft`. Zero if the channel is off or primary hydraulics have failed. (set in `fmc/fn_fmc.sqf`) |
+| `bmkhs_fmcSasRollOut` | Number, ±0.1 cyclic fraction | local (owner only) | Roll SAS command added to the cyclic roll. Same sign as `cyclicLeftRight`. (set in `fmc/fn_fmc.sqf`) |
+| `bmkhs_fmcSasYawOut` | Number, ±0.1 pedal fraction | local (owner only) | Yaw SAS command added to the pedals. Same sign as `pedalLeftRight`. (set in `fmc/fn_fmc.sqf`) |
+| `bmkhs_fmcAttHoldCycPitchOut` | Number, ±1 cyclic fraction | local (owner only) | Attitude/position/velocity hold command added to the cyclic pitch. 0 when the hold is off, force trim is held, the channel is off, or primary hydraulics have failed. (set in `fmc/fn_fmc.sqf`) |
+| `bmkhs_fmcAttHoldCycRollOut` | Number, ±1 cyclic fraction | local (owner only) | Same as the pitch output, for cyclic roll. (set in `fmc/fn_fmc.sqf`) |
+| `bmkhs_fmcHdgHoldPedalYawOut` | Number, ±0.1 pedal fraction | local (owner only) | Heading hold / turn coordination command added to the pedals. Forced to 0 when the springless-pedal or auto-pedal setting is on. (set in `fmc/fn_fmc.sqf`) |
+| `bmkhs_fmcAltHoldCollOut` | Number, collective fraction. Range is set by the PID config. | local (owner only) | Altitude hold command added to the collective. 0 when the hold is off. (set in `fmc/fn_fmc.sqf`) |
+
+### Pilot inputs
+
+| Variable | Type / units | Net | Meaning |
+|---|---|---|---|
+| `bmkhs_cyclicFwdAft` | Number -1..1, + = forward | local (pilot's machine) | Pilot cyclic pitch after the keyboard handling, the assists and the actuator lag. It is the stick displacement only: no trim, SAS or hold. Forced to 0 when flight-control hydraulics are lost (`bmkhs_fltCtrlsSupplied` false and `bmkhs_emerHydOn` false). With mouse-as-joystick it is multiplied by `bmkhs_mouseSense`. (set in `input/fn_inputUpdate.sqf`) |
+| `bmkhs_cyclicLeftRight` | Number -1..1, + = LEFT | local (pilot's machine) | Pilot cyclic roll, worked out the same way as pitch. Calculated as left minus right. (set in `input/fn_inputUpdate.sqf`) |
+| `bmkhs_pedalLeftRight` | Number -1..1, + = right pedal | local (pilot's machine) | Pilot pedal after actuator lag. It holds its last value when the tail rotor is unpowered or undriven (`bmkhs_tailRtrSupplied` / `bmkhs_tailRtrDriven` false). It is 0 when flight-control hydraulics are lost. (set in `input/fn_inputUpdate.sqf`) |
+| `bmkhs_collectiveOutput` | Number 0..1, 0 = full down | local (pilot's machine) | Pilot collective position after actuator lag. It holds its last value while flight-control hydraulics are lost, unless emergency hydraulics are on, and while the game is not focused or a dialog is open. (set in `input/fn_inputUpdate.sqf`) |
+| `bmkhs_forceTrimPosPitch` | Number -1..1, + = forward | net (owner), sometimes local only | Cyclic pitch trim position: where the stick rests. Set on force-trim release. Zeroed by force-trim reset. The auto attitude assist writes it every frame. In springless/sticky-keyboard mode it is set to 0 without being sent over the network. (set in `fmc/fn_fmcForceTrimSet.sqf`, `fmc/fn_fmcForceTrimReset.sqf`, `input/fn_inputAutoAttitude.sqf`) |
+| `bmkhs_forceTrimPosRoll` | Number -1..1, + = left | net (owner), sometimes local only | Cyclic roll trim position. Same rules as pitch. (set in `fmc/fn_fmcForceTrimSet.sqf`, `fmc/fn_fmcForceTrimReset.sqf`) |
+| `bmkhs_forceTrimPosYaw` | Number -1..1, + = right | net (owner), sometimes local only | Pedal trim position. When auto pedal is on, auto pedal writes it every frame. (set in `fmc/fn_fmcForceTrimSet.sqf`, `fmc/fn_fmcForceTrimReset.sqf`, `input/fn_inputAutoPedal.sqf`) |
+| `bmkhs_autoAttCycRollOut` | Number, ±0.8 cyclic fraction | net | Roll command from the casual-mode auto attitude assist, added to cyclic roll at the rotor. It is 0 unless the auto-roll setting is on and realism is not REALISTIC. (set in `input/fn_inputAutoAttitude.sqf`) |
+| `bmkhs_flightControlLockOut` | Bool | local (pilot's machine) | Only used with the center-trim mode settings. It is true after a force-trim release while the controls are off centre, and pilot cyclic/pedal input is ignored until they come back within ±0.05. A pack could show a "centre controls" cue from it. (set in `input/fn_inputCenterTrimMode.sqf`, `input/fn_inputUpdate.sqf`) |
+
+The control position the rotor actually usesis not stored anywhere. `rotor/fn_rotorControl.sqf` (and `simpleRotor/fn_simpleRotorControl.sqf`) work it out each frame:
+  - pitch = `inputGetInterp(cyclicFwdAft, forceTrimPosPitch) + fmcSasPitchOut + fmcAttHoldCycPitchOut + mixPitchOut`, clamped to -1..1
+  - roll = `inputGetInterp(cyclicLeftRight, forceTrimPosRoll) + fmcSasRollOut + fmcAttHoldCycRollOut + autoAttCycRollOut + mixRollOut`, clamped to -1..1
+  - yaw = `inputGetInterp(pedalLeftRight, forceTrimPosYaw) + fmcSasYawOut + fmcHdgHoldPedalYawOut + mixYawOut`, clamped to -1..1
+  - collective = `collectiveOutput + fmcAltHoldCollOut`
+  
+  `inputGetInterp(stick, trim)` = `trim + (±1 - trim) * |stick|`. With the stick centred, the result is the trim position. To drive a control position indicator, a pack has to repeat this sum, and it can only do so on the owner/pilot machine. `ctrlVis/fn_ctrlVisUpdate.sqf` is a working example of reading these values.
+
+### Core
+
+| Variable | Type / units | Net | Meaning |
+|---|---|---|---|
+| `bmkhs_initialised` | Bool | net | Set true once, by the local machine, in `core/fn_coreInit.sqf`. `controlSet` refuses to act until it is true. |
+| `bmkhs_useSystems` | Bool | local (every machine that runs coreConfig) | Config `useSystems > 0`. With false: no component solve, no APU, no spring-back. Seeds read as "running". (`core/fn_coreConfig.sqf`) |
+
+### CBA settings (globals)
+
+Registered in `event/fn_eventPreInit.sqf`. These are missionNamespace globals, not vehicle variables.
+
+| Variable | Type / units | Net | Meaning |
+|---|---|---|---|
+| `bmkhs_helisimRealismSetting` | Number, 0 = CASUAL, 2 = REALISTIC | CBA setting | Realism level. |
+| `bmkhs_helisimEnvironment` | Number 0..6 (ISA_STD, EUROPE_SUMMER, EUROPE_WINTER, MIDDLE_EAST, CENTRAL_ASIA_SUMMER, CENTRAL_ASIA_WINTER, ASIA) | CBA setting | Environment preset. |
+| `bmkhs_rotorModel` | Number, 0 = Simple, 1 = BET | CBA setting | Rotor model. |
+| `bmkhs_vrsWarning` | Bool | CBA setting | VRS warning on. |
+| `bmkhs_sysDebug` / `bmkhs_fmDebug` / `bmkhs_engDisplay` / `bmkhs_forcesDebug` | Bool | CBA setting | Debug displays on. |
+| `bmkhs_cyclicCenterTrimMode`, `bmkhs_pedalCenterTrimMode`, `bmkhs_springlessCyclic`, `bmkhs_springlessPedals`, `bmkhs_keyboardStickyPitch/Roll/Yaw`, `bmkhs_autoPedal`, `bmkhs_autoPitch`, `bmkhs_autoRoll`, `bmkhs_mouseAsJoystick` | Bool | CBA setting | Input options. |
+| `bmkhs_mouseSense` | Number 0.1..1.0 | CBA setting | Mouse sensitivity. |
+| `bmkhs_testGwtEnabled` / `bmkhs_testGwtLbs` | Bool / String (lb) | CBA setting | Fixed test gross weight. |
+| `bmkhs_windDisabled` | Bool | CBA setting | Flight model ignores wind. |
+| `bmkhs_ctrlVisColor` | Number 0..5 | CBA setting | Colour scheme for the control visualiser. |
+
+### Events
+
+Raised through `bmkhs_fnc_utilNotify`. It calls the handler registered for the aircraft's base class, as `[_heli, _event, _data]`. Events are raised only on the machine running the code. For per-frame events in the H-60, that is the owner.
+
+| Event | Payload (`_data`) | Raised when |
+|---|---|---|
+| `controlMoved` | `[variableName (String, no prefix), newIdx, prevIdx, value (Number), positionClassName (String)]` | A control's index actually changes. Causes: a `controlSet`; a spring-back returning to rest (owner, `useSystems = 1`); or an external write to `bmkhs_<name>On` (owner, `useSystems = 1`). Not raised at init seeding. (`controls/fn_controlPublish.sqf`) |
+| `apuStateChanged` | `[]` | `bmkhs_apuOn` differs from its value on the previous frame. Also raised on the first frame after init: the last-state memory starts at true, so if the APU is off then, the event fires. Only with `useSystems = 1`. Read `bmkhs_apuOn` for the state. (`systems/apu/fn_apu.sqf`) |
+| `fuelCheckComplete` | `[]` | A running fuel check reaches `bmkhs_checkMinutes`. Raised after `checkDone`/`checkPendingAdvisory` are set, but before the burn rate and time strings are written in the same frame. (`fuel/fn_fuelMgmtUpdate.sqf`) |
+| `holdModeDisengaged` | `[]` | Altitude hold drops because the collective moved more than 5 % from its reference (`fmc/fn_fmcAltitudeHold.sqf`). Or altitude hold is toggled off (`fmc/fn_fmcAltitudeHoldEnable.sqf`). Or attitude hold is toggled off (`fmc/fn_fmcAttitudeHoldEnable.sqf`). Or "hold modes off" is used while either hold is active (`fmc/fn_fmcHoldModesDisable.sqf`). Not raised when altitude hold drops because torque reaches 98 % or more. |
+
+### Read functions
+
+| Function | Params | Returns |
+|---|---|---|
+| `bmkhs_fnc_damageGet` | `[_heli, _role, _index = -1]` | Number 0..1. Damage on member `_index` of a role, or the worst member when -1. Returns 0 for a role nothing claims, or for a missing hitpoint (Arma's -1 is clamped). Works on any machine that has run coreConfig. |
+| `bmkhs_fnc_damageCount` | `[_heli, _role]` | Number. How many hitpoints claim the role (`bmkhsRole` / `bmkhsRoleIndex`). 0 if none. If no hitpoint claims `engines`, there is one shared `hitengine` entry per `numEngines`. |
+| `bmkhs_fnc_systemCircuit` | `[_heli, _circuit]` | Number. Current value of a circuit, in the config's unit; the highest feeder wins. Returns 0 for `""`, an unknown circuit, or nothing feeding it. Only meaningful on the owner with `useSystems = 1`: values are local and solved only there. `"Nr"` is fed from `bmkhs_rtrRpm`. |
+| `bmkhs_fnc_controlSet` (write) | `[_name, _pos, _heli = vehicle player]`. `_pos` is a Number (absolute index) or a String step (`"+1"`, `"-1"`) | Bool, true if the control moved. False if HeliSim is not initialised, the name is unknown, an interlock blocks it, or it is already there. Indices are clamped, or wrap if `wraps = 1`. |
+| `bmkhs_fnc_damageSet` (write) | `[_heli, _role, _damage 0..1, _index = -1]` | Nothing. Sets one member, or all of them when -1. Does nothing for an undeclared role. |
+| `bmkhs_fnc_utilNotifyRegister` | `[_baseClass, _handler]` | Nothing. Registers `_handler` (called with `[_heli, _event, _data]`) for aircraft of that kind. Call from the pack's preInit. |
+| `bmkhs_fnc_fuelTankVarName` (init helper) | `[_tankConfig, _kind, _index, _seenNames]` | String: the tank's variable prefix, e.g. `"bmkhs_no1Tank"`, or the fallback name. |
+
+### Known gaps
+
+Behaviour a designer will otherwise trip over. Each is a Core item, not a pack one.
+
+- `bmkhs_engOilPsi` is a gauge fraction (Ng × 0.90 × oil health), not psi - the same units as
+  `oilPsiLimits[]`.
+- `bmkhs_rtrThrust` is written only by the BET rotor model; with the default Simple model it stays 0.
+- Fuel tank masses (`bmkhs_<tank>Mass`, `bmkhs_totFuelMass`) are not networked.
+- With `useSystems = 0` a spring-back position is never returned to rest.
+- `apuStateChanged` fires once on the first frame after init even if nothing changed.
+- `fuelCheckComplete` is raised before the burn rate and time strings are written that frame.
+- `holdModeDisengaged` is not raised when altitude hold drops at 98% torque.
+- `bmkhs_boostOn`, `bmkhs_checkStartZulu` and `bmkhs_checkElapsedSec` are seeded and never updated.
+- Two control names are hard-coded: `apuBtn` (forced off when the APU stops or starves) and
+  `apuFireHandle`.
+- `bmkhs_prestonActive` is always false - the Preston AI is disabled.
+- `bmkhs_fmcTrimOn` is stored but nothing in Core reads it.
+- The control position the rotor uses is not published; a pack must rebuild it (Pilot inputs).
+
+
+### Internal - do not read
+
+Working state, solver bookkeeping, filters and debug. These change without notice.
+
+- `bmkhs_engineInitialised` - one-shot init guard.
+- `bmkhs_engNp` - raw Np state; use engPctNp.
+- `bmkhs_engResidualHeat` - hot-section restart model state.
+- `bmkhs_engPrevLever` - edge detect for lever.
+- `bmkhs_engLeverSched` - governor fuel schedule working value.
+- `bmkhs_engNpRef` - governor Np reference.
+- `bmkhs_engLimFuel` - TGT/Ng limiter fuel allowance.
+- `bmkhs_engMinFuel` - governor minimum-flow floor.
+- `bmkhs_pid_engine` - governor PID objects.
+- `bmkhs_engIdleSince` - useSystems=0 idle-to-fly timer.
+- `bmkhs_engFailureResult` - useSystems=0 picked engine index.
+- `bmkhs_engStarvedSince` - fuel starvation grace timer.
+- `bmkhs_engSlipT` - clutch slip clock (systems).
+- `bmkhs_engSlipWait` - clutch slip wait timer (systems).
+- `bmkhs_engSlipDepth` - clutch slip depth (systems).
+- `bmkhs_engTimer_<np|ng|tgt><engIdx>_<band>` - per-band exceedance accumulators.
+- `bmkhs_shiftLocked` - stops shift spinning rotor.
+- `bmkhs_lastTimePropagated` - 10 Hz broadcast timer.
+- `bmkhs_gtDiagLast<idx>`, `bmkhs_gtDiagSw<idx>` - debug logging only.
+- `bmkhs_govDiagLast<idx>` - debug logging only.
+- `bmkhs_hotDiagLast_<name>` (missionNamespace) - debug logging only.
+- `bmkhs_xmsnDiagLast` - debug logging only.
+- `bmkhs_dbgForces` - forces debug readout.
+- `bmkhs_rtrMoi` - rotor inertia for transmission.
+- `bmkhs_numRotors` - BET rotor config mirror (WIP).
+- `bmkhs_rotorType`, `bmkhs_rotorDirection`, `bmkhs_rotorNumBlades`, `bmkhs_rotorNumElements`, `bmkhs_rotorMastLength`, `bmkhs_rotorGearRatioArr`, `bmkhs_rotorPivot`, `bmkhs_rotorRotation`, `bmkhs_rotorFlapTimeConst`, `bmkhs_rotorAirfoil`, `bmkhs_rotorBladeCutout`, `bmkhs_rotorBladeLength`, `bmkhs_rotorBladeChordArr`, `bmkhs_rotorBladeTwist`, `bmkhs_rotorBladeMassArr`, `bmkhs_rotorDelta3`, `bmkhs_rotorPitchMin`, `bmkhs_rotorPitchMid`, `bmkhs_rotorPitchMax`, `bmkhs_rotorRollMin`, `bmkhs_rotorRollMid`, `bmkhs_rotorRollMax`, `bmkhs_rotorCollMin`, `bmkhs_rotorCollMid`, `bmkhs_rotorCollMax`, `bmkhs_rotorAnimSource`, `bmkhs_rotorHitPoint` - BET rotor config mirrors (WIP).
+- `bmkhs_rotorFlapMoment` - BET per-blade working accumulator.
+- `bmkhs_rotorBladeAzimuth` - BET per-blade working state.
+- `bmkhs_rotorInducedFlow` - BET inflow filter state.
+- `bmkhs_rotorInducedFlowAccum` - BET inflow accumulator (local only).
+- `bmkhs_rotorReactionTorque` - BET accumulator; holds power (W).
+- `bmkhs_rotorThrustAccum` - BET thrust accumulator.
+- `bmkhs_rotorRateDampScalar` - BET tuning constant.
+- `bmkhs_betMainLiftTable`, `bmkhs_betTailLiftTable` - BET tuning tables.
+- `bmkhs_rotorBeta0`, `bmkhs_rotorA1`, `bmkhs_rotorB1` - BET flap state, degrees.
+- `bmkhs_rotorBeta0Target`, `bmkhs_rotorA1Target`, `bmkhs_rotorB1Target` - BET flap filter targets.
+- `bmkhs_prevLagInputPitch`, `bmkhs_prevLagOutputPitch`, `bmkhs_prevLagInputRoll`, `bmkhs_prevLagOutputRoll`, `bmkhs_prevLagInputYaw`, `bmkhs_prevLagOutputYaw`, `bmkhs_prevLagInputColl`, `bmkhs_prevLagOutputColl` - actuator lag filter state.
+- `bmkhs_sysProducers` / `bmkhs_sysConverters` / `bmkhs_sysStorage` / `bmkhs_sysConsumers` / `bmkhs_sysNamed` / `bmkhs_sysTorqued` - parsed component tables, solver input.
+- `bmkhs_sysCircuits` - circuit map; use `bmkhs_fnc_systemCircuit`.
+- `bmkhs_sysReaders` / `bmkhs_sysWatchers` / `bmkhs_sysFeeds_of` - dependency graph for the walk.
+- `bmkhs_sysFeeds` / `bmkhs_sysFeedIsProducer` - per-feeder circuit contributions.
+- `bmkhs_sysProducerFeed_<circuit>` - producer-only total, used by storage.
+- `bmkhs_sysWalkCost` / `bmkhs_sysWalkPeak` - solver cost, debug only.
+- `bmkhs_sysWatchedLast` - gate values from the previous sweep.
+- `bmkhs_systemsInitialised` - one-time seed guard.
+- `bmkhs_repairPending` - repair trigger flag.
+- `bmkhs_<comp>GateWhy` / `bmkhs_<comp>Why` / `bmkhs_<comp>Tgt` - debug explanation of the solve.
+- `bmkhs_<comp>Awake` / `bmkhs_<comp>DmgLast` - solver wake bookkeeping.
+- `bmkhs_<comp>Feed_<circuit>` - per-output contribution, debug.
+- `bmkhs_<store>Charge` - raw 0..1 charge; read the published value instead.
+- `bmkhs_<store>Drawn` - start-draw latch, solver internal.
+- `bmkhs_tqTimer_<role><i>_<tier>` - per-tier over-torque clocks.
+- `bmkhs_engClutchSlip` / `bmkhs_engSlipT` / `bmkhs_engSlipWait` / `bmkhs_engSlipDepth` - clutch-slip torque jitter state.
+- `bmkhs_apuOnLast` - last APU state, for change detection.
+- `bmkhs_<control>Held` / `bmkhs_<control>Awake` - spring-back hold bookkeeping.
+- `bmkhs_<control>GateWhy` - interlock debug text.
+- `bmkhs_ctrlList` / `bmkhs_ctrlIndex` - parsed control tables.
+- `bmkhs_fuelTanks` / `bmkhs_auxTanks` - parsed tank tables.
+- `bmkhs_fuelMains` / `bmkhs_fuelTransfers` - role-to-index lookups.
+- `bmkhs_xferDestinations` / `bmkhs_xferFlowVars` / `bmkhs_fuelFlowVars` / `bmkhs_crossfeedSources` - parsed fuel config.
+- `bmkhs_boostOn` - seeded, never read or written.
+- `bmkhs_checkStartZulu` / `bmkhs_checkElapsedSec` - seeded, never updated by Core.
+- `bmkhs_damagePoints` - role map; use damageGet/damageCount.
+- `bmkhs_previousTime` / `bmkhs_deltaTime_avg` - frame timing state.
+- `bmkhs_movingAverageSize` (global) - smoothing window constant.
+- `bmkhs_keyboardCollective` / `bmkhs_keyboardCollectivePrevious` / `bmkhs_lastFrameGetIn` (global) - input path flags.
+- `bmkhs_accelX_avg` - moving-average buffer for accelX.
+- `bmkhs_accelY_avg` - moving-average buffer for accelY.
+- `bmkhs_accelZ_avg` - moving-average buffer for accelZ.
+- `bmkhs_aero_beta_g_prev` - low-pass filter state (broadcast anyway).
+- `bmkhs_angVelModelSpaceX_avg` - angular-rate smoothing buffer.
+- `bmkhs_angVelModelSpaceY_avg` - angular-rate smoothing buffer.
+- `bmkhs_angVelModelSpaceZ_avg` - angular-rate smoothing buffer.
+- `bmkhs_deltaTime` - Core frame step, capped 0.1 s.
+- `bmkhs_deltaTime_avg` - frame-time smoothing buffer.
+- `bmkhs_velModelSpaceX_avg` - velocity smoothing buffer.
+- `bmkhs_velModelSpaceY_avg` - velocity smoothing buffer.
+- `bmkhs_velModelSpaceZ_avg` - velocity smoothing buffer.
+- `bmkhs_velWorldSpaceX_avg` - velocity smoothing buffer.
+- `bmkhs_velWorldSpaceY_avg` - velocity smoothing buffer.
+- `bmkhs_velWorldSpaceZ_avg` - velocity smoothing buffer.
+- `bmkhs_velWorldSpaceNoWind_prev` - previous-frame value for differencing.
+- `bmkhs_velX_prev` - previous-frame value for differencing.
+- `bmkhs_velY_prev` - previous-frame value for differencing.
+- `bmkhs_velZ_prev` - previous-frame value for differencing.
+- `bmkhs_worldAccelX_avg` - acceleration smoothing buffer.
+- `bmkhs_worldAccelY_avg` - acceleration smoothing buffer.
+- `bmkhs_worldAccelZ_avg` - acceleration smoothing buffer.
+- `bmkhs_perfDataChange` - change-detection key for perf recompute.
+- `bmkhs_emptyMom` - raw config moment, frame-specific.
+- `bmkhs_emptyMassVariants` - cached config table.
+- `bmkhs_comCorrection` - config centre-of-mass offset.
+- `bmkhs_casualModeCom` - config casual-mode centre of mass.
+- `bmkhs_seats` - cached config table.
+- `bmkhs_stations` - cached config table.
+- `bmkhs_stores` - cached config table.
+- `bmkhs_magazines` - cached config table.
+- `bmkhs_equipment` - cached config table.
+- `bmkhs_airfoils` - cached airfoil lift/drag tables.
+- `bmkhs_wings` - cached wing geometry hashmaps.
+- `bmkhs_numWings` - count of cached wings.
+- `bmkhs_fuselageAirfoil` - cached config airfoil name.
+- `bmkhs_fuselagePanels` - cached fuselage panel geometry.
+- `bmkhs_pid_roll`, `bmkhs_pid_pitch`: position/velocity hold PID state.
+- `bmkhs_pid_roll_att`, `bmkhs_pid_pitch_att`: attitude hold PID state.
+- `bmkhs_pid_radHold`, `bmkhs_pid_barHold`: altitude hold PID state.
+- `bmkhs_pid_hdgHold`, `bmkhs_pid_trnCoord`: heading/turn-coord PID state.
+- `bmkhs_pid_sas_pitch`, `bmkhs_pid_sas_roll`, `bmkhs_pid_sas_yaw`: SAS PID state.
+- `bmkhs_pid_autoAttPitch`, `bmkhs_pid_autoAttRoll`: assist PID state, casual only.
+- `bmkhs_pid_autoPedalHdg`, `bmkhs_pid_autoPedalNtt`, `bmkhs_pid_autoPedalAero`: auto-pedal PID state.
+- `bmkhs_posIntX`, `bmkhs_posIntY`: position hold integrator, clamped tiny.
+- `bmkhs_mixes`: parsed `ControlMixing` table.
+- `bmkhs_autoAttLevelPitch`, `bmkhs_autoAttRollLimit`: config copy for assist.
+- `bmkhs_autoAttRollTarget`: assist roll setpoint, deg.
+- `bmkhs_autoPedalHdg`: auto-pedal heading setpoint (networked).
+- `bmkhs_autoPedalRegime`, `bmkhs_autoPedalRegimeWgt`: auto-pedal regime, weight always 1.
+- `bmkhs_autoPedalHdgErr`, `bmkhs_autoPedalNttErr`, `bmkhs_autoPedalAeroErr`: auto-pedal loop errors.
+- `bmkhs_autoPedalOut`: auto-pedal output; see forceTrimPosYaw.
+- `bmkhs_kbPedalLeftRight`: auto-pedal keyboard lerp state.
+- `bmkhs_cyclicPitchValue`, `bmkhs_cyclicRollValue`, `bmkhs_pedalYawValue`: sticky-keyboard accumulators.
+- `bmkhs_prevCyclicPitchValue`, `bmkhs_prevCyclicRollValue`, `bmkhs_prevPedalYawValue`: sticky-keyboard shadow values.
+- `bmkhs_kbStickyInterupt`: sticky interrupt key held.
+- `bmkhs_kbHeliCollectiveRaiseOut`, `bmkhs_kbHeliCollectiveLowerOut`: raw keyboard collective key state.
+- `bmkhs_heliCyclicForwardOut`, `bmkhs_heliCyclicBackwardOut`, `bmkhs_heliCyclicLeftOut`, `bmkhs_heliCyclicRightOut`: raw axis halves, pre-processing.
+- `bmkhs_heliRudderLeftOut`, `bmkhs_heliRudderRightOut`: raw axis halves, pre-processing.
+- `bmkhs_heliCollectiveRaiseOut`, `bmkhs_heliCollectiveLowerOut`: raw axis halves, pre-processing.
+- `bmkhs_pid_prestonPitch`, `bmkhs_pid_prestonRoll`, `bmkhs_pid_prestonHoverX`, `bmkhs_pid_prestonHoverY`, `bmkhs_pid_prestonVelX`, `bmkhs_pid_prestonVelY`: Preston PIDs, AI disabled.
+- `bmkhs_prestonPitchActive`, `bmkhs_prestonRollActive`: Preston internals, AI disabled.
+- `bmkhs_prestonPitchTarget`, `bmkhs_prestonRollTarget`, `bmkhs_prestonVelCmdFwd`: Preston setpoints, AI disabled.
+- `bmkhs_prestonPosWgt`, `bmkhs_prestonVelWgt`, `bmkhs_prestonAttWgt`: Preston regime weights, AI disabled.
+- `bmkhs_prestonPrevPitch`, `bmkhs_prestonPrevRoll`, `bmkhs_prestonBreakout`: Preston filter state, AI disabled.
+- `bmkhs_prestonHoverDatum`, `bmkhs_prestonHoverIntX`, `bmkhs_prestonHoverIntY`: Preston hover integrator, AI disabled.
+- `bmkhs_prestonLearnedIntX`, `bmkhs_prestonLearnedIntY`: Preston learned trim, AI disabled.
+- `bmkhs_dbgHovIntP`, `bmkhs_dbgHovIntR`, `bmkhs_dbgHovOutP`, `bmkhs_dbgHovOutR`: Preston debug readouts, never updated.
+- `bmkhs_dbgHovSetX`, `bmkhs_dbgHovSetY`, `bmkhs_dbgHovVelX`, `bmkhs_dbgHovVelY`: Preston debug readouts, never updated.
+- `bmkhs_dbgForces`: per-frame debug overlay scratch list.
+- `bmkhs_ctrlvis`, `bmkhs_ctrlVisCircleW`, `bmkhs_ctrlVisColors`: uiNamespace overlay handle/cache.
+- `bmkhs_engdisplay`: uiNamespace overlay display handle.
+- `bmkhs_fmdebug`: uiNamespace overlay display handle.

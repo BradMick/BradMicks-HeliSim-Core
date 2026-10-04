@@ -3,7 +3,7 @@ Function: bmkhs_fnc_massVariables
 
 Description:
     Loads the mass and balance configuration - fuselage datum, CG limits, and
-    the indexed seat, tank, station, magazine and store tables.
+    the indexed seat, tank, station, magazine, store and equipment tables.
 
 Parameters:
     _heli   - The helicopter to get information from [Unit].
@@ -97,6 +97,18 @@ private _stores = [];
     ]);
 } forEach ([_config >> "Stores", "Store", getNumber (_config >> "numStores")] call _readClass);
 _heli setVariable ["bmkhs_stores", _stores];
+
+//EQUIPMENT - parts fitted or removed by the aircraft's own animation sources
+private _equipment = [];
+{
+    _equipment pushBack (createHashMapFromArray [
+        ["animation",      getText   (_x >> "animation")],
+        ["installedPhase", getNumber (_x >> "installedPhase")],
+        ["mass",           getNumber (_x >> "mass")],
+        ["arm",            getArray  (_x >> "arm")]
+    ]);
+} forEach ([_config >> "Equipment", "Equipment", getNumber (_config >> "numEquipment")] call _readClass);
+_heli setVariable ["bmkhs_equipment", _equipment];
 
 _heli setVariable ["bmkhs_gwt", 0.0];
 _heli setVariable ["bmkhs_cg",  0.0];
