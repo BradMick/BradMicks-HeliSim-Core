@@ -45,37 +45,8 @@ private _want = [_target, _cur] select (_target < 0);
 //The extra _n is because SQF's mod keeps the sign, so stepping back off 0 gives -1.
 _want = if (_ctl get "wraps") then {((_want mod _n) + _n) mod _n} else {(_want max 0) min (_n - 1)};
 
-//Interlocks are the gate form, so this is the gate loop: a variable name, or
-//{circuit, threshold} read live. _ctl because the forEach rebinds _x.
-private _free    = true;
-private _gateWhy = "";
-{
-    private _ok = if (_x isEqualType []) then {
-        ([_heli, _x select 0] call bmkhs_fnc_systemCircuit) >= (_x select 1)
-    } else {
-        _heli getVariable [_x, false]
-    };
-    if (!_ok) exitWith {
-        _free = false;
-        _gateWhy = if (_x isEqualType []) then {_x select 0} else {_x select [6]};
-    };
-} forEach ((_ctl get "enabledBy") + ((_poss select _want) get "enabledBy"));
-
-//The same loop with the test inverted - any one of these blocks it.
-if (_free) then {
-    {
-        private _bad = if (_x isEqualType []) then {
-            ([_heli, _x select 0] call bmkhs_fnc_systemCircuit) >= (_x select 1)
-        } else {
-            _heli getVariable [_x, false]
-        };
-        if (_bad) exitWith {
-            _free = false;
-            _gateWhy = if (_x isEqualType []) then {_x select 0} else {_x select [6]};
-        };
-    } forEach ((_ctl get "inhibitedBy") + ((_poss select _want) get "inhibitedBy"));
-};
-_heli setVariable [_varName + "GateWhy", _gateWhy];
+//Interlocks - checked in one place, bmkhs_fnc_controlAllowed, which outside callers ask too.
+private _free = [_heli, _index, _want] call bmkhs_fnc_controlAllowed;
 
 //An inhibited control does not move, and does not spring - a rotor brake set while the
 //lever is at FLY leaves it at FLY. The interlock stops the throw, not the state.

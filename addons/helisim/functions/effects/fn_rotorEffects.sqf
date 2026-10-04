@@ -110,7 +110,7 @@ if (_velXYNoWind < 12.35 && _inputRPM > EPSILON && !_isOnGnd) then {  //must be 
         setCustomSoundController[_heli, "CustomSoundController3", 6.4];
         setCustomSoundController[_heli, "CustomSoundController4", 1.8];
 
-        if (bmkhs_vrsWarning) then {
+        if (bmkhs_vrsWarning && {vehicle player == _heli}) then {
             hintSilent parseText format ["<t size='1.5' font='EtelkaMonospacePro' color='#99ffffff'>Entering VRS Condition!</t>"];
         };
     };
@@ -124,7 +124,7 @@ if (_velXYNoWind < 12.35 && _inputRPM > EPSILON && !_isOnGnd) then {  //must be 
         setCustomSoundController[_heli, "CustomSoundController3", 6.4];
         setCustomSoundController[_heli, "CustomSoundController4", 1.8];
 
-        if (bmkhs_vrsWarning) then {
+        if (bmkhs_vrsWarning && {vehicle player == _heli}) then {
             hintSilent parseText format ["<t size='1.5' font='EtelkaMonospacePro' color='#FFFF00'>Caution! VRS Developing!</t>"];
         };
     };
@@ -137,7 +137,7 @@ if (_velXYNoWind < 12.35 && _inputRPM > EPSILON && !_isOnGnd) then {  //must be 
 
         setCustomSoundController[_heli, "CustomSoundController3", 6.4];
         setCustomSoundController[_heli, "CustomSoundController4", 1.8];
-        if (bmkhs_vrsWarning) then {
+        if (bmkhs_vrsWarning && {vehicle player == _heli}) then {
             hintSilent parseText format ["<t size='1.5' font='EtelkaMonospacePro' color='#ff0000'>Warning! Fully Developed VRS Imminent!</t>"];
         };
     };
@@ -151,7 +151,7 @@ if (_velXYNoWind < 12.35 && _inputRPM > EPSILON && !_isOnGnd) then {  //must be 
         setCustomSoundController[_heli, "CustomSoundController3", 6.4];
         setCustomSoundController[_heli, "CustomSoundController4", 1.8];
 
-        if (bmkhs_vrsWarning) then {
+        if (bmkhs_vrsWarning && {vehicle player == _heli}) then {
             hintSilent parseText format ["<t size='1.5' font='EtelkaMonospacePro' color='#ff0000'>Danger! You are in VRS!</t>"];
         };
     };

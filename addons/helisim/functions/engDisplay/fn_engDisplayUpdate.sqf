@@ -28,12 +28,15 @@ private _display = uiNamespace getVariable ["bmkhs_engdisplay", displayNull];
 private _wanted  = (!(_heli getVariable ["bmkhs_useSystems", false]) || bmkhs_engDisplay)
                 && {driver _heli == player || gunner _heli == player};
 
+//One window, and every aircraft runs this - only the one that opened it closes it.
+private _owner = uiNamespace getVariable ["bmkhs_engdisplayHeli", objNull];
 if (!_wanted) exitWith {
-    if !(isNull _display) then {
+    if (!(isNull _display) && {isNull _owner || {_owner == _heli}}) then {
         ("bmkhs_engdisplay" call BIS_fnc_rscLayer) cutText ["", "PLAIN", 0, false];
         uiNamespace setVariable ["bmkhs_engdisplay", displayNull];
     };
 };
+uiNamespace setVariable ["bmkhs_engdisplayHeli", _heli];
 
 if (isNull _display) exitWith {
     ("bmkhs_engdisplay" call BIS_fnc_rscLayer) cutRsc ["bmkhs_engdisplay", "PLAIN", 0, false];

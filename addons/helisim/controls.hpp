@@ -49,11 +49,13 @@
 // WHAT A CONTROL PUBLISHES
 /////////////////////////////////////////////////////////////////////////////////////////////
 //
-//Three variables, all derived, none interpreted by Core:
+//Its variables, all derived, none interpreted by Core:
 //
 //    bmkhs_<name>Idx   the position index - canonical
 //    bmkhs_<name>Val   the current position's declared value
 //    bmkhs_<name>On    Val != 0
+//    bmkhs_<name>_<Position>  true while it sits in that position, one per position class -
+//                      how a gate names a switch position (bmkhs_airSource_Apu)
 //
 //THE NAMING IS LOAD-BEARING. `On` is what keeps existing gates working untouched: a
 //control with variableName = "battSwitch" publishes bmkhs_battSwitchOn, which is the name
@@ -109,15 +111,12 @@
 //
 //These are MECHANICAL interlocks, not electrical ones. See below.
 //
-//INTERLOCKS ARE PER-CONTROL, NOT PER-POSITION, and some switches want the finer grain. The
-//start switch is the case: a locked-rotor start is a real procedure, so the rotor brake
-//blocks START while ABORTING must always be available - a pilot who hits trouble mid-start
-//has to be able to override whatever else is set. One inhibitedBy on the control would
-//block the abort with everything else.
+//Either list may also sit on a position, added to the control's own - a rotor brake blocks
+//a power lever reaching FLY without blocking IDLE.
 //
-//Where a control needs that, the interlock belongs with whatever knows the difference
-//rather than on the control. Per-position interlocks are not modelled; add them only if a
-//second airframe needs them, rather than for this one case.
+//Ask bmkhs_fnc_controlAllowed rather than checking these yourself. Circuits exist only where
+//the aircraft is local, so the owner publishes the answer per position as
+//bmkhs_<name>Allowed (networked controls only).
 //
 /////////////////////////////////////////////////////////////////////////////////////////////
 // CONTROLS AND POWER - there is no poweredBy, and that is deliberate

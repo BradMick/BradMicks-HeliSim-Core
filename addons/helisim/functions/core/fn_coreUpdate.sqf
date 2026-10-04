@@ -87,7 +87,7 @@ if (isAutoHoverOn _heli) then {
 
 //The systems display owns the hint while it is up - both use hintSilent, and this one
 //runs last, so it would simply overwrite the other.
-if (bmkhs_fmDebug && {!bmkhs_sysDebug}) then {
+if (bmkhs_fmDebug && {!bmkhs_sysDebug} && {vehicle player == _heli}) then {
     hintSilent format [
     "_cyclicFwdAft = %1
     \n_cyclicLeftRight = %2

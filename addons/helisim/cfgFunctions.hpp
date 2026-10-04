@@ -148,6 +148,7 @@ class CfgFunctions
         class controls {
             file = "\bmkhs_helisim\functions\controls";
             class control {R;};
+            class controlAllowed {R;};
             class controlPublish {R;};
             class controlSet {R;};
             class controlsRelease {R;};

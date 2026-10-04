@@ -34,7 +34,8 @@ Author:
 ---------------------------------------------------------------------------- */
 params ["_heli"];
 
-if !(bmkhs_sysDebug) exitWith {};
+//One hint, and every aircraft runs this - only the player's own writes it.
+if (!bmkhs_sysDebug || {vehicle player != _heli}) exitWith {};
 
 //Values read better rounded - 7.4257e-07 is noise, not information.
 private _fmt = {

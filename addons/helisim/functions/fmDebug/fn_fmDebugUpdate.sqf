@@ -34,13 +34,16 @@ if !(_heli getVariable ["bmkhs_initialised", false]) exitWith {};
 private _display = uiNamespace getVariable ["bmkhs_fmdebug", displayNull];
 private _wanted  = bmkhs_forcesDebug && {driver _heli == player || gunner _heli == player};
 
+//One window, and every aircraft runs this - only the one that opened it closes it.
+private _owner = uiNamespace getVariable ["bmkhs_fmdebugHeli", objNull];
 if (!_wanted) exitWith {
-    if !(isNull _display) then {
+    if (!(isNull _display) && {isNull _owner || {_owner == _heli}}) then {
         ("bmkhs_fmdebug" call BIS_fnc_rscLayer) cutText ["", "PLAIN", 0, false];
         uiNamespace setVariable ["bmkhs_fmdebug", displayNull];
     };
     _heli setVariable ["bmkhs_dbgForces", []];
 };
+uiNamespace setVariable ["bmkhs_fmdebugHeli", _heli];
 
 if (isNull _display) exitWith {
     //Opened this frame; the display is not there to write to until the next one.

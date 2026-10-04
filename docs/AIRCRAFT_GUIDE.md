@@ -866,8 +866,9 @@ class Controls {
 };
 ```
 
-Each control publishes three variables: `bmkhs_<name>Idx`, `Val`, and `On`
-(`Val != 0`).
+Each control publishes `bmkhs_<name>Idx`, `Val`, and `On` (`Val != 0`), plus one flag
+per position, `bmkhs_<name>_<Position>`, true while it sits there. A gate names a switch
+position with that flag: `gate[] = {"bmkhs_airSource_Apu"}` holds only with AIR SOURCE at APU.
 
 **THE NAMING IS LOAD-BEARING.** `variableName = "battSwitch"` publishes
 `bmkhs_battSwitchOn`, which is the name your Battery component gates on. Get it
@@ -901,6 +902,11 @@ locked-rotor start still works. `enabledBy[]` is the opposite - all must hold.
 
 **An inhibited control does not move.** It is a mechanical stop, not a veto on
 the consequence.
+
+**Ask Core, don't re-check.** `[_heli, "eng1PwrLvr", 2] call bmkhs_fnc_controlAllowed`
+answers whether a control may move to a position - the same check Core makes when it moves
+it. A cockpit that refuses a click before animating asks this; it never re-implements the
+interlocks.
 
 **These are MECHANICAL interlocks, not electrical.** A switch is a piece of
 metal and moves whether or not the bus is up - what stops an unpowered switch
@@ -965,9 +971,9 @@ animator, and these hold:
   two run on different clocks.
 - **Tell Core when the move starts, not when it ends.** Call `controlSet` from
   the framework's start hook, so the engine and the lever move together.
-- **Refuse before moving.** Check the control's `enabledBy[]` / `inhibitedBy[]`
-  in the framework's pre-move condition, so a refused control never moves rather
-  than snapping back.
+- **Refuse before moving.** Ask `bmkhs_fnc_controlAllowed` in the framework's
+  pre-move condition, so a refused control never moves rather than snapping back.
+  Core answers; the cockpit never re-checks the interlocks itself.
 - **`controlSet` runs where the aircraft is local.** A click from another seat is
   forwarded to the owner.
 - **Linked controls go through the framework too.** Two power levers advancing
@@ -1128,6 +1134,7 @@ Each class under the aircraft's `Controls` gives one control. `variableName` nam
 |---|---|---|---|
 | `bmkhs_<variableName>Idx` | Number, 0-based position index | net if the control's `networked = 1`, else local to the machine that moved it | The current position, and the one value Core treats as canonical. Seeded at `rest` on every machine that runs coreConfig, with a plain local setVariable. After that it is published only when it changes. (set in `controls/fn_controlsVariables.sqf`, `controls/fn_controlPublish.sqf`) |
 | `bmkhs_<variableName>Val` | Number, the position's config `value` | same as Idx | The declared `value` of the current position. (set in `controls/fn_controlPublish.sqf`) |
+| `bmkhs_<variableName>_<Position>` | Bool, one per position class | same as Idx | True while the control sits in that position. How a gate, interlock or mix gate names a switch position - `bmkhs_airSource_Apu`. Seeded at `rest`, published with Idx. (set in `controls/fn_controlsVariables.sqf`, `controls/fn_controlPublish.sqf`) |
 | `bmkhs_<variableName>On` | Bool, `Val != 0` | same as Idx | This is what component `gate[]` entries normally read. Example: `batt1Switch` publishes `bmkhs_batt1SwitchOn`. Code outside Core may also write it. On the owner, with `useSystems = 1`, Core then moves Idx to a position that matches. It prefers `rest`, and raises `controlMoved`. If no position matches, it leaves Idx alone. (reconciled in `controls/fn_controlsUpdate.sqf`) |
 
 Notes:
@@ -1418,6 +1425,7 @@ Raised through `bmkhs_fnc_utilNotify`. It calls the handler registered for the a
 | `bmkhs_fnc_damageGet` | `[_heli, _role, _index = -1]` | Number 0..1. Damage on member `_index` of a role, or the worst member when -1. Returns 0 for a role nothing claims, or for a missing hitpoint (Arma's -1 is clamped). Works on any machine that has run coreConfig. |
 | `bmkhs_fnc_damageCount` | `[_heli, _role]` | Number. How many hitpoints claim the role (`bmkhsRole` / `bmkhsRoleIndex`). 0 if none. If no hitpoint claims `engines`, there is one shared `hitengine` entry per `numEngines`. |
 | `bmkhs_fnc_systemCircuit` | `[_heli, _circuit]` | Number. Current value of a circuit, in the config's unit; the highest feeder wins. Returns 0 for `""`, an unknown circuit, or nothing feeding it. Only meaningful on the owner with `useSystems = 1`: values are local and solved only there. `"Nr"` is fed from `bmkhs_rtrRpm`. |
+| `bmkhs_fnc_controlAllowed` | `[_heli, _control, _pos]` - variableName or index, position index | Bool: may it move there - the control's and the position's `enabledBy[]` / `inhibitedBy[]`, the check Core itself makes before moving. Records the blocker in `bmkhs_<control>GateWhy`. Off the owner, returns the owner's answer. |
 | `bmkhs_fnc_controlSet` (write) | `[_name, _pos, _heli = vehicle player]`. `_pos` is a Number (absolute index) or a String step (`"+1"`, `"-1"`) | Bool, true if the control moved. False if HeliSim is not initialised, the name is unknown, an interlock blocks it, or it is already there. Indices are clamped, or wrap if `wraps = 1`. |
 | `bmkhs_fnc_damageSet` (write) | `[_heli, _role, _damage 0..1, _index = -1]` | Nothing. Sets one member, or all of them when -1. Does nothing for an undeclared role. |
 | `bmkhs_fnc_utilNotifyRegister` | `[_baseClass, _handler]` | Nothing. Registers `_handler` (called with `[_heli, _event, _data]`) for aircraft of that kind. Call from the pack's preInit. |
@@ -1503,6 +1511,7 @@ Working state, solver bookkeeping, filters and debug. These change without notic
 - `bmkhs_apuOnLast` - last APU state, for change detection.
 - `bmkhs_<control>Held` / `bmkhs_<control>Awake` - spring-back hold bookkeeping.
 - `bmkhs_<control>GateWhy` - interlock debug text.
+- `bmkhs_<control>Allowed` - per-position interlock result, published by the owner; ask `bmkhs_fnc_controlAllowed` instead.
 - `bmkhs_ctrlList` / `bmkhs_ctrlIndex` - parsed control tables.
 - `bmkhs_fuelTanks` / `bmkhs_auxTanks` - parsed tank tables.
 - `bmkhs_fuelMains` / `bmkhs_fuelTransfers` - role-to-index lookups.
