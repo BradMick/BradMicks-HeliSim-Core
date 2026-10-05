@@ -67,18 +67,7 @@
 //Advance ratio ceiling - the 4.65*mu^2 profile growth diverges past here
 #define MU_MAX                  0.35
 
-#define RAD_ALT_MAX_ALT         435.254 //1428ft
-#define ALT_HOLD_SPEED_SWITCH   20.577  //40kts GS
-
-#define POS_HOLD_SPEED_SWITCH         2.572   //5kts GS
-#define VEL_HOLD_SPEED_SWITCH_DECEL   15.433  //30kts GS
-#define VEL_HOLD_SPEED_SWITCH_ACCEL   20.577  //40kts GS
-
-#define HDG_HOLD_SPEED_SWITCH_DECEL   15.433  //30kts GS
-#define HDG_HOLD_SPEED_SWITCH_ACCEL   20.577  //40kts GS
-#define HDG_HOLD_BREAKOUT_VALUE       0.05//0.03
-#define VEL_HOLD_BREAKOUT_VALUE       0.10//0.06
-#define ATT_HOLD_BREAKOUT_VALUE       0.20//0.09
+//FMC hold switch speeds, breakouts and authorities are the aircraft's - class FMC, fmc.hpp
 
 #define CENTER_TRIM_VAL               0.05
 #define BETA_G_TAU                    0.60

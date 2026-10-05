@@ -1,10 +1,12 @@
-params ["_heli"];
+params ["_heli", "_alt", "_on"];
 #include "\bmkhs_helisim\functions\core\core.hpp"
+
+if (count _alt == 0) exitWith {0.0};
 
 private _deltaTime  = _heli getVariable "bmkhs_deltaTime";
 private _gndSpeed   = (_heli getVariable "bmkhs_gndSpeed") * KNOTS_TO_MPS;
-private _pidRadAlt  = _heli getVariable "bmkhs_pid_radHold";
-private _pidBarAlt  = _heli getVariable "bmkhs_pid_barHold";
+private _pidRadAlt  = _alt get "rad";
+private _pidBarAlt  = _alt get "bar";
 private _curAltAGL  = ASLToAGL getPosASL _heli # 2;
 private _subMode    = _heli getVariable "bmkhs_altHoldSubMode";
 private _desiredAlt = _heli getVariable "bmkhs_altHoldDesiredAlt";
@@ -13,28 +15,25 @@ private _collRef    = _heli getVariable  "bmkhs_altHoldCollRef";
 private _tq         = selectMax (_heli getVariable "bmkhs_engPctTq");
 private _output     = 0.0;
 
-//If the total torque exceeds 98%, de-activate altitude hold and don't allow its
-//activation until it it is below 98%
-if (_tq >= 0.98) then {
+//At the torque limit, de-activate altitude hold and don't allow its activation until below it
+if (_tq >= (_alt get "dropAboveTq")) then {
     [_heli, "bmkhs_altHoldActive", false] call bmkhs_fnc_utilUpdateNetworkGlobal;
     [_pidRadAlt] call bmkhs_fnc_pidReset;
     [_pidBarAlt] call bmkhs_fnc_pidReset;
 };
 
-if ( _heli getVariable "bmkhs_altHoldActive") then {
+if (_on && {_heli getVariable "bmkhs_altHoldActive"}) then {
     //If the pilot is intentionally trying to change altitude, de-activate altitude
     //hold and allow them to do so
-    private _collRef_low = _collRef * 0.95;
-    private _collRef_hi  = _collRef * 1.05;
+    private _collRef_low = _collRef * (1 - (_alt get "collBand"));
+    private _collRef_hi  = _collRef * (1 + (_alt get "collBand"));
     if ((_heli getVariable "bmkhs_collectiveOutput") >= _collRef_hi || (_heli getVariable "bmkhs_collectiveOutput") <= _collRef_low) then {
         [_heli, "bmkhs_altHoldActive", false] call bmkhs_fnc_utilUpdateNetworkGlobal;
         [_heli, "holdModeDisengaged"] call bmkhs_fnc_utilNotify;
     };
 
-    //If the helicopters radar altitude is < 1428ft (435.25m) and current velocity is < 40kts
-    //then set the desired altitude to the current AGL altitude, otherwise set it to the
-    //current ASL altitude.
-    if (_curAltAGL < RAD_ALT_MAX_ALT && _gndSpeed < ALT_HOLD_SPEED_SWITCH) then {
+    //Radar below its height and speed, barometric otherwise
+    if (_curAltAGL < ((_alt get "radBelowFt") * FEET_TO_METERS) && _gndSpeed < ((_alt get "radBelowKts") * KNOTS_TO_MPS)) then {
         [_heli, "bmkhs_altHoldSubMode", "rad"] call bmkhs_fnc_utilUpdateNetworkGlobal;
     } else {
         [_heli, "bmkhs_altHoldSubMode", "bar"] call bmkhs_fnc_utilUpdateNetworkGlobal;

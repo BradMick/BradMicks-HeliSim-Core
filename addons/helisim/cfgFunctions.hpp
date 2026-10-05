@@ -110,6 +110,11 @@ class CfgFunctions
             class fmcAltitudeHoldEnable {R;};
             class fmcAttitudeHoldEnable {R;};
             class fmcControlMixing {R;};
+            class fmcFdMode {R;};
+            class fmcFdStep {R;};
+            class fmcFdSync {R;};
+            class fmcFdTarget {R;};
+            class fmcFlightDirector {R;};
             class fmcForceTrimHold {R;};
             class fmcForceTrimRelease {R;};
             class fmcForceTrimReset {R;};

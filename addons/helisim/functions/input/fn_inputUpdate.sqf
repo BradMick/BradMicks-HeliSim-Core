@@ -20,7 +20,9 @@ params ["_heli"];
 #include "\bmkhs_helisim\functions\core\core.hpp"
 #include "\bmkhs_helisim\functions\systems\systems.hpp"
 
-if (currentPilot _heli != player || !local _heli) exitWith {};
+if (currentPilot _heli != player || !local _heli) exitWith {
+    if (local _heli) then {[_heli, "bmkhs_autoAttCycRollOut", 0.0] call bmkhs_fnc_utilUpdateNetworkGlobal};
+};
 
 private _paused             = isNull findDisplay 49;
 private _chatting           = isNull findDisplay 24;
@@ -164,6 +166,8 @@ if (bmkhs_autoPedal) then {
 //The sticky interrupt suspends the assist and hands both axes back to the pilot.
 if ((bmkhs_autoPitch || bmkhs_autoRoll) && {bmkhs_helisimRealismSetting != REALISTIC} && {!_kbStickyInterupt}) then {
     _cyclicLeftRight = [_heli, _deltaTime, _cyclicFwdAft, _cyclicLeftRight] call bmkhs_fnc_inputAutoAttitude;
+} else {
+    [_heli, "bmkhs_autoAttCycRollOut", 0.0] call bmkhs_fnc_utilUpdateNetworkGlobal;
 };
 /////////////////////////////////////////////////////////////////////////////////////////////
 // Flight Ctrl Lockout  /////////////////////////////////////////////////////////////////////

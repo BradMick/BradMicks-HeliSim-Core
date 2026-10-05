@@ -30,7 +30,7 @@ params ["_heli", "_deltaTime", "_pedalLeftRight", "_kbPedalLeftRight", "_kbYawSw
 private _yawBreakout = false;
 private _gndSpeed    = (_heli getVariable "bmkhs_gndSpeed") * KNOTS_TO_MPS;
 
-private _yawBreakoutVal = (inputAction "HeliRudderRight") - (inputAction "HeliRudderLeft");
+private _yawBreakoutVal = (_heli getVariable "bmkhs_heliRudderRightOut") - (_heli getVariable "bmkhs_heliRudderLeftOut");
 if (_yawBreakoutVal < -0.01 || _yawBreakoutVal > 0.01) then {
     _yawBreakout = true;
 };

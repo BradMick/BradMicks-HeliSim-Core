@@ -34,7 +34,7 @@ if !(_heli getVariable ["bmkhs_initialised", false]) exitWith {};
 private _display = uiNamespace getVariable ["bmkhs_fmdebug", displayNull];
 private _wanted  = bmkhs_forcesDebug && {driver _heli == player || gunner _heli == player};
 
-//One window, and every aircraft runs this - only the one that opened it closes it.
+//One window, and every local aircraft runs this - only the one that opened it closes it.
 private _owner = uiNamespace getVariable ["bmkhs_fmdebugHeli", objNull];
 if (!_wanted) exitWith {
     if (!(isNull _display) && {isNull _owner || {_owner == _heli}}) then {
@@ -49,6 +49,19 @@ if (isNull _display) exitWith {
     //Opened this frame; the display is not there to write to until the next one.
     ("bmkhs_fmdebug" call BIS_fnc_rscLayer) cutRsc ["bmkhs_fmdebug", "PLAIN", 0, false];
     _heli setVariable ["bmkhs_dbgForces", []];
+    //Its aircraft stops updating once it dies or leaves this machine, so the machine closes it.
+    if (isNil "bmkhs_fmDebugWatch") then {
+        bmkhs_fmDebugWatch = addMissionEventHandler ["EachFrame", {
+            private _heli = uiNamespace getVariable ["bmkhs_fmdebugHeli", objNull];
+            if (isNull _heli || {!alive _heli} || {!local _heli} || {driver _heli != player && {gunner _heli != player}}) then {
+                ("bmkhs_fmdebug" call BIS_fnc_rscLayer) cutText ["", "PLAIN", 0, false];
+                uiNamespace setVariable ["bmkhs_fmdebug", displayNull];
+                uiNamespace setVariable ["bmkhs_fmdebugHeli", objNull];
+                removeMissionEventHandler ["EachFrame", _thisEventHandler];
+                bmkhs_fmDebugWatch = nil;
+            };
+        }];
+    };
 };
 
 private _ctrl = _display displayCtrl 5203;

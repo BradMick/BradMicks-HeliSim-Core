@@ -130,8 +130,13 @@ private _windAzimuth        = if (_velXY > 0.01) then { _velX atan2 _velY } else
 private _flapBackRollAngle  = _flapBackRollMax  * _advanceRatio;
 private _flapBackPitchAngle = _flapBackPitchMax * _advanceRatio;
 
+//Blade lift coefficient - the same at all four positions
+private _liftCoef       = [_liftCoefTable, _tableKey, _velXY] call bmkhs_fnc_mathLinearInterp2D;
+//Axial speed along the thrust actually produced - a tail rotor's reverses with pedal
+private _axialVel       = _velZ * ([1.0, -1.0] select (_liftCoef < 0));
+
 //Total torque of the four blade positions
-private _viScalarDenom  = linearConversion [-7.62, -19.30, _velZ, VEL_VRS, VEL_VRS * 0.1, true];
+private _viScalarDenom  = linearConversion [-7.62, -19.30, _axialVel, VEL_VRS, VEL_VRS * 0.1, true];
 private _rotorTorque    = 0.0;
 private _torqueSign     = [1.0, -1.0] select (_dir == CW);
 
@@ -155,8 +160,6 @@ for "_i" from 0 to 3 do {
     //Because the model is 4 fixed points, we have to scale based on the number of blades
     private _bladeScalar    = _numBlades / 4;
     //Blade lift
-    private _liftCoef       = [_liftCoefTable, _tableKey, _velXY] call bmkhs_fnc_mathLinearInterp2D;
-    //Blade lift
     private _bladeLift      = _liftCoef * 0.5 * _dryAirDensity * _bladeArea * (_bladeVel_75 * _bladeVel_75);
     _bladeLift              = _bladeLift * _bladeScalar;
     //Differential lift from cyclic application
@@ -177,10 +180,10 @@ for "_i" from 0 to 3 do {
 
     //Induced velocity
     private _viScalar = 1.0;
-    if (_velZ < -VEL_VRS && _velXY < VEL_ETL) then {
+    if (_axialVel < -VEL_VRS && _velXY < VEL_ETL) then {
         _viScalar = 0.0;
     } else {
-        _viScalar = 1 - (_velZ / _viScalarDenom);
+        _viScalar = 1 - (_axialVel / _viScalarDenom);
     };
 
     //Ground effect - strongest on the deck, gone by one rotor diameter up

@@ -8,13 +8,14 @@ reads declarations. Everything specific to your aircraft lives in your own
 addon, which this guide calls the PACK. The AH-64's pack is
 `fza_ah64_helisim`, and it is the worked example throughout.
 
-Three field references sit beside this one and are the authority on what each
+Four field references sit beside this one and are the authority on what each
 field means:
 
 - `addons/helisim/components.hpp` - systems: producers, converters,
   storage, circuits, consumers
 - `addons/helisim/controls.hpp` - switches, buttons and levers
 - `addons/helisim/engine.hpp` - the gas turbine engine, station by station
+- `addons/helisim/fmc.hpp` - the flight management computer: SAS and the holds
 
 This guide is the ORDER. Those are the DETAIL.
 
@@ -619,8 +620,37 @@ for a pack's config.
 No map: the control is the key, as before. Cone angle, autorotation and control mixing read
 the control itself, not the mapped key.
 
+**Inflow is read along the thrust.** The descent and VRS law takes the rotor's axial speed in
+the direction it is actually pushing. A main rotor always pushes up its mast; a tail rotor
+pushes either way with the pedal, and its sideslip is read against whichever way that is.
+
 Outside REALISTIC Core sets every tail rotor upright - pitch 0, roll 90 - so a canted tail rotor
 yaws without pitching or rolling the aircraft. Nothing to declare.
+
+### The FMC
+
+SAS, the attitude, altitude and heading holds and the flight director are declared in `class FMC`, beside the
+flight control gains, one class per feature - `fmc.hpp` is the field reference. A feature
+not declared does not exist. Each takes a `gate[]` in component form for what it needs to
+work - the hydraulics its servos run on, the bus its computer runs on - and drops out while
+the gate is shut. Its gains, switch speeds, breakouts and authority are the aircraft's.
+
+```cpp
+class FMC {
+    class Sas {
+        gate[]      = {{"UTIL_HYD", 1260}, "bmkhs_dcBusOn"};
+        authority[] = {0.2, 0.1, 0.1};
+        pitch[] = {...}; roll[] = {...}; yaw[] = {...};
+    };
+};
+```
+
+The flight director's modes and targets are Core's own actions (`bmkhs_fd<Mode>`,
+`bmkhs_fd<Target>Up/Dn/Sync`, `bmkhs_fd<Target>Target`). A cockpit button or knob calls them
+through `bmkhs_fnc_inputControlHandle` / `bmkhs_fnc_inputAnalogHandler` by the same names a
+keybind uses, and passes the aircraft. A dragged knob passes its position as a fraction of the
+target's range - the pack converts its animation to that, Core does the rest. The aircraft
+writes `bmkhs_fdWaypoint` for NAV.
 
 ### Control mixing
 
@@ -937,6 +967,11 @@ two views, so the binds and the group cannot drift apart. Copy the AH-64's file.
 class gives a keybind that appears in the menu and does nothing, with no build
 error.
 
+**The flight controls and the FMC are Core's own actions.** Cyclic, pedals, collective, force
+trim, the hold modes and the flight director are in Core's `CfgUserActions`, in its "HeliSim
+Flight Controls" group. Your pack ships no rows for them; a cockpit button or knob calls Core's
+action by name (see the cockpit framework, Step 7).
+
 ---
 
 ## Step 7 - Animation and audio
@@ -960,6 +995,11 @@ Core raises events to the handler your pack registers for its base class, in
 **One handler per base class.** Registering again for the same class replaces
 it; another pack's aircraft never reach it.
 
+**Core drives two sound controllers** for the translational lift, high speed and VRS
+effects: `CustomSoundController64` (intensity) and `CustomSoundController63` (blend, 0
+outside every band). Use them in your sound config for those effects; leave them free
+for anything else.
+
 ### When the cockpit framework animates
 
 Some interaction frameworks (Hatchet's lever interactions) animate a control
@@ -980,6 +1020,15 @@ animator, and these hold:
   together are both moved by the framework, at one rate.
 - **Match the framework's rate to Core's.** A lever's travel time is the
   engine's `leverTravelTime`.
+- **FMC buttons and knobs send Core's action.** A button calls
+  `bmkhs_fnc_inputControlHandle` with the action's name (`bmkhs_fdAlt`); its light follows
+  `fdModeChanged`. Forward it to the owner, as `controlSet` is.
+- **A dragged knob passes a fraction.** On the framework's drag hooks, turn the knob's
+  animation into a fraction 0..1 of the target's range and call
+  `bmkhs_fnc_inputAnalogHandler` with the target's action (`bmkhs_fdAltTarget`) - the same
+  input an axis gives. Core clamps, wraps, snaps and publishes. Turn the knob to Core's
+  published target when it changes from elsewhere (a sync, a step, a capture), but not while
+  it is being dragged.
 
 The H-60's `docs/HATCHET.md` is the worked example.
 
@@ -1083,7 +1132,7 @@ machines, and what it means. Inputs are the config field references
 | `bmkhs_numEngines` | number | local | Engine count. Taken from the `engines` hitpoint role count, or from config `numEngines` if there are none. Set at config load (set in `engine/fn_engineVariables.sqf`). |
 | `bmkhs_engines` | array of hashmaps, per engine | local | Each engine's config. Keys are the config property names (e.g. `name`, `idleNg`, `maxTgt`, `maxTgtSe`, `startTgt`, `startMinTgt`, `npFly`, `designRpm`, `maxNg`, `maxNp`, `oilPsiLimits`, `ngLimits`, `npLimits`, `tqLimits`, `tgtLimits`, `tqLimitsSe`, `tgtLimitsSe`, `ngMin`), plus the derived `refTq` (Nm, 100% torque). Read limits from here (set in `engine/fn_engineVariables.sqf`). |
 | `bmkhs_engDesignRpm` | number, rpm | local | Power turbine rpm at 100% Np, from Engine01 `designRpm`. This is the shaft reference for `bmkhs_xmsnOutputRpm`. Only set if there is at least one engine (set in `engine/fn_engineVariables.sqf`). |
-| `bmkhs_engState` | array of strings, per engine: `"OFF"`, `"STARTING"`, `"ON"` | net on change + 10 Hz | Engine run state. Goes `STARTING` on a start (start switch at +1 with useSystems = 1, or Arma engine-on with useSystems = 0). Goes `ON` when Ng reaches `selfSustNg`. Goes `OFF` on ignition override (-1) during a start, lever to OFF while ON, an engine failure, fuel starvation, or no bleed air (`bmkhs_pneuAvail` false) during a start (set in `engine/fn_engineUpdate.sqf`, `engine/gasTurbine/fn_gasTurbineStarter.sqf`). |
+| `bmkhs_engState` | array of strings, per engine: `"OFF"`, `"STARTING"`, `"ON"` | net on change + 10 Hz | Engine run state. Goes `STARTING` on a start (start switch at +1 with useSystems = 1, or Arma engine-on with useSystems = 0). Goes `ON` when Ng reaches `selfSustNg`. Goes `OFF` on ignition override (-1) during a start, lever to OFF while ON, an engine failure, an overspeed trip, fuel starvation, or no bleed air (`bmkhs_pneuAvail` false) during a start (set in `engine/fn_engineUpdate.sqf`, `engine/gasTurbine/fn_gasTurbineStarter.sqf`). |
 | `bmkhs_engPowerLeverState` | array of strings, per engine: `"OFF"`, `"IDLE"`, `"FLY"` | net on change | Power lever detent. With useSystems = 1 it follows `bmkhs_eng<N>PwrLvrVal` (>= 1 FLY, > 0 IDLE, else OFF). With useSystems = 0 Core moves it to IDLE on Arma engine-on, then to FLY once Ng has held idle for 1 s (set in `engine/fn_engineUpdate.sqf`). |
 | `bmkhs_engPctNg` | array of numbers, per engine, fraction (1.0 = 100% Ng) | 10 Hz | Gas generator speed. Clamped 0 to 1.1 (set in `engine/turboShaftEngine/fn_turboShaftEngine.sqf`). |
 | `bmkhs_engPctNp` | array of numbers, per engine, fraction of `designRpm` (1.0 = 100%) | 10 Hz | Power turbine speed as the gauge reads it. Governed Np shows `npFly` (e.g. 1.01 = 101%) (set in `engine/turboShaftEngine/fn_turboShaftEngine.sqf`). |
@@ -1331,35 +1380,40 @@ Fuselage and airfoil folders publish no designer-facing values.
 
 | Variable | Type / units | Net | Meaning |
 |---|---|---|---|
-| `bmkhs_fmcPitchOn` | Bool, default true | net | FMC pitch channel on. When false, the pitch SAS and attitude hold pitch outputs are zeroed, and the actuator also uses this flag for its lag model. Set with `bmkhs_fnc_fmcSetChannel [heli,"pitch",bool]`. (set in `fmc/fn_fmcVariables.sqf`, `fmc/fn_fmcSetChannel.sqf`) |
+| `bmkhs_fmcPitchOn` | Bool, default true | net | FMC pitch channel on. When false, the pitch SAS and attitude hold pitch outputs are zeroed (the flight director's too, when it holds pitch), and the actuator also uses this flag for its lag model. Set with `bmkhs_fnc_fmcSetChannel [heli,"pitch",bool]`. (set in `fmc/fn_fmcVariables.sqf`, `fmc/fn_fmcSetChannel.sqf`) |
 | `bmkhs_fmcRollOn` | Bool, default true | net | FMC roll channel on. Same as pitch, for the roll SAS and attitude hold roll outputs. (set in `fmc/fn_fmcVariables.sqf`, `fmc/fn_fmcSetChannel.sqf`) |
-| `bmkhs_fmcYawOn` | Bool, default true | net | FMC yaw channel on. When false, the yaw SAS and heading hold outputs are zeroed. (set in `fmc/fn_fmcVariables.sqf`, `fmc/fn_fmcSetChannel.sqf`) |
-| `bmkhs_fmcCollOn` | Bool, default true | net | FMC collective channel on. When false, the altitude hold output is zeroed. (set in `fmc/fn_fmcVariables.sqf`, `fmc/fn_fmcSetChannel.sqf`) |
+| `bmkhs_fmcYawOn` | Bool, default true | net | FMC yaw channel on. When false, the yaw SAS and heading hold outputs are zeroed (the flight director's too). (set in `fmc/fn_fmcVariables.sqf`, `fmc/fn_fmcSetChannel.sqf`) |
+| `bmkhs_fmcCollOn` | Bool, default true | net | FMC collective channel on. When false, the altitude hold output is zeroed (the flight director's too). (set in `fmc/fn_fmcVariables.sqf`, `fmc/fn_fmcSetChannel.sqf`) |
+| `bmkhs_fmcSasAvail`, `bmkhs_fmcAttHoldAvail`, `bmkhs_fmcAltHoldAvail`, `bmkhs_fmcHdgHoldAvail`, `bmkhs_fmcFdAvail` | Bool | net on change | The feature is declared in `class FMC` and its `gate[]` holds. (set in `fmc/fn_fmc.sqf`) |
+| `bmkhs_fd_<mode>` | Bool, one per declared mode | net on change | Flight director mode engaged (`ralt`, `alt`, `altp`, `ias`, `hdg`, `nav`, `hvr`). (set in `fmc/fn_fmcFdMode.sqf`) |
+| `bmkhs_fdTgt_<target>` | Number, ft / kt / deg | net on change | Flight director target, clamped or wrapped and snapped to its declared step. (set in `fmc/fn_fmcFdTarget.sqf`) |
+| `bmkhs_fdWptBearing`, `bmkhs_fdWptDistance` | Number, deg / m, -1 with no waypoint | net on change | To `bmkhs_fdWaypoint`. NAV flies the bearing. (set in `fmc/fn_fmcFlightDirector.sqf`) |
+| `bmkhs_fdWaypoint` | Array posASL, or [] | input | The aircraft's active waypoint. The aircraft writes it; seeded [] locally if unset. |
 | `bmkhs_fmcTrimOn` | Bool, default true | net | Trim channel flag. Core stores it but never reads it, so it changes nothing in Core. A pack can use it as a switch state. (set in `fmc/fn_fmcVariables.sqf`, `fmc/fn_fmcSetChannel.sqf`) |
 | `bmkhs_forceTrimInterupted` | Bool | net | True while the force-trim (trim release) button is held. While true, attitude hold does nothing and heading hold drops out. On release it goes false and new hold references are captured. Note the spelling ("Interupted"). (set in `fmc/fn_fmcForceTrimHold.sqf`, `fmc/fn_fmcForceTrimRelease.sqf`) |
-| `bmkhs_attHoldActive` | Bool | net | Attitude/position/velocity hold engaged. Toggled by the `bmkhs_holdModeAttitude` key. Cleared by `bmkhs_holdModesOff`. This is the mode state only. It stays true even when the pitch/roll channel is off or primary hydraulics have failed, and both of those zero the output. (set in `fmc/fn_fmcAttitudeHoldEnable.sqf`, `fmc/fn_fmcHoldModesDisable.sqf`) |
-| `bmkhs_attHoldSubMode` | String `"pos"` / `"vel"` / `"att"` | net | Which attitude hold law applies. Chosen every frame from ground speed, even when the hold is off: `pos` at 5 kt GS or less, `vel` above 5 and up to 40 kt, `att` above 40 kt. (set in `fmc/fn_fmcAttitudeHold.sqf`, `fmc/fn_fmcAttitudeHoldEnable.sqf`) |
+| `bmkhs_attHoldActive` | Bool | net | Attitude/position/velocity hold engaged. Toggled by the `bmkhs_holdModeAttitude` key. Cleared by `bmkhs_holdModesOff`. This is the mode state only. It stays true even when the pitch/roll channel is off or the hold's `gate[]` is shut, and both of those zero the output. (set in `fmc/fn_fmcAttitudeHoldEnable.sqf`, `fmc/fn_fmcHoldModesDisable.sqf`) |
+| `bmkhs_attHoldSubMode` | String `"pos"` / `"vel"` / `"att"` | net | Which attitude hold law applies. Chosen every frame from ground speed, even when the hold is off: `pos` at `posBelowKts` GS or less; `vel` up to `velBelowKts` accelerating, `att` above it until back below `attBelowKts` decelerating (`class FMC >> AttitudeHold`). (set in `fmc/fn_fmcAttitudeHold.sqf`, `fmc/fn_fmcAttitudeHoldEnable.sqf`) |
 | `bmkhs_attHoldDesiredPos` | Array `getPos` [x,y,z], m | net | Position hold reference. Captured on engage in `pos`, and again on force-trim release. (set in `fmc/fn_fmcAttitudeHoldEnable.sqf`, `fmc/fn_fmcForceTrimRelease.sqf`) |
 | `bmkhs_attHoldDesiredVel` | Array [x, y], m/s, body axes | net | Velocity hold reference. x is the NEGATED model-space lateral velocity, so + = left. y is forward velocity, + = forward. Reset to [0,0] by hold-modes-off. (set in `fmc/fn_fmcAttitudeHoldEnable.sqf`, `fmc/fn_fmcForceTrimRelease.sqf`, `fmc/fn_fmcHoldModesDisable.sqf`) |
 | `bmkhs_attHoldDesiredAtt` | Array [pitch, bank], deg | net | Attitude hold reference, as returned by `BIS_fnc_getPitchBank`. When turn coordination ends, heading hold sets bank to 0. (set in `fmc/fn_fmcAttitudeHoldEnable.sqf`, `fmc/fn_fmcForceTrimRelease.sqf`, `fmc/fn_fmcHeadingHold.sqf`, `fmc/fn_fmcHoldModesDisable.sqf`) |
-| `bmkhs_altHoldActive` | Bool | net | Altitude hold engaged. Toggled by the `bmkhs_holdModeAltitude` key, which only engages if vertical speed is within ±200 fpm. It drops out on its own when collective moves more than ±5 % from `altHoldCollRef`, or when the highest engine torque (`bmkhs_engPctTq`) reaches 0.98 or more. (set in `fmc/fn_fmcAltitudeHold.sqf`, `fmc/fn_fmcAltitudeHoldEnable.sqf`, `fmc/fn_fmcHoldModesDisable.sqf`) |
-| `bmkhs_altHoldSubMode` | String `"rad"` / `"bar"` | net | Radar or barometric altitude hold. While engaged it is `rad` below 1428 ft AGL and under 40 kt GS, and `bar` otherwise. It is only re-evaluated while the hold is engaged. (set in `fmc/fn_fmcAltitudeHold.sqf`, `fmc/fn_fmcAltitudeHoldEnable.sqf`) |
+| `bmkhs_altHoldActive` | Bool | net | Altitude hold engaged. Toggled by the `bmkhs_holdModeAltitude` key, which only engages within `engageFpm` of level. It drops out on its own when collective moves more than `collBand` from `altHoldCollRef`, or when the highest engine torque (`bmkhs_engPctTq`) reaches `dropAboveTq` (`class FMC >> AltitudeHold`). (set in `fmc/fn_fmcAltitudeHold.sqf`, `fmc/fn_fmcAltitudeHoldEnable.sqf`, `fmc/fn_fmcHoldModesDisable.sqf`) |
+| `bmkhs_altHoldSubMode` | String `"rad"` / `"bar"` | net | Radar or barometric altitude hold. While engaged it is `rad` below `radBelowFt` AGL and under `radBelowKts` GS, and `bar` otherwise. It is only re-evaluated while the hold is engaged. (set in `fmc/fn_fmcAltitudeHold.sqf`, `fmc/fn_fmcAltitudeHoldEnable.sqf`) |
 | `bmkhs_altHoldDesiredAlt` | Number, m (AGL in `rad`, ASL in `bar`) | net | Altitude hold reference, rounded to the metre on engage. It is 0 when the hold is off. Engage chooses AGL or ASL once. The sub-mode can switch later without the reference being re-captured. (set in `fmc/fn_fmcAltitudeHoldEnable.sqf`, `fmc/fn_fmcHoldModesDisable.sqf`) |
-| `bmkhs_altHoldCollRef` | Number 0..1 (collective) | net | Collective position captured when altitude hold engaged. Used for the ±5 % disengage band. (set in `fmc/fn_fmcAltitudeHoldEnable.sqf`) |
-| `bmkhs_hdgHoldActive` | Bool | net | Heading hold engaged. There is no button for it. It is true whenever the aircraft is off the ground, force trim is not held, and pedal input is inside the breakout (0.05 in `pos`, 0.10 in `vel`, 0.20 in `att`). The heading is re-captured each time it re-engages. (set in `fmc/fn_fmcHeadingHold.sqf`) |
-| `bmkhs_hdgHoldSubMode` | String `"hdg"` / `"trn"` / `"yaw"` / `"aut"` | net | Heading hold law, only updated while engaged. `hdg` = hold heading, below 5 kt GS. `trn` = turn coordination: attitude hold on and bank over 7° (drops at under 3°). `yaw` = ball-centring yaw damping. `aut` = the auto-pedal assist owns the yaw axis. (set in `fmc/fn_fmcHeadingHold.sqf`) |
+| `bmkhs_altHoldCollRef` | Number 0..1 (collective) | net | Collective position captured when altitude hold engaged. Used for the `collBand` disengage band. (set in `fmc/fn_fmcAltitudeHoldEnable.sqf`) |
+| `bmkhs_hdgHoldActive` | Bool | net | Heading hold engaged. There is no button for it. It is true whenever the aircraft is off the ground, force trim is not held, and pedal input is inside the breakout (`class FMC >> HeadingHold >> breakout[]`, by the attitude hold sub-mode, `pos` / `vel` / `att`). The heading is re-captured each time it re-engages. (set in `fmc/fn_fmcHeadingHold.sqf`) |
+| `bmkhs_hdgHoldSubMode` | String `"hdg"` / `"trn"` / `"yaw"` / `"aut"` | net | Heading hold law, only updated while engaged. `hdg` = hold heading, below `hdgBelowKts` GS. `trn` = turn coordination: attitude hold on and bank over 7° (drops at under 3°). `yaw` = ball-centring yaw damping. `aut` = the auto-pedal assist owns the yaw axis. (set in `fmc/fn_fmcHeadingHold.sqf`) |
 | `bmkhs_hdgHoldDesiredHdg` | Number, deg 0..360 (`getDir`) | net | Heading hold reference. Captured when the hold engages, when it re-enters `hdg`, and on force-trim release. (set in `fmc/fn_fmcHeadingHold.sqf`, `fmc/fn_fmcForceTrimRelease.sqf`) |
 | `bmkhs_hdgHoldDesiredSideslip` | Number, lateral g | net | Sideslip (ball) reference. Core always sets it to 0. (set in `fmc/fn_fmcForceTrimRelease.sqf`) |
 | `bmkhs_mixPitchOut` | Number, cyclic fraction, + = forward | local (owner only) | Sum of the aircraft's `ControlMixing` mixes targeting pitch, added to the cyclic pitch at the rotor. 0 with no mixes, while a mix's gate is shut, or outside REALISTIC. (set in `fmc/fn_fmc.sqf`, from `fmc/fn_fmcControlMixing.sqf`) |
 | `bmkhs_mixRollOut` | Number, cyclic fraction, + = left | local (owner only) | As above, for roll. |
 | `bmkhs_mixYawOut` | Number, pedal fraction, + = right | local (owner only) | As above, for the pedals. |
-| `bmkhs_fmcSasPitchOut` | Number, ±0.2 cyclic fraction | local (owner only) | Pitch SAS rate-damping command added to the cyclic pitch. Same sign as `cyclicFwdAft`. Zero if the channel is off or primary hydraulics have failed. (set in `fmc/fn_fmc.sqf`) |
+| `bmkhs_fmcSasPitchOut` | Number, ±0.2 cyclic fraction | local (owner only) | Pitch SAS rate-damping command added to the cyclic pitch. Same sign as `cyclicFwdAft`. Zero if the channel is off or the SAS `gate[]` is shut. (set in `fmc/fn_fmc.sqf`) |
 | `bmkhs_fmcSasRollOut` | Number, ±0.1 cyclic fraction | local (owner only) | Roll SAS command added to the cyclic roll. Same sign as `cyclicLeftRight`. (set in `fmc/fn_fmc.sqf`) |
 | `bmkhs_fmcSasYawOut` | Number, ±0.1 pedal fraction | local (owner only) | Yaw SAS command added to the pedals. Same sign as `pedalLeftRight`. (set in `fmc/fn_fmc.sqf`) |
-| `bmkhs_fmcAttHoldCycPitchOut` | Number, ±1 cyclic fraction | local (owner only) | Attitude/position/velocity hold command added to the cyclic pitch. 0 when the hold is off, force trim is held, the channel is off, or primary hydraulics have failed. (set in `fmc/fn_fmc.sqf`) |
-| `bmkhs_fmcAttHoldCycRollOut` | Number, ±1 cyclic fraction | local (owner only) | Same as the pitch output, for cyclic roll. (set in `fmc/fn_fmc.sqf`) |
-| `bmkhs_fmcHdgHoldPedalYawOut` | Number, ±0.1 pedal fraction | local (owner only) | Heading hold / turn coordination command added to the pedals. Forced to 0 when the springless-pedal or auto-pedal setting is on. (set in `fmc/fn_fmc.sqf`) |
-| `bmkhs_fmcAltHoldCollOut` | Number, collective fraction. Range is set by the PID config. | local (owner only) | Altitude hold command added to the collective. 0 when the hold is off. (set in `fmc/fn_fmc.sqf`) |
+| `bmkhs_fmcAttHoldCycPitchOut` | Number, ±1 cyclic fraction | local (owner only) | Attitude/position/velocity hold command added to the cyclic pitch - or the flight director's, while IAS holds pitch. 0 when neither is flying it, force trim is held, the channel is off, or the `gate[]` is shut. (set in `fmc/fn_fmc.sqf`) |
+| `bmkhs_fmcAttHoldCycRollOut` | Number, ±1 cyclic fraction | local (owner only) | Same as the pitch output, for cyclic roll - the flight director's while HDG or NAV holds roll. (set in `fmc/fn_fmc.sqf`) |
+| `bmkhs_fmcHdgHoldPedalYawOut` | Number, ±0.1 pedal fraction | local (owner only) | Heading hold / turn coordination command added to the pedals - or the flight director's, while HDG or NAV turns by pedal below `bankAboveKts`. Forced to 0 when the springless-pedal or auto-pedal setting is on. (set in `fmc/fn_fmc.sqf`) |
+| `bmkhs_fmcAltHoldCollOut` | Number, collective fraction. Range is set by the PID config. | local (owner only) | Altitude hold command added to the collective - or the flight director's, while RALT, ALT or ALTP holds it. 0 when neither is flying it. (set in `fmc/fn_fmc.sqf`) |
 
 ### Pilot inputs
 
@@ -1416,7 +1470,8 @@ Raised through `bmkhs_fnc_utilNotify`. It calls the handler registered for the a
 | `controlMoved` | `[variableName (String, no prefix), newIdx, prevIdx, value (Number), positionClassName (String)]` | A control's index actually changes. Causes: a `controlSet`; a spring-back returning to rest (owner, `useSystems = 1`); or an external write to `bmkhs_<name>On` (owner, `useSystems = 1`). Not raised at init seeding. (`controls/fn_controlPublish.sqf`) |
 | `apuStateChanged` | `[]` | `bmkhs_apuOn` differs from its value on the previous frame. Also raised on the first frame after init: the last-state memory starts at true, so if the APU is off then, the event fires. Only with `useSystems = 1`. Read `bmkhs_apuOn` for the state. (`systems/apu/fn_apu.sqf`) |
 | `fuelCheckComplete` | `[]` | A running fuel check reaches `bmkhs_checkMinutes`. Raised after `checkDone`/`checkPendingAdvisory` are set, but before the burn rate and time strings are written in the same frame. (`fuel/fn_fuelMgmtUpdate.sqf`) |
-| `holdModeDisengaged` | `[]` | Altitude hold drops because the collective moved more than 5 % from its reference (`fmc/fn_fmcAltitudeHold.sqf`). Or altitude hold is toggled off (`fmc/fn_fmcAltitudeHoldEnable.sqf`). Or attitude hold is toggled off (`fmc/fn_fmcAttitudeHoldEnable.sqf`). Or "hold modes off" is used while either hold is active (`fmc/fn_fmcHoldModesDisable.sqf`). Not raised when altitude hold drops because torque reaches 98 % or more. |
+| `fdModeChanged` | `[mode (String), engaged (Bool)]` | A flight director mode engages or drops, on the machine that changed it. (`fmc/fn_fmcFdMode.sqf`) |
+| `holdModeDisengaged` | `[]` | Altitude hold drops because the collective moved more than `collBand` from its reference (`fmc/fn_fmcAltitudeHold.sqf`). Or altitude hold is toggled off (`fmc/fn_fmcAltitudeHoldEnable.sqf`). Or attitude hold is toggled off (`fmc/fn_fmcAttitudeHoldEnable.sqf`). Or "hold modes off" is used while either hold is active (`fmc/fn_fmcHoldModesDisable.sqf`). Not raised when altitude hold drops because torque reaches `dropAboveTq`. |
 
 ### Read functions
 
@@ -1427,6 +1482,9 @@ Raised through `bmkhs_fnc_utilNotify`. It calls the handler registered for the a
 | `bmkhs_fnc_systemCircuit` | `[_heli, _circuit]` | Number. Current value of a circuit, in the config's unit; the highest feeder wins. Returns 0 for `""`, an unknown circuit, or nothing feeding it. Only meaningful on the owner with `useSystems = 1`: values are local and solved only there. `"Nr"` is fed from `bmkhs_rtrRpm`. |
 | `bmkhs_fnc_controlAllowed` | `[_heli, _control, _pos]` - variableName or index, position index | Bool: may it move there - the control's and the position's `enabledBy[]` / `inhibitedBy[]`, the check Core itself makes before moving. Records the blocker in `bmkhs_<control>GateWhy`. Off the owner, returns the owner's answer. |
 | `bmkhs_fnc_controlSet` (write) | `[_name, _pos, _heli = vehicle player]`. `_pos` is a Number (absolute index) or a String step (`"+1"`, `"-1"`) | Bool, true if the control moved. False if HeliSim is not initialised, the name is unknown, an interlock blocks it, or it is already there. Indices are clamped, or wrap if `wraps = 1`. |
+| `bmkhs_fnc_inputControlHandle` (write) | `[_name, _pressed, _heli = vehicle player]` | Nothing. Core's discrete flight-control and FMC actions by name - force trim, the hold modes, the flight director's modes and target steps and syncs (`bmkhs_fd<Mode>`, `bmkhs_fd<Target>Up/Dn/Sync`). What a keybind calls; a cockpit button calls it by the same name. Runs where called. |
+| `bmkhs_fnc_inputAnalogHandler` (write) | `[_name, _value, _heli = vehicle player]` | Nothing. Core's analog actions by name - the flight controls, and the flight director's targets (`bmkhs_fd<Target>Target`, `_value` a fraction 0..1 of the target's range). What an axis calls; a dragged cockpit knob calls it by the same name. Runs where called. |
+| `bmkhs_fnc_fmcSetChannel` (write) | `[_heli, _channel, _on]` - `"pitch"`, `"roll"`, `"yaw"`, `"coll"` or `"trim"` | Nothing. Switches an FMC axis channel (`bmkhs_fmc<Axis>On`). |
 | `bmkhs_fnc_damageSet` (write) | `[_heli, _role, _damage 0..1, _index = -1]` | Nothing. Sets one member, or all of them when -1. Does nothing for an undeclared role. |
 | `bmkhs_fnc_utilNotifyRegister` | `[_baseClass, _handler]` | Nothing. Registers `_handler` (called with `[_heli, _event, _data]`) for aircraft of that kind. Call from the pack's preInit. |
 | `bmkhs_fnc_fuelTankVarName` (init helper) | `[_tankConfig, _kind, _index, _seenNames]` | String: the tank's variable prefix, e.g. `"bmkhs_no1Tank"`, or the fallback name. |
@@ -1442,7 +1500,7 @@ Behaviour a designer will otherwise trip over. Each is a Core item, not a pack o
 - With `useSystems = 0` a spring-back position is never returned to rest.
 - `apuStateChanged` fires once on the first frame after init even if nothing changed.
 - `fuelCheckComplete` is raised before the burn rate and time strings are written that frame.
-- `holdModeDisengaged` is not raised when altitude hold drops at 98% torque.
+- `holdModeDisengaged` is not raised when altitude hold drops at `dropAboveTq` torque.
 - `bmkhs_boostOn`, `bmkhs_checkStartZulu` and `bmkhs_checkElapsedSec` are seeded and never updated.
 - Two control names are hard-coded: `apuBtn` (forced off when the APU stops or starves) and
   `apuFireHandle`.
@@ -1559,11 +1617,7 @@ Working state, solver bookkeeping, filters and debug. These change without notic
 - `bmkhs_numWings` - count of cached wings.
 - `bmkhs_fuselageAirfoil` - cached config airfoil name.
 - `bmkhs_fuselagePanels` - cached fuselage panel geometry.
-- `bmkhs_pid_roll`, `bmkhs_pid_pitch`: position/velocity hold PID state.
-- `bmkhs_pid_roll_att`, `bmkhs_pid_pitch_att`: attitude hold PID state.
-- `bmkhs_pid_radHold`, `bmkhs_pid_barHold`: altitude hold PID state.
-- `bmkhs_pid_hdgHold`, `bmkhs_pid_trnCoord`: heading/turn-coord PID state.
-- `bmkhs_pid_sas_pitch`, `bmkhs_pid_sas_roll`, `bmkhs_pid_sas_yaw`: SAS PID state.
+- `bmkhs_fmc`: the declared FMC features, their settings and PID state.
 - `bmkhs_pid_autoAttPitch`, `bmkhs_pid_autoAttRoll`: assist PID state, casual only.
 - `bmkhs_pid_autoPedalHdg`, `bmkhs_pid_autoPedalNtt`, `bmkhs_pid_autoPedalAero`: auto-pedal PID state.
 - `bmkhs_posIntX`, `bmkhs_posIntY`: position hold integrator, clamped tiny.

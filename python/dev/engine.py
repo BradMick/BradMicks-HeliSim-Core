@@ -475,8 +475,7 @@ def turbo_shaft_power_turbine(eng, t45, p45, p2, mDot, running, np_, nrFrac, dt)
     npDrag = eng['ptDrag'] * np_ * np_ + (eng['ptDragFloor'] if shaftTq <= 0.0 else 0.0)
     npDot = ((shaftTq / refTq) - npDrag) / eng['ptInertia']
     npFree = max(np_ + npDot * dt, 0.0)
-    npDriven = np_ + ((shaftTq / refTq) / eng['ptInertia']) * dt
-    clutch = (npDriven if running else npFree) >= nrFrac
+    clutch = npFree >= nrFrac
     return shaftTq, (nrFrac if clutch else npFree), clutch, t5
 
 
@@ -651,10 +650,10 @@ def simple_rotor_thrust(H, rotor):
     rpm = H['bmkhs_xmsnOutputRpm'] / rotor['gearRatio']
     omega = 0.0 if rpm == 0.0 else (2.0 * math.pi) * (rpm / 60.0)
     bladeVel75 = omega * rotor['bladeRadius'] * 0.75
-    velZ = H['hubVelZ']
-    viScalarDenom = linear_conversion(-7.62, -19.30, velZ, VEL_VRS, VEL_VRS * 0.1, True)
-    viScalar = 0.0 if (velZ < -VEL_VRS and velXY < VEL_ETL) else 1 - (velZ / viScalarDenom)
     liftCoef = math_linear_interp_2d(rotor['liftCoefTable'], simple_rotor_table_key(rotor, collOutput), velXY)
+    axialVel = H['hubVelZ'] * (-1.0 if liftCoef < 0 else 1.0)
+    viScalarDenom = linear_conversion(-7.62, -19.30, axialVel, VEL_VRS, VEL_VRS * 0.1, True)
+    viScalar = 0.0 if (axialVel < -VEL_VRS and velXY < VEL_ETL) else 1 - (axialVel / viScalarDenom)
     bladeLift = liftCoef * 0.5 * rho * (rotor['bladeRadius'] * rotor['bladeChord']) * (bladeVel75 * bladeVel75)
     return 4 * bladeLift * (rotor['numBlades'] / 4) * viScalar
 

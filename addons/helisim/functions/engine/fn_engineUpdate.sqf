@@ -233,9 +233,10 @@ if (local _heli) then {
 
 private _engFailed = _heli getVariable "bmkhs_engFailed";
 private _fuelAvail = _heli getVariable "bmkhs_engFuelAvail";
+private _overspeed = _heli getVariable "bmkhs_engineOverspeed";
 
 {
-    if (_x || {!(_fuelAvail select _forEachIndex)}) then {
+    if (_x || {_overspeed select _forEachIndex} || {!(_fuelAvail select _forEachIndex)}) then {
         [_heli, "bmkhs_engState", _forEachIndex, "OFF", true] call bmkhs_fnc_utilSetArrayVariable;
     };
 } forEach _engFailed;
