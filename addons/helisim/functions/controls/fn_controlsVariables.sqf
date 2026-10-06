@@ -84,6 +84,7 @@ private _byName   = createHashMap;
 
     _c set ["positions", _poss];
     _c set ["varName",   format ["bmkhs_%1", _c get "variableName"]];
+    _c set ["interlocked", ((_poss + [_c]) findIf {((_x get "enabledBy") + (_x get "inhibitedBy")) isNotEqualTo []}) >= 0];
 
     //Rest has to name a real position - it is where the control spawns and what a
     //spring-back returns to, so a bad index would publish nil forever.
@@ -114,6 +115,7 @@ _heli setVariable ["bmkhs_ctrlIndex", _byName];
     _heli setVariable [_v + "Idx", _rest];
     _heli setVariable [_v + "Val", _val];
     _heli setVariable [_v + "On",  _val != 0];
+    { _heli setVariable [_v + "_" + (_x get "name"), _forEachIndex == _rest]; } forEach (_ctl get "positions");
 
     //No notify: seeding is not a movement, and nothing has subscribed yet.
     [_heli, _ctl, _rest, _rest, false] call bmkhs_fnc_controlPublish;

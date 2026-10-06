@@ -78,9 +78,11 @@ if (_lever == "FLY" && {_govPowered}) then {
     //The Np it holds follows the lever, reaching trim as the lever reaches fly.
     private _npTarget = _npRef + ((1.0 - _npRef) * linearConversion [_fuelIdle, _fuelFly, _fuelSched, 0.0, 1.0, true]);
 
+    //Collective anticipation - from the collective the rotor gets, the pilot's and the holds'
+    private _coll     = (((_heli getVariable "bmkhs_collectiveOutput") + (_heli getVariable ["bmkhs_fmcAltHoldCollOut", 0.0])) max 0.0) min 1.0;
     private _integral = _pid get "integral";
     private _govFuel  = ([_pid, _deltaTime, _npTarget, _np] call bmkhs_fnc_pidRun)
-                      + ((_heli getVariable "bmkhs_collectiveOutput") * (_engine get "ffwdGain"));
+                      + (_coll * (_engine get "ffwdGain"));
 
     //TGT and Ng limiters - the fuel allowed rides above demand and is pulled down by whichever
     //is over its limit. Never below the idle floor.

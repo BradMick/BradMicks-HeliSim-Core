@@ -9,8 +9,8 @@ Description:
     rotor models call it the same way and neither owns the effects.
 
     Sound controllers:
-        CustomSoundController3 - intensity
-        CustomSoundController4 - blend; zeroed whenever no band is active
+        CustomSoundController64 - intensity
+        CustomSoundController63 - blend; zero whenever no band is active
 
 Parameters:
     _heli - The helicopter to get information from [Unit].
@@ -34,9 +34,13 @@ if (cameraView != "INTERNAL") exitWith {};
 private _velNoWind    = _heli getVariable "bmkhs_velModelSpaceNoWind";
 private _velXYNoWind  = vectorMagnitude [_velNoWind select 0, _velNoWind select 1];
 private _velZ         = _velNoWind select 2;
-private _vel2d        = (_heli getVariable "bmkhs_vel2D") * KNOTS_TO_MPS;
+private _vel2d        = _heli getVariable "bmkhs_vel2D";
 private _isOnGnd      = [_heli] call bmkhs_fnc_stateOnGround;
 private _inputRPM     = _heli getVariable "bmkhs_rtrRpm";
+
+//Set once, from whichever band is active - the last active band wins
+private _intensity = 0;
+private _blend     = 0;
 
 //Camera shake effect for ETL (16 to 24 knots)
 if (_velXYNoWind > 8.23 && _velXYNoWind < 12.35 && !_isOnGnd) then {
@@ -45,10 +49,8 @@ if (_velXYNoWind > 8.23 && _velXYNoWind < 12.35 && !_isOnGnd) then {
     addCamShake       [0.9, 0.4, 6.2];
     enableCamShake false;
 
-    setCustomSoundController[_heli, "CustomSoundController3", 1.5];
-    setCustomSoundController[_heli, "CustomSoundController4", 0.8];
-} else {
-    setCustomSoundController[_heli, "CustomSoundController4", 0.0];
+    _intensity = 1.5;
+    _blend     = 0.8;
 };
 //Camera shake effect 130kts to 140kts
 if (_vel2d >= 66.87 && _vel2d < 72.02) then {
@@ -57,10 +59,8 @@ if (_vel2d >= 66.87 && _vel2d < 72.02) then {
     addCamShake       [2.5, 1, 5];
     enableCamShake false;
 
-    setCustomSoundController[_heli, "CustomSoundController3", 6.4];
-    setCustomSoundController[_heli, "CustomSoundController4", 1.8];
-} else {
-    setCustomSoundController[_heli, "CustomSoundController4", 0.0];
+    _intensity = 6.4;
+    _blend     = 1.8;
 };
 //Camera shake effect 140kts to 150kts
 if (_vel2d >= 72.02 && _vel2d < 77.16) then {
@@ -69,10 +69,8 @@ if (_vel2d >= 72.02 && _vel2d < 77.16) then {
         addCamShake       [3, 1, 5.5];
         enableCamShake false;
 
-        setCustomSoundController[_heli, "CustomSoundController3", 6.4];
-        setCustomSoundController[_heli, "CustomSoundController4", 1.8];
-} else {
-    setCustomSoundController[_heli, "CustomSoundController4", 0.0];
+        _intensity = 6.4;
+        _blend     = 1.8;
 };
 //Camera shake effect 150kts to 160kts
 if (_vel2d >= 77.16 && _vel2d < 82.30) then {
@@ -81,10 +79,8 @@ if (_vel2d >= 77.16 && _vel2d < 82.30) then {
         addCamShake       [3.5, 1, 6.0];
         enableCamShake false;
 
-        setCustomSoundController[_heli, "CustomSoundController3", 6.4];
-        setCustomSoundController[_heli, "CustomSoundController4", 1.8];
-} else {
-    setCustomSoundController[_heli, "CustomSoundController4", 0.0];
+        _intensity = 6.4;
+        _blend     = 1.8;
 };
 //Camera shake effect >160kts
 if (_vel2d >= 82.30) then {
@@ -93,10 +89,8 @@ if (_vel2d >= 82.30) then {
         addCamShake       [4.0, 1, 6.5];
         enableCamShake false;
 
-        setCustomSoundController[_heli, "CustomSoundController3", 6.4];
-        setCustomSoundController[_heli, "CustomSoundController4", 1.8];
-} else {
-    setCustomSoundController[_heli, "CustomSoundController4", 0.0];
+        _intensity = 6.4;
+        _blend     = 1.8;
 };
 //Camera shake effect for vortex ring sate
 if (_velXYNoWind < 12.35 && _inputRPM > EPSILON && !_isOnGnd) then {  //must be less than ETL
@@ -107,10 +101,10 @@ if (_velXYNoWind < 12.35 && _inputRPM > EPSILON && !_isOnGnd) then {  //must be 
         addCamShake       [2.5, 1, 5];
         enableCamShake false;
 
-        setCustomSoundController[_heli, "CustomSoundController3", 6.4];
-        setCustomSoundController[_heli, "CustomSoundController4", 1.8];
+        _intensity = 6.4;
+        _blend     = 1.8;
 
-        if (bmkhs_vrsWarning) then {
+        if (bmkhs_vrsWarning && {vehicle player == _heli}) then {
             hintSilent parseText format ["<t size='1.5' font='EtelkaMonospacePro' color='#99ffffff'>Entering VRS Condition!</t>"];
         };
     };
@@ -121,10 +115,10 @@ if (_velXYNoWind < 12.35 && _inputRPM > EPSILON && !_isOnGnd) then {  //must be 
         addCamShake       [3, 1, 5.5];
         enableCamShake false;
 
-        setCustomSoundController[_heli, "CustomSoundController3", 6.4];
-        setCustomSoundController[_heli, "CustomSoundController4", 1.8];
+        _intensity = 6.4;
+        _blend     = 1.8;
 
-        if (bmkhs_vrsWarning) then {
+        if (bmkhs_vrsWarning && {vehicle player == _heli}) then {
             hintSilent parseText format ["<t size='1.5' font='EtelkaMonospacePro' color='#FFFF00'>Caution! VRS Developing!</t>"];
         };
     };
@@ -135,9 +129,9 @@ if (_velXYNoWind < 12.35 && _inputRPM > EPSILON && !_isOnGnd) then {  //must be 
         addCamShake       [3.5, 1, 6.0];
         enableCamShake false;
 
-        setCustomSoundController[_heli, "CustomSoundController3", 6.4];
-        setCustomSoundController[_heli, "CustomSoundController4", 1.8];
-        if (bmkhs_vrsWarning) then {
+        _intensity = 6.4;
+        _blend     = 1.8;
+        if (bmkhs_vrsWarning && {vehicle player == _heli}) then {
             hintSilent parseText format ["<t size='1.5' font='EtelkaMonospacePro' color='#ff0000'>Warning! Fully Developed VRS Imminent!</t>"];
         };
     };
@@ -148,13 +142,14 @@ if (_velXYNoWind < 12.35 && _inputRPM > EPSILON && !_isOnGnd) then {  //must be 
         addCamShake       [4.0, 1, 6.5];
         enableCamShake false;
 
-        setCustomSoundController[_heli, "CustomSoundController3", 6.4];
-        setCustomSoundController[_heli, "CustomSoundController4", 1.8];
+        _intensity = 6.4;
+        _blend     = 1.8;
 
-        if (bmkhs_vrsWarning) then {
+        if (bmkhs_vrsWarning && {vehicle player == _heli}) then {
             hintSilent parseText format ["<t size='1.5' font='EtelkaMonospacePro' color='#ff0000'>Danger! You are in VRS!</t>"];
         };
     };
-} else {
-    setCustomSoundController[_heli, "CustomSoundController4", 0.0];
 };
+
+setCustomSoundController [_heli, "CustomSoundController64", _intensity];
+setCustomSoundController [_heli, "CustomSoundController63", _blend];

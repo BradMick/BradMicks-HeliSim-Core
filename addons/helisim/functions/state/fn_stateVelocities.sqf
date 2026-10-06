@@ -7,11 +7,14 @@ Parameters:
     _heli - The helicopter to get information from [Unit].
 
 Returns:
-    _gndSpeed, kts
-    _vel2D, kts, simulates velocity from pitot/static sources
-    _vel3D, kts, simulates velocity from an air data sensor
+    _gndSpeed, m/s
+    _vel2D, m/s, simulates velocity from pitot/static sources
+    _vel3D, m/s, simulates velocity from an air data sensor
+    _velClimb, m/s
     _velModelSpace, m/s, unified local velocity for the simulation to use
     _velWorldSpace, m/s, unified velocity for the simulation to use
+
+    All m/s, unrounded - a display converts.
 
 Examples:
     ...
@@ -49,11 +52,11 @@ _velModelSpaceZ              = [_velModelSpaceZ_avg, _velModelSpaceZ] call bmkhs
 private _velModelSpace       = [_velModelSpaceX, _velModelSpaceY, _velModelSpaceZ] vectorDiff _velWindModelSpace;
 private _velModelSpaceNoWind = [_velModelSpaceX, _velModelSpaceY, _velModelSpaceZ];
 //Ground speed
-private _gndSpeed            = round(vectorMagnitude [_velModelSpaceNoWind select 0, _velModelSpaceNoWind select 1] * MPS_TO_KNOTS);
+private _gndSpeed            = vectorMagnitude [_velModelSpaceNoWind select 0, _velModelSpaceNoWind select 1, 0.0];
 //3D velocity of the aircraft
-private _vel3D               = round(MPS_TO_KNOTS * vectorMagnitude _velModelSpace);
-//2D velocity of the aircraft
-private _vel2D               = [round(MPS_TO_KNOTS * (_velModelSpace select 1)), 0.0, 180.0] call BIS_fnc_clamp;
+private _vel3D               = vectorMagnitude _velModelSpace;
+//2D velocity of the aircraft - the pitot reads 0 to 180 kt
+private _vel2D               = [_velModelSpace select 1, 0.0, 180.0 * KNOTS_TO_MPS] call BIS_fnc_clamp;
 //Velocity world space
 private _velWorldSpaceX_avg  = _heli getVariable "bmkhs_velWorldSpaceX_avg";
 private _velWorldSpaceY_avg  = _heli getVariable "bmkhs_velWorldSpaceY_avg";
@@ -68,7 +71,7 @@ _velWorldSpaceZ              = [_velWorldSpaceZ_avg, _velWorldSpaceZ] call bmkhs
 private _velWorldSpace       = [_velWorldSpaceX, _velWorldSpaceY, _velWorldSpaceZ] vectorDiff _velWindWorldSpace;
 private _velWorldSpaceNoWind = [_velWorldSpaceX, _velWorldSpaceY, _velWorldSpaceZ];
 //Climb velocity
-private _velClimb              = (_velWorldSpace select 2) * MPS_TO_FPM;
+private _velClimb              = _velWorldSpace select 2;
 //Angular velocity in model space
 private _angVelModelSpaceX_avg = _heli getVariable "bmkhs_angVelModelSpaceX_avg";
 private _angVelModelSpaceY_avg = _heli getVariable "bmkhs_angVelModelSpaceY_avg";
@@ -94,4 +97,4 @@ _heli setVariable ["bmkhs_velWorldSpace",       _velWorldSpace];
 _heli setVariable ["bmkhs_velWorldSpaceNoWind", _velWorldSpaceNoWind];
 _heli setVariable ["bmkhs_velClimb",            _velClimb];
 _heli setVariable ["bmkhs_angVelModelSpace",    _angVelModelSpace];
-//windDirFrom / windSpeedKts are published by fn_environment (single source of truth).
+//windDirFrom / windSpeed are published by fn_environment (single source of truth).

@@ -21,11 +21,11 @@ Author:
 
 params ["_heli"];
 
-_heli setVariable ["bmkhs_pa",                  0.0];
+_heli setVariable ["bmkhs_barAlt",              0.0];
 _heli setVariable ["bmkhs_fat",                 0.0];
 _heli setVariable ["bmkhs_rho",                 ISA_STD_DAY_AIR_DENSITY];
 
-_heli setVariable ["bmkhs_windSpeedKts",        0];
+_heli setVariable ["bmkhs_windSpeed",           0];
 _heli setVariable ["bmkhs_windDirFrom",         0];
 _heli setVariable ["bmkhs_velWindWorldSpace",   [0.0, 0.0, 0.0]];
 

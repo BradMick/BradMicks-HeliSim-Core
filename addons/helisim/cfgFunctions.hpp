@@ -110,6 +110,11 @@ class CfgFunctions
             class fmcAltitudeHoldEnable {R;};
             class fmcAttitudeHoldEnable {R;};
             class fmcControlMixing {R;};
+            class fmcFdMode {R;};
+            class fmcFdStep {R;};
+            class fmcFdSync {R;};
+            class fmcFdTarget {R;};
+            class fmcFlightDirector {R;};
             class fmcForceTrimHold {R;};
             class fmcForceTrimRelease {R;};
             class fmcForceTrimReset {R;};
@@ -148,6 +153,7 @@ class CfgFunctions
         class controls {
             file = "\bmkhs_helisim\functions\controls";
             class control {R;};
+            class controlAllowed {R;};
             class controlPublish {R;};
             class controlSet {R;};
             class controlsRelease {R;};
@@ -206,6 +212,7 @@ class CfgFunctions
             class debugDrawCircle {R;};
             class debugDrawCross {R;};
             class debugDrawLine {R;};
+            class debugFlightLog {R;};
         };
         class mathQuaternion {
             file = "\bmkhs_helisim\functions\math\quaternion";
@@ -220,11 +227,6 @@ class CfgFunctions
             class smoothAverageAdd {R;};
             class smoothAverageGet {R;};
             class smoothAverageInit {R;};
-        };
-        class performance {
-            file = "\bmkhs_helisim\functions\performance";
-            class perfData {R;};
-            class perfVariables {R;};
         };
         class rotor {
             file = "\bmkhs_helisim\functions\rotor";

@@ -52,9 +52,9 @@ private _npDrag = ((_engine get "ptDrag") * _np * _np)
 private _npDot  = ((_shaftTq / _refTq) - _npDrag) / (_engine get "ptInertia");
 private _npFree = (_np + (_npDot * _deltaTime)) max 0.0;
 
-//Running, the turbine is driven and stays engaged; not running, its drag lets it go.
-private _npDriven = _np + (((_shaftTq / _refTq) / (_engine get "ptInertia")) * _deltaTime);
-private _clutch   = ([_npFree, _npDriven] select _running) >= _nrFrac;
+//A sprag clutch: engaged while the turbine, free, would keep up with the rotor; released the
+//moment the rotor overruns it - running or not.
+private _clutch   = _npFree >= _nrFrac;
 //Engaged, the pair are one shaft and the transmission integrates them together.
 _np = [_npFree, _nrFrac] select _clutch;
 

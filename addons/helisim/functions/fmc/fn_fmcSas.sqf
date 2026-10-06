@@ -1,9 +1,12 @@
-params ["_heli"];
+params ["_heli", "_sas", "_on"];
 #include "\bmkhs_helisim\functions\core\core.hpp"
 
-private _pidSASPitch = _heli getVariable "bmkhs_pid_sas_pitch";
-private _pidSASRoll  = _heli getVariable "bmkhs_pid_sas_roll";
-private _pidSASYaw   = _heli getVariable "bmkhs_pid_sas_yaw";
+if (!_on) exitWith {[0.0, 0.0, 0.0]};
+
+private _pidSASPitch = _sas get "pitch";
+private _pidSASRoll  = _sas get "roll";
+private _pidSASYaw   = _sas get "yaw";
+(_sas get "authority") params ["_authPitch", "_authRoll", "_authYaw"];
 
 ((_heli getVariable "bmkhs_angVelModelSpace"))
     params [
@@ -26,8 +29,8 @@ private _sasYawOutput   = 0.0;
 //(helicopters are under-damped, esp. the low-inertia roll) so it feels solid - stop commanding
 //and the rate bleeds off fast. Not a maneuver limit; you just hold a bit more input to sustain a
 //rate. Runs ALWAYS (incl. force-trim interrupt); holds no attitude/heading reference (that's the
-//holds). Authority 20% pitch, 10% roll/yaw. FMC-axis + primary-hydraulics gating in fn_fmc.
-//Tune firmness per axis via the SAS PID kp (fn_coreConfig) - roll is the twitchy low-inertia one.
+//holds). Authority per axis is the aircraft's (FMC >> Sas >> authority[]); its gate[] and the FMC
+//axis channels are applied in fn_fmc.
 
 //SAS RUNS ON EVERY AXIS, ALWAYS - including when keyboard auto-attitude owns pitch and roll.
 //
@@ -45,18 +48,18 @@ private _sasYawOutput   = 0.0;
 
 //ROLL: proportional rate damping - oppose actual roll rate.
 private _roll  = [_pidSASRoll, _deltaTime, 0.0, _angVelY] call bmkhs_fnc_pidRun;
-_roll          = [_roll,  -0.1, 0.1] call BIS_fnc_clamp;   // 10% SAS-servo authority (roll)
+_roll          = [_roll,  -_authRoll, _authRoll] call BIS_fnc_clamp;
 _sasRollOutput = _roll;
 
 //YAW: proportional rate damping - oppose actual yaw rate. (Heading Hold is a separate
 //reference-hold submode on top, in fn_fmcHeadingHold; not built here.)
 private _yaw   = [_pidSASYaw, _deltaTime, 0.0, _angVelZ] call bmkhs_fnc_pidRun;
-_yaw           = [_yaw, -0.1, 0.1] call BIS_fnc_clamp;   // 10% SAS-servo authority (yaw)
+_yaw           = [_yaw, -_authYaw, _authYaw] call BIS_fnc_clamp;
 _sasYawOutput  = _yaw;
 
 //PITCH: proportional rate damping - oppose actual pitch rate. Runs always (see the note above).
 private _pitch = [_pidSASPitch, _deltaTime, 0.0, _angVelX] call bmkhs_fnc_pidRun;
-_pitch         = [_pitch, -0.2, 0.2] call BIS_fnc_clamp;   // 20% SAS-servo authority (pitch)
+_pitch         = [_pitch, -_authPitch, _authPitch] call BIS_fnc_clamp;
 _sasPitchOutput = _pitch;
 
 //systemChat format ["Pitch SAS = %1 -- Roll SAS = %2", _SASPitchOutput, _SASRollOutput];

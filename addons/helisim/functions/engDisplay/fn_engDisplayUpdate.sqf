@@ -28,15 +28,31 @@ private _display = uiNamespace getVariable ["bmkhs_engdisplay", displayNull];
 private _wanted  = (!(_heli getVariable ["bmkhs_useSystems", false]) || bmkhs_engDisplay)
                 && {driver _heli == player || gunner _heli == player};
 
+//One window, and every local aircraft runs this - only the one that opened it closes it.
+private _owner = uiNamespace getVariable ["bmkhs_engdisplayHeli", objNull];
 if (!_wanted) exitWith {
-    if !(isNull _display) then {
+    if (!(isNull _display) && {isNull _owner || {_owner == _heli}}) then {
         ("bmkhs_engdisplay" call BIS_fnc_rscLayer) cutText ["", "PLAIN", 0, false];
         uiNamespace setVariable ["bmkhs_engdisplay", displayNull];
     };
 };
+uiNamespace setVariable ["bmkhs_engdisplayHeli", _heli];
 
 if (isNull _display) exitWith {
     ("bmkhs_engdisplay" call BIS_fnc_rscLayer) cutRsc ["bmkhs_engdisplay", "PLAIN", 0, false];
+    //Its aircraft stops updating once it dies or leaves this machine, so the machine closes it.
+    if (isNil "bmkhs_engDisplayWatch") then {
+        bmkhs_engDisplayWatch = addMissionEventHandler ["EachFrame", {
+            private _heli = uiNamespace getVariable ["bmkhs_engdisplayHeli", objNull];
+            if (isNull _heli || {!alive _heli} || {!local _heli} || {driver _heli != player && {gunner _heli != player}}) then {
+                ("bmkhs_engdisplay" call BIS_fnc_rscLayer) cutText ["", "PLAIN", 0, false];
+                uiNamespace setVariable ["bmkhs_engdisplay", displayNull];
+                uiNamespace setVariable ["bmkhs_engdisplayHeli", objNull];
+                removeMissionEventHandler ["EachFrame", _thisEventHandler];
+                bmkhs_engDisplayWatch = nil;
+            };
+        }];
+    };
 };
 
 private _bgPos = ctrlPosition (_display displayCtrl 5301);

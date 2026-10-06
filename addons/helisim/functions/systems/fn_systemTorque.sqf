@@ -81,12 +81,13 @@ private _driveDmg = _engines apply {0};
         };
     };
 
-    //Where no role claims this component, it damages named hitpoints instead - and reads
-    //its current damage from the worst of them.
+    //Its damage is its role's hitpoint. Where it has no role, it damages named hitpoints
+    //instead and reads the worst of them - or, naming none, Core keeps it (fn_systemsComponents).
     private _direct = _comp get "damages";
-    private _damage = if (_direct isEqualTo []) then {
-        [_heli, _role, _index] call bmkhs_fnc_damageGet
-    } else {
+    private _ownVar = _comp getOrDefault ["damageVar", ""];
+    private _damage = call {
+        if (_ownVar != "") exitWith { _heli getVariable [_ownVar, 0] };
+        if (_direct isEqualTo []) exitWith { [_heli, _role, _index] call bmkhs_fnc_damageGet };
         private _worst = 0;
         { _worst = _worst max ((_heli getHitPointDamage _x) max 0) } forEach _direct;
         _worst
@@ -156,9 +157,9 @@ private _driveDmg = _engines apply {0};
 
     if (_accrue > 0) then {
         _damage = (_damage + (_accrue * _deltaTime)) min 1.0;
-        if (_direct isEqualTo []) then {
-            [_heli, _role, _damage, _index] call bmkhs_fnc_damageSet;
-        } else {
+        call {
+            if (_ownVar != "") exitWith { _heli setVariable [_ownVar, _damage] };
+            if (_direct isEqualTo []) exitWith { [_heli, _role, _damage, _index] call bmkhs_fnc_damageSet };
             { _heli setHitPointDamage [_x, _damage] } forEach _direct;
         };
     };
@@ -174,12 +175,25 @@ private _driveDmg = _engines apply {0};
 
     //What a destroyed component takes with it. An entry naming a damage role destroys that
     //role outright - a transmission is what holds the rotors, the generators and the pumps
-    //up, so losing it loses all of them. An entry naming a variable sets it at this
-    //member's index instead, which is how a nose gearbox that has come apart overspeeds
-    //the engine driving it.
+    //up, so losing it loses all of them. An entry naming a variable latches it true for the
+    //engines this component carries - its own engine for a nose gearbox, every engine for a
+    //component that sums them (a transmission). Unloaded, an engine overspeeds and trips.
+    //Set on destruction only; repair clears it.
     {
         if ((_x select [0, 6]) == "bmkhs_") then {
-            [_heli, _x, _index, _damage >= 1.0, false] call bmkhs_fnc_utilSetArrayVariable;
+            if (_damage >= 1.0) then {
+                private _var = _x;
+                private _members = [_index];
+                if (_comp get "torqueSum") then {
+                    _members = [];
+                    for "_e" from 0 to ((count _engines) - 1) do { _members pushBack _e };
+                };
+                {
+                    if !((_heli getVariable [_var, []]) param [_x, false]) then {
+                        [_heli, _var, _x, true, true] call bmkhs_fnc_utilSetArrayVariable;
+                    };
+                } forEach _members;
+            };
         } else {
             if (_damage >= 1.0) then {
                 private _n = [_heli, _x] call bmkhs_fnc_damageCount;

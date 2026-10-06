@@ -201,6 +201,15 @@
 ] call CBA_fnc_addSetting;
 
 [
+    "bmkhs_flightLog",
+    "CHECKBOX",
+    ["Enable Flight Log", "Writes the flight to the RPT 10 times a second - air data, attitude, engines, the pilot's controls and trims, and every FMC output, mode and target - as BMKHSLOG lines under a BMKHSLOG_HDR header, for analysis."],
+    [BMKHS_SETTINGS_CATEGORY, "Testing"],
+    [false],
+    2
+] call CBA_fnc_addSetting;
+
+[
     "bmkhs_rotorModel",
     "LIST",
     ["Rotor Model", "Selects the rotor aerodynamic model. Simple is stable and performant. BET (Blade Element Theory) is higher fidelity with induced flow, dissymmetry of lift, and flapping dynamics."],

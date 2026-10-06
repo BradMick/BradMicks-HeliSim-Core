@@ -5,6 +5,5 @@ createHashMapFromArray
     , ["ki",       _ki]
     , ["kd",       _kd]
     , ["ki_clamp", _ki_clamp]
-    , ["prevError", 0]
     , ["integral",  0]
     ];

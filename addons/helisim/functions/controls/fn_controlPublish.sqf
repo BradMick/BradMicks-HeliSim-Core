@@ -50,6 +50,17 @@ if (_ctl get "networked") then {
     _heli setVariable [_varName + "On",  _val != 0];
 };
 
+//One flag per position, true for the one it sits in - so a gate can name a switch position
+//as a plain variable: bmkhs_airSource_Apu.
+{
+    private _flag = _varName + "_" + (_x get "name");
+    if (_ctl get "networked") then {
+        [_heli, _flag, _forEachIndex == _idx] call bmkhs_fnc_utilUpdateNetworkGlobal;
+    } else {
+        _heli setVariable [_flag, _forEachIndex == _idx];
+    };
+} forEach _poss;
+
 //The position name is the designer's label, passed through for animation and audio.
 if (_moved) then {
     [_heli, "controlMoved",

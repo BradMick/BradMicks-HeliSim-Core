@@ -54,6 +54,13 @@ _heli setVariable ["bmkhs_repairPending", false];
     };
 } forEach ((_heli getVariable ["bmkhs_sysProducers", []]) + (_heli getVariable ["bmkhs_sysConverters", []]));
 
+//Drive parts whose damage Core keeps have no hitpoint to repair, so a repair replaces them -
+//as a store with no damage role comes back full either way.
+{
+    private _var = _x getOrDefault ["damageVar", ""];
+    if (_var != "") then { _heli setVariable [_var, 0] };
+} forEach (_heli getVariable ["bmkhs_sysTorqued", []]);
+
 //Engines are not components - a repair clears their latches.
 private _engines = _heli getVariable ["bmkhs_numEngines", 0];
 for "_i" from 0 to (_engines - 1) do {

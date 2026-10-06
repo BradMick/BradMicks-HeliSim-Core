@@ -1,17 +1,20 @@
-params ["_heli"];
+params ["_heli", "_hh", "_on"];
 #include "\bmkhs_helisim\functions\core\core.hpp"
 
-private _pidHdg        = _heli getVariable "bmkhs_pid_hdgHold";
+if (count _hh == 0) exitWith {0.0};
 
-private _pidTrn        = _heli getVariable "bmkhs_pid_trnCoord";
-//_pidTrn set ["kp", T_KP];
-//_pidTrn set ["ki", T_KI];
-//_pidTrn set ["kd", T_KD];
+private _pidHdg        = _hh get "hdg";
+private _pidTrn        = _hh get "trn";
+private _hdgBelow      = (_hh get "hdgBelowKts") * KNOTS_TO_MPS;
+private _blendTo       = (_hh get "blendToKts") * KNOTS_TO_MPS;
+private _authority     = _hh get "authority";
 
-private _pidYaw        = _heli getVariable "bmkhs_pid_sas_yaw";
+//The SAS yaw loop is cleared alongside, where the aircraft has one
+private _pidYaw        = ((_heli getVariable "bmkhs_fmc") getOrDefault ["Sas", createHashMap]) getOrDefault ["yaw", createHashMap];
+private _resetYaw      = { if (count _pidYaw > 0) then { [_pidYaw] call bmkhs_fnc_pidReset } };
 
 private _deltaTime     = _heli getVariable "bmkhs_deltaTime";
-private _gndSpeed      = (_heli getVariable "bmkhs_gndSpeed") * KNOTS_TO_MPS;
+private _gndSpeed      = _heli getVariable "bmkhs_gndSpeed";
 private _angVelZ       = (_heli getVariable "bmkhs_angVelModelSpace") # 2;
 private _pedalTrim     = _heli getVariable "bmkhs_forceTrimPosYaw";
 private _curHdg        = getDir _heli;
@@ -39,7 +42,6 @@ private _hdgError      = [_curHdg - _desiredHdg] call CBA_fnc_simplifyAngle180;
 private _desiredSlip   = _heli getVariable "bmkhs_hdgHoldDesiredSideslip";
 private _sideslipError = (_heli getVariable ["bmkhs_aero_beta_g", 0.0]) - _desiredSlip;
 private _subMode       = _heli getVariable "bmkhs_hdgHoldSubMode";
-private _attSubMode    = _heli getVariable "bmkhs_attHoldSubMode";
 private _hdgOutput     = 0.0;
 private _trnOutput     = 0.0;
 private _yawOutput     = 0.0;
@@ -48,17 +50,9 @@ private _output        = 0.0;
 private _onGnd         = [_heli] call bmkhs_fnc_stateOnGround;
 //Breakout values expand as the aircraft goes faster to provide good pedal response
 //at a hover. The expanded range is meant to de-sensitize the pedals in order to
-//prevent disengaging the heading hold mode during cruise flight
-private _breakoutValue = 0.0;
-if (_attSubMode == "pos") then {
-    _breakoutValue = HDG_HOLD_BREAKOUT_VALUE;
-};
-if (_attSubMode == "vel") then {
-    _breakoutValue = VEL_HOLD_BREAKOUT_VALUE;
-};
-if (_attSubMode == "att") then {
-    _breakoutValue = ATT_HOLD_BREAKOUT_VALUE;
-};
+//prevent disengaging the heading hold mode during cruise flight. By the attitude hold's sub-mode,
+//so both holds change band together, on its hysteresis: {pos, vel, att}.
+private _breakoutValue = (_hh get "breakout") select ((["pos", "vel", "att"] find (_heli getVariable "bmkhs_attHoldSubMode")) max 0);
 //If we are on the ground, or if the force trim is interupted, or the pilot has exceeded
 //the breakout values for the pedals, then heading hold is not active (doing work)
 //otherwise, heading hold is ALWAYS active
@@ -71,7 +65,8 @@ if ((_heli getVariable "bmkhs_pedalLeftRight") >= _breakoutValue && (_heli getVa
     _breakout = true;
 };
 //systemChat format ["_breakoutValue = %1 -- bmkhs_pedalLeftRight = %2", _breakoutValue, (_heli getVariable "bmkhs_pedalLeftRight") toFixed 2];
-if (   _onGnd
+if (   !_on
+    || _onGnd
     || _heli getVariable "bmkhs_forceTrimInterupted"
     || _breakout
     ) then {
@@ -88,7 +83,7 @@ if (   _onGnd
         //instant the hold re-engages.
         [_pidHdg] call bmkhs_fnc_pidReset;
         [_pidTrn] call bmkhs_fnc_pidReset;
-        [_pidYaw] call bmkhs_fnc_pidReset;
+        call _resetYaw;
     };
 };
 //Finally, if the heading hold is active, perform the required functions
@@ -98,7 +93,7 @@ if (_heli getVariable "bmkhs_hdgHoldActive") then {
     //  >= 5 kts, auto pedal on              → aut  (auto pedal owns axis via force trim, PIDs idle)
     //  >= 5 kts, auto pedal off, trn active → trn
     //  >= 5 kts, auto pedal off, trn off    → yaw
-    private _targetSubMode = if (_gndSpeed < POS_HOLD_SPEED_SWITCH) then {
+    private _targetSubMode = if (_gndSpeed < _hdgBelow) then {
         "hdg"
     } else {
         if (bmkhs_autoPedal) then {
@@ -128,7 +123,7 @@ if (_heli getVariable "bmkhs_hdgHoldActive") then {
     if (_subMode != _targetSubMode) then {
         if (_subMode == "hdg") then { [_pidHdg] call bmkhs_fnc_pidReset; };
         if (_subMode == "trn" || _subMode == "yaw") then { [_pidTrn] call bmkhs_fnc_pidReset; };
-        if (_subMode == "aut") then { [_pidYaw] call bmkhs_fnc_pidReset; };
+        if (_subMode == "aut") then { call _resetYaw; };
         if (_targetSubMode == "hdg") then { [_pidHdg] call bmkhs_fnc_pidReset; };
         if (_targetSubMode == "trn" || _targetSubMode == "yaw") then { [_pidTrn] call bmkhs_fnc_pidReset; };
         if (_targetSubMode == "hdg") then {
@@ -165,13 +160,13 @@ if (_heli getVariable "bmkhs_hdgHoldActive") then {
         case "aut": { 0.0 };        // auto pedal owns the axis; fn_fmc.sqf zeroes this anyway
         default     { 0.0 };
     };
-    _output = linearConversion[POS_HOLD_SPEED_SWITCH, HDG_HOLD_SPEED_SWITCH_ACCEL, _gndSpeed, _hdgOutput, _highSpeedOutput, true];
+    _output = linearConversion[_hdgBelow, _blendTo, _gndSpeed, _hdgOutput, _highSpeedOutput, true];
 } else {
     [_pidHdg] call bmkhs_fnc_pidReset;
     [_pidTrn] call bmkhs_fnc_pidReset;
-    [_pidYaw] call bmkhs_fnc_pidReset;
+    call _resetYaw;
 };
 
-_output = [_output,  -0.1, 0.1] call BIS_fnc_clamp;
+_output = [_output, -_authority, _authority] call BIS_fnc_clamp;
 
 _output;

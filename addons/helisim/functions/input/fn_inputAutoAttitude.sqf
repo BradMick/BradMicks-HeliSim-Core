@@ -35,7 +35,7 @@ private _pidRoll    = _heli getVariable "bmkhs_pid_autoAttRoll";
 private _levelPitch = _heli getVariable "bmkhs_autoAttLevelPitch";
 private _rollLimit  = _heli getVariable "bmkhs_autoAttRollLimit";
 
-private _gndSpeed = (_heli getVariable "bmkhs_gndSpeed") * KNOTS_TO_MPS;
+private _gndSpeed = _heli getVariable "bmkhs_gndSpeed";
 (_heli call BIS_fnc_getPitchBank) params ["_curPitch", "_curRoll"];
 
 //Authority recedes in proportion to stick deflection, so the assist never fights an input

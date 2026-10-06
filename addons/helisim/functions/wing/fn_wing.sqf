@@ -59,7 +59,7 @@ if (_isStab) then {
                        ];
 
     if (_stabDamage < SYS_STAB_DMG_THRESH && _dcBusOn) then {
-        _desiredTheta = [_stabOutputTable, (_heli getVariable "bmkhs_vel2D") * KNOTS_TO_MPS] call bmkhs_fnc_mathLinearInterp select 1;
+        _desiredTheta = [_stabOutputTable, _heli getVariable "bmkhs_vel2D"] call bmkhs_fnc_mathLinearInterp select 1;
         _theta        = [_theta, _desiredTheta, (1.0 / 1.5) * _deltaTime] call BIS_fnc_lerp;
         _heli setVariable ["bmkhs_stabilatorPosition", _theta];
     };

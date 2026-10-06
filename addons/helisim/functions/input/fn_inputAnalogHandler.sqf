@@ -1,7 +1,20 @@
-params["_name", "_value"];
-private _heli = vehicle player;
+params ["_name", "_value", ["_heli", vehicle player]];
 //Gate on HeliSim being initialised, not on an airframe class - Core is airframe-agnostic
 if !(_heli getVariable ["bmkhs_initialised", false]) exitWith {};
+
+//Flight director targets. The value is a fraction, 0..1, of the target's declared range - so
+//an axis and a cockpit knob are the same input.
+private _fdTarget = createHashMapFromArray [
+    ["bmkhs_fdRaltTarget", "ralt"], ["bmkhs_fdAltTarget", "alt"], ["bmkhs_fdAltpTarget", "altp"],
+    ["bmkhs_fdIasTarget", "ias"], ["bmkhs_fdHdgTarget", "hdg"]
+];
+if (_name in _fdTarget) exitWith {
+    private _t = ((((_heli getVariable "bmkhs_fmc") getOrDefault ["FlightDirector", createHashMap]) getOrDefault ["targets", createHashMap])
+        getOrDefault [_fdTarget get _name, []]);
+    if (_t isNotEqualTo []) then {
+        [_heli, _fdTarget get _name, linearConversion [0, 1, _value, _t select 0, _t select 1, true]] call bmkhs_fnc_fmcFdTarget;
+    };
+};
 
 private _heliCyclicForwardOut   = _heli getVariable "bmkhs_heliCyclicForwardOut";
 private _heliCyclicBackOut      = _heli getVariable "bmkhs_heliCyclicBackwardOut";

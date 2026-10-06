@@ -52,9 +52,6 @@ if (isAutoHoverOn _heli) then {
 //Mass and Balance
 [_heli] call bmkhs_fnc_massUpdate;
 
-//Performance
-[_heli] call bmkhs_fnc_perfData;
-
 //Engines
 [_heli] call bmkhs_fnc_engineUpdate;
 
@@ -85,9 +82,12 @@ if (isAutoHoverOn _heli) then {
 //Forces and moments readout. Runs after every contributor has published its row.
 [_heli] call bmkhs_fnc_fmDebugUpdate;
 
+//Flight log - to the RPT, for analysis
+[_heli] call bmkhs_fnc_debugFlightLog;
+
 //The systems display owns the hint while it is up - both use hintSilent, and this one
 //runs last, so it would simply overwrite the other.
-if (bmkhs_fmDebug && {!bmkhs_sysDebug}) then {
+if (bmkhs_fmDebug && {!bmkhs_sysDebug} && {vehicle player == _heli}) then {
     hintSilent format [
     "_cyclicFwdAft = %1
     \n_cyclicLeftRight = %2

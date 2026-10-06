@@ -118,6 +118,11 @@
 //  maxNg               Fly-weight trip - shuts the engine down. ALSO the compressor map's
 //                      100% point: the map's Ng axis runs 0 to 1 as a fraction of maxNg.
 //  maxNp               Electrical overspeed trip - shuts the engine down.
+//  fuelSelector        OPTIONAL. The control whose position picks this engine's fuel source -
+//                      a FUEL SYS lever, say. Declare none and the engine draws through the
+//                      fuel config's CrossfeedModes.
+//  fuelSources[]       With fuelSelector: the source for each of that control's positions,
+//                      in order - a fuel tank variableName, or "off" for no fuel.
 //
 //COMPRESSOR - stations 2 to 3
 //  pressureRatio       Compressor pressure ratio at Ng 1.0. A spec-sheet number.

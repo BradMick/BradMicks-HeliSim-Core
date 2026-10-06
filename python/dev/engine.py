@@ -169,14 +169,14 @@ def math_linear_interp_2d(grid, rowKey, colKey):
 
 
 def pid_create(kp, ki, kd, kiClamp):
-    return {'kp': kp, 'ki': ki, 'kd': kd, 'ki_clamp': kiClamp, 'prevError': 0.0, 'integral': 0.0}
+    return {'kp': kp, 'ki': ki, 'kd': kd, 'ki_clamp': kiClamp, 'integral': 0.0}
 
 
 def pid_run(pid, dt, desired, actual):
     """fn_pidRun."""
     error = desired - actual
     integral = clamp(pid['integral'] + error * dt, -pid['ki_clamp'], pid['ki_clamp'])
-    raw = 0.0 if dt == 0 else (error - pid['prevError']) / dt
+    raw = 0.0 if dt == 0 else (error - pid.get('prevError', error)) / dt
     dCoef = pid.get('dCoef', 0.3)
     prev = pid.get('derivFilt', raw)
     derivative = prev + dCoef * (raw - prev)
@@ -187,7 +187,8 @@ def pid_run(pid, dt, desired, actual):
 
 def pid_reset(pid):
     """fn_pidReset."""
-    pid['prevError'], pid['integral'], pid['derivFilt'] = 0.0, 0.0, 0.0
+    pid.pop('prevError', None)
+    pid['integral'], pid['derivFilt'] = 0.0, 0.0
 
 
 # ---------------------------------------------------------------------------------------------
@@ -293,6 +294,7 @@ def simple_rotor_variables(H, cfg):
         rot['dir'] = CW if r['direction'].lower() == 'cw' else CCW
         rot['dragCoefTable'] = math_build_interp_grid(r['dragCoefTable'])
         rot['liftCoefTable'] = math_build_interp_grid(r['liftCoefTable'])
+        rot['controlMap'] = r.get('controlMap', [])
         rotors.append(rot)
     H['bmkhs_simpleRotors'] = rotors
     H['bmkhs_reqEngTorque'] = [0.0, 0.0]
@@ -310,14 +312,14 @@ BASE_FAT = 15.0
 def environment(H):
     baroAlt = H['baroAltM'] * METERS_TO_FEET
     baseAlt, baseFAT = 0, BASE_FAT
-    altitude = sqf_round((baseAlt + baroAlt) / 10) * 10
+    altitude = baseAlt + baroAlt                     # exact, as fn_environment
     altimeter = 29.92
-    temperature = baseFAT - sqf_round((baroAlt / 1000) * 2)
+    temperature = baseFAT - ((baroAlt / 1000) * 2)
     refPressure = altimeter * IN_MG_TO_HPA
     exp_ = (-GRAVITY * MOLAR_MASS_OF_AIR * ((altitude - 0) * FEET_TO_METERS)
             / (UNIVERSAL_GAS_CONSTANT * (temperature + DEG_C_TO_KELVIN)))
     pressure = ((refPressure / 0.01) * math.exp(exp_)) * 0.01
-    H['bmkhs_pa'] = altitude
+    H['bmkhs_barAlt'] = altitude
     H['bmkhs_fat'] = temperature
     H['bmkhs_rho'] = (pressure / 0.01) / (287.05 * (temperature + DEG_C_TO_KELVIN))
 
@@ -353,7 +355,8 @@ def engine_governor(H, i, eng, ng, np_, tgt, lever, fat, dt):
             npRef = np_
         npTarget = npRef + (1.0 - npRef) * linear_conversion(eng['fuelIdle'], eng['fuelFly'], sched, 0.0, 1.0, True)
         integral = pid['integral']
-        govFuel = pid_run(pid, dt, npTarget, np_) + H['bmkhs_collectiveOutput'] * eng['ffwdGain']
+        coll = clamp(H['bmkhs_collectiveOutput'] + H.get('bmkhs_fmcAltHoldCollOut', 0.0), 0.0, 1.0)
+        govFuel = pid_run(pid, dt, npTarget, np_) + coll * eng['ffwdGain']
         tgtLim = eng['maxTgtSe'] if H['bmkhs_isSingleEng'] else eng['maxTgt']
         ngLim = min(eng['ngLimitMax'], eng['ngLimitBase'] + eng['ngLimitSlope'] * fat)
         err = min((tgtLim - tgt) / GT_TGT_LIMIT_BAND, (ngLim - ng) / GT_NG_LIMIT_BAND)
@@ -474,8 +477,7 @@ def turbo_shaft_power_turbine(eng, t45, p45, p2, mDot, running, np_, nrFrac, dt)
     npDrag = eng['ptDrag'] * np_ * np_ + (eng['ptDragFloor'] if shaftTq <= 0.0 else 0.0)
     npDot = ((shaftTq / refTq) - npDrag) / eng['ptInertia']
     npFree = max(np_ + npDot * dt, 0.0)
-    npDriven = np_ + ((shaftTq / refTq) / eng['ptInertia']) * dt
-    clutch = (npDriven if running else npFree) >= nrFrac
+    clutch = npFree >= nrFrac
     return shaftTq, (nrFrac if clutch else npFree), clutch, t5
 
 
@@ -620,7 +622,7 @@ def simple_rotor(H, idx, rotor):
 
     rotorTorque = 0.0
     bladeScalar = rotor['numBlades'] / 4
-    dragCoef = math_linear_interp_2d(rotor['dragCoefTable'], collOutput, velXY)
+    dragCoef = math_linear_interp_2d(rotor['dragCoefTable'], simple_rotor_table_key(rotor, collOutput), velXY)
     for _ in range(4):
         bladeDrag = dragCoef * 0.5 * rho * bladeArea * (bladeVel75 * bladeVel75) * bladeScalar
         rotorTorque += bladeDrag * bladeRad75
@@ -650,12 +652,18 @@ def simple_rotor_thrust(H, rotor):
     rpm = H['bmkhs_xmsnOutputRpm'] / rotor['gearRatio']
     omega = 0.0 if rpm == 0.0 else (2.0 * math.pi) * (rpm / 60.0)
     bladeVel75 = omega * rotor['bladeRadius'] * 0.75
-    velZ = H['hubVelZ']
-    viScalarDenom = linear_conversion(-7.62, -19.30, velZ, VEL_VRS, VEL_VRS * 0.1, True)
-    viScalar = 0.0 if (velZ < -VEL_VRS and velXY < VEL_ETL) else 1 - (velZ / viScalarDenom)
-    liftCoef = math_linear_interp_2d(rotor['liftCoefTable'], collOutput, velXY)
+    liftCoef = math_linear_interp_2d(rotor['liftCoefTable'], simple_rotor_table_key(rotor, collOutput), velXY)
+    axialVel = H['hubVelZ'] * (-1.0 if liftCoef < 0 else 1.0)
+    viScalarDenom = linear_conversion(-7.62, -19.30, axialVel, VEL_VRS, VEL_VRS * 0.1, True)
+    viScalar = 0.0 if (axialVel < -VEL_VRS and velXY < VEL_ETL) else 1 - (axialVel / viScalarDenom)
     bladeLift = liftCoef * 0.5 * rho * (rotor['bladeRadius'] * rotor['bladeChord']) * (bladeVel75 * bladeVel75)
     return 4 * bladeLift * (rotor['numBlades'] / 4) * viScalar
+
+
+def simple_rotor_table_key(rotor, control):
+    """fn_simpleRotor's _tableKey - the control through the rotor's optional controlMap."""
+    m = rotor.get('controlMap') or []
+    return control if not m else math_linear_interp(m, control)[1]
 
 
 def simple_rotor_update(H):

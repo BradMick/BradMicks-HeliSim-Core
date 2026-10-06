@@ -1,14 +1,21 @@
-params ["_heli"];
+params ["_heli", "_att", "_on"];
 #include "\bmkhs_helisim\functions\core\core.hpp"
 
-//pos/vel use pid_roll/pid_pitch (posRoll/posPitch gains); att uses pid_roll_att/pid_pitch_att (attRoll/attPitch).
+if (count _att == 0) exitWith {[0.0, 0.0]};
+
+//pos/vel use the posRoll/posPitch gains; att uses attRoll/attPitch.
 //Roll
-private _pidRoll      = _heli getVariable "bmkhs_pid_roll";
-private _pidRoll_att  = _heli getVariable "bmkhs_pid_roll_att";
+private _pidRoll      = _att get "posRoll";
+private _pidRoll_att  = _att get "attRoll";
 
 //Pitch
-private _pidPitch     = _heli getVariable "bmkhs_pid_pitch";
-private _pidPitch_att = _heli getVariable "bmkhs_pid_pitch_att";
+private _pidPitch     = _att get "posPitch";
+private _pidPitch_att = _att get "attPitch";
+
+private _posBelow  = (_att get "posBelowKts") * KNOTS_TO_MPS;
+private _velBelow  = (_att get "velBelowKts") * KNOTS_TO_MPS;
+private _attBelow  = (_att get "attBelowKts") * KNOTS_TO_MPS;
+private _authority = _att get "authority";
 
 //Position & Velocity hold
 private _subMode  = _heli getVariable "bmkhs_attHoldSubMode";
@@ -28,7 +35,7 @@ private _subMode  = _heli getVariable "bmkhs_attHoldSubMode";
            ];
 
 private _deltaTime = _heli getVariable "bmkhs_deltaTime";
-private _gndSpeed  = (_heli getVariable "bmkhs_gndSpeed") * KNOTS_TO_MPS;
+private _gndSpeed  = _heli getVariable "bmkhs_gndSpeed";
 
 //Attitude hold
 private _curAtt   = _heli call BIS_fnc_getPitchBank;
@@ -38,23 +45,16 @@ private _curRoll  = _curAtt # 1;
 private _attHoldCycPitchOut = 0.0;
 private _attHoldCycRollOut  = 0.0;
 
-//Submode selection: speed-driven.
-//Position hold
-if (_gndSpeed <= POS_HOLD_SPEED_SWITCH) then {
-    [_heli, "bmkhs_attHoldSubMode", "pos"] call bmkhs_fnc_utilUpdateNetworkGlobal;
-};
-//Velocity hold
-//This needs to check if accelerating or decelerating...really it's
-//5 to 40 knots accelerating, 30 to 5 knots decelerating
-if (_gndSpeed > POS_HOLD_SPEED_SWITCH && _gndSpeed <= VEL_HOLD_SPEED_SWITCH_ACCEL) then {
-    [_heli, "bmkhs_attHoldSubMode", "vel"] call bmkhs_fnc_utilUpdateNetworkGlobal;
-};
-//Attitude hold
-if (_gndSpeed > VEL_HOLD_SPEED_SWITCH_ACCEL) then {
-    [_heli, "bmkhs_attHoldSubMode", "att"] call bmkhs_fnc_utilUpdateNetworkGlobal;
-};
+//Submode selection, by ground speed: position hold below posBelowKts; velocity hold up to
+//velBelowKts accelerating, and attitude hold above it until back below attBelowKts.
+[_heli, "bmkhs_attHoldSubMode", switch (true) do {
+    case (_gndSpeed <= _posBelow):                           { "pos" };
+    case (_subMode == "att" && {_gndSpeed >= _attBelow}):    { "att" };
+    case (_gndSpeed > _velBelow):                            { "att" };
+    default                                                  { "vel" };
+}] call bmkhs_fnc_utilUpdateNetworkGlobal;
 
-if (_heli getVariable "bmkhs_attHoldActive" && !(_heli getVariable "bmkhs_forceTrimInterupted")) then {
+if (_on && {_heli getVariable "bmkhs_attHoldActive"} && {!(_heli getVariable "bmkhs_forceTrimInterupted")}) then {
     //Position hold = velocity-null loop + a SLOW, TIGHTLY-CLAMPED position-error integral that biases
     //the velocity SETPOINT (not the output) to trim out the standing drift a pure velocity-null loop
     //leaves (type-0 -> type-1: zero steady-state position error). The bias works THROUGH the velocity
@@ -134,7 +134,7 @@ if (_heli getVariable "bmkhs_attHoldActive" && !(_heli getVariable "bmkhs_forceT
 //systemChat format ["Dist = %4 -- DistX = %1 -- DistY = %2 -- Dir = %3", _distX toFixed 2, _distY toFixed 2, _dir toFixed 2, _dist toFixed 2];
 //systemChat format ["VelX = %1 -- VelY = %2 -- Pitch Out = %3 -- Roll Out = %4", _curVelX toFixed 2, _curVelY toFixed 2, _attHoldCycPitchOut toFixed 2, _attHoldCycRollOut toFixed 2];
 
-_attHoldCycPitchOut = [_attHoldCycPitchOut, -0.1, 0.1] call BIS_fnc_clamp;
-_attHoldCycRollOut  = [_attHoldCycRollOut, -0.1, 0.1] call BIS_fnc_clamp;
+_attHoldCycPitchOut = [_attHoldCycPitchOut, -_authority, _authority] call BIS_fnc_clamp;
+_attHoldCycRollOut  = [_attHoldCycRollOut, -_authority, _authority] call BIS_fnc_clamp;
 
 [_attHoldCycPitchOut, _attHoldCycRollOut]

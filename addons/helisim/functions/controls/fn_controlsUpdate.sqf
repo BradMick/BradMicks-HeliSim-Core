@@ -74,5 +74,16 @@ params ["_heli", "_deltaTime"];
         };
     };
 
+    //What each position allows, for the machines that cannot solve it.
+    if ((_ctl get "interlocked") && {_ctl get "networked"}) then {
+        private _allowed = [];
+        for "_p" from 0 to ((count _poss) - 1) do {
+            _allowed pushBack ([_heli, _index, _p, false] call bmkhs_fnc_controlAllowed);
+        };
+        if ((_heli getVariable [_varName + "Allowed", []]) isNotEqualTo _allowed) then {
+            _heli setVariable [_varName + "Allowed", _allowed, true];
+        };
+    };
+
     //Axes are handled on the input path, not here - see fn_controlsAxisUpdate.
 } forEach (_heli getVariable ["bmkhs_ctrlList", []]);

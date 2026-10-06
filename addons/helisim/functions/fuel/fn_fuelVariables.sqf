@@ -193,9 +193,11 @@ _heli setVariable ["bmkhs_xferFlowVars", (getArray (_config >> "xferFlowingVars"
 { _heli setVariable [_x, false] } forEach _flowVars;
 _heli setVariable ["bmkhs_fuelFlowVars", _flowVars];
 
-//A tank named by a consumer, resolved to its variable name; "" if it matches no tank.
+//A tank named by a consumer, resolved to its variable name; "" for "off" or no match.
 private _tankRef = {
     params ["_name", "_who"];
+    //"off" is a deliberate no-fuel source - a selector lever at OFF, say. Not an error.
+    if ((toLower _name) in ["off", ""]) exitWith {""};
     private _var = "bmkhs_" + _name;
     if !(_var in _fuelNames) exitWith {
         diag_log text format [
@@ -219,6 +221,20 @@ for "_i" from 1 to (getNumber (_config >> "numCrossfeedModes")) do {
 };
 _heli setVariable ["bmkhs_crossfeedSources", _crossfeed];
 _heli setVariable ["bmkhs_crossfeedMode",    _defaultPos];
+
+//An engine can name its own fuel selector - fuelSelector, a control, and fuelSources[], the
+//source for each of its positions. Engines without one draw through the crossfeed positions.
+private _selectors = [];
+{
+    private _engName = configName _x;
+    private _ctrl    = getText (_x >> "fuelSelector");
+    if (_ctrl == "") then {
+        _selectors pushBack [];
+    } else {
+        _selectors pushBack [_ctrl, (getArray (_x >> "fuelSources")) apply {[_x, _engName + " fuelSources"] call _tankRef}];
+    };
+} forEach ("true" configClasses (_config >> "Engines"));
+_heli setVariable ["bmkhs_engFuelSelectors", _selectors];
 
 //A producer that burns fuel names its tank.
 {

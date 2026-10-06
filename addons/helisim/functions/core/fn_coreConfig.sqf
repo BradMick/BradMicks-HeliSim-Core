@@ -44,7 +44,6 @@ _heli setVariable ["bmkhs_useSystems",          getNumber (_config >> "useSystem
 [_heli] call bmkhs_fnc_transmissionVariables;
 [_heli, _config] call bmkhs_fnc_simpleRotorVariables;
 [_heli, _config] call bmkhs_fnc_rotorVariables;
-[_heli] call bmkhs_fnc_perfVariables;
 [_heli] call bmkhs_fnc_actuatorVariables;
 [_heli] call bmkhs_fnc_prestonVariables;
 [_heli] call bmkhs_fnc_fmDebugVariables;

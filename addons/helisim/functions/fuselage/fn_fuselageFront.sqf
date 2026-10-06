@@ -41,7 +41,7 @@ for "_i" from 0 to (_count - 1) do {
 
     private _velFwd     = (_heli getVariable "bmkhs_velModelSpace") vectorDotProduct _vecFwd;
     private _v          = [_velFwd, -VEL_VNE, VEL_VNE] call BIS_fnc_clamp;
-    private _pa         = _heli getVariable "bmkhs_pa";
+    private _pa         = _heli getVariable "bmkhs_barAlt";
     private _CD         = [_dragCoefTable, _pa] call bmkhs_fnc_mathLinearInterp select 1;
     private _area       = [_a, _b, _c, _d] call bmkhs_fnc_mathGetArea;
     private _drag       = _CD * 0.5 * _rho * _area * (_v * _v);

@@ -19,7 +19,7 @@ Author:
 params ["_heli"];
 
 private _onGround = false;
-private _radAlt   = _heli getVariable "bmkhs_radAltRaw";
+private _radAlt   = _heli getVariable "bmkhs_radAlt";
 
 //Metres. Was 0.5 ft when the raw value was published in feet.
 if (isTouchingGround _heli || _radAlt < 0.15) then {
