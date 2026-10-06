@@ -14,7 +14,7 @@ private _pidYaw        = ((_heli getVariable "bmkhs_fmc") getOrDefault ["Sas", c
 private _resetYaw      = { if (count _pidYaw > 0) then { [_pidYaw] call bmkhs_fnc_pidReset } };
 
 private _deltaTime     = _heli getVariable "bmkhs_deltaTime";
-private _gndSpeed      = (_heli getVariable "bmkhs_gndSpeed") * KNOTS_TO_MPS;
+private _gndSpeed      = _heli getVariable "bmkhs_gndSpeed";
 private _angVelZ       = (_heli getVariable "bmkhs_angVelModelSpace") # 2;
 private _pedalTrim     = _heli getVariable "bmkhs_forceTrimPosYaw";
 private _curHdg        = getDir _heli;

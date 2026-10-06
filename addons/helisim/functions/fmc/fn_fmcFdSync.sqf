@@ -18,10 +18,10 @@ params ["_heli", "_target"];
 #include "\bmkhs_helisim\functions\core\core.hpp"
 
 private _now = switch (_target) do {
-    case "ralt": { (_heli getVariable "bmkhs_radAltRaw") * METERS_TO_FEET };
+    case "ralt": { _heli getVariable "bmkhs_radAlt" };
     case "alt";
-    case "altp": { ((getPosASL _heli) select 2) * METERS_TO_FEET };
-    case "ias":  { _heli getVariable "bmkhs_vel2D" };
+    case "altp": { (_heli getVariable "bmkhs_barAlt") * FEET_TO_METERS };
+    case "ias":  { (_heli getVariable "bmkhs_velModelSpace") select 1 };
     case "hdg":  { getDir _heli };
     default      { nil };
 };

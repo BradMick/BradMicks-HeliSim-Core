@@ -28,7 +28,7 @@ Author:
 params ["_heli", "_deltaTime", "_pedalLeftRight", "_kbPedalLeftRight", "_kbYawSwitchVel"];
 
 private _yawBreakout = false;
-private _gndSpeed    = (_heli getVariable "bmkhs_gndSpeed") * KNOTS_TO_MPS;
+private _gndSpeed    = _heli getVariable "bmkhs_gndSpeed";
 
 private _yawBreakoutVal = (_heli getVariable "bmkhs_heliRudderRightOut") - (_heli getVariable "bmkhs_heliRudderLeftOut");
 if (_yawBreakoutVal < -0.01 || _yawBreakoutVal > 0.01) then {
@@ -47,7 +47,7 @@ private _curHdg     = getDir _heli;
 private _desiredHdg = _heli getVariable "bmkhs_autoPedalHdg";
 
 //Use the RAW radar altitude - the displayed one is rounded to 10ft above 50ft.
-private _radAltRaw = (_heli getVariable "bmkhs_radAltRaw") * METERS_TO_FEET;
+private _radAltRaw = (_heli getVariable "bmkhs_radAlt") * METERS_TO_FEET;
 
 //FORWARD speed, not ground speed - a sideways hover drift is not the aircraft leaving the hover.
 private _velFwd = (_heli getVariable "bmkhs_velModelSpaceNoWind") select 1;

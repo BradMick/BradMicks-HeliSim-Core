@@ -4,8 +4,8 @@ params ["_heli"];
 private _alt = (_heli getVariable "bmkhs_fmc") getOrDefault ["AltitudeHold", createHashMap];
 if (count _alt == 0) exitWith {};
 
-private _gndSpeed  = (_heli getVariable "bmkhs_gndSpeed") * KNOTS_TO_MPS;
-private _velClimb  = (_heli getVariable "bmkhs_velClimb") * FPM_TO_MPS;
+private _gndSpeed  = _heli getVariable "bmkhs_gndSpeed";
+private _velClimb  = _heli getVariable "bmkhs_velClimb";
 private _engage    = (_alt get "engageFpm") * FPM_TO_MPS;
 
 if (_heli getVariable "bmkhs_altHoldActive" == false) then {

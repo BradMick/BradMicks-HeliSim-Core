@@ -35,7 +35,7 @@ private _subMode  = _heli getVariable "bmkhs_attHoldSubMode";
            ];
 
 private _deltaTime = _heli getVariable "bmkhs_deltaTime";
-private _gndSpeed  = (_heli getVariable "bmkhs_gndSpeed") * KNOTS_TO_MPS;
+private _gndSpeed  = _heli getVariable "bmkhs_gndSpeed";
 
 //Attitude hold
 private _curAtt   = _heli call BIS_fnc_getPitchBank;

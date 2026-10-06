@@ -220,16 +220,35 @@ if (!_tailHyd || !_tailDriven) then {
 
 if (!_hydFailure || _emerHydOn) then {
     private _collectiveValue = _heli getVariable "bmkhs_collectiveOutput";
+    //A flight director vertical mode drives the lever itself (fn_fmc). The pilot takes it back
+    //with the keys, or by bringing the axis to meet the lever - from where the lever is, so
+    //nothing jumps - and that uncouples the mode.
+    private _fdModes = ((_heli getVariable "bmkhs_fmc") getOrDefault ["FlightDirector", createHashMap]) getOrDefault ["modes", []];
+    private _fdColl  = ["ralt", "alt", "altp"] select {(_x in _fdModes) && {_heli getVariable ["bmkhs_fd_" + _x, false]}};
+    private _fdTakeover = { { [_heli, _x] call bmkhs_fnc_fmcFdMode } forEach _fdColl; _fdColl = [] };
     if (bmkhs_keyboardCollective) then {
-        if (_keyCollectiveUp > 0.1) then { _collectiveValue = _collectiveValue + ((1.0 / 4.0) * _deltaTime); };
-        if (_keyCollectiveDn > 0.1) then { _collectiveValue = _collectiveValue - ((1.0 / 4.0) * _deltaTime); };
-        _collectiveValue = (round (_collectiveValue / 0.005)) * 0.005;
-        _collectiveValue = [_collectiveValue, 0.0, 1.0] call bis_fnc_clamp;
+        if (_fdColl isNotEqualTo [] && {_keyCollectiveUp > 0.1 || _keyCollectiveDn > 0.1}) then { call _fdTakeover };
+        if (_fdColl isEqualTo []) then {
+            if (_keyCollectiveUp > 0.1) then { _collectiveValue = _collectiveValue + ((1.0 / 4.0) * _deltaTime); };
+            if (_keyCollectiveDn > 0.1) then { _collectiveValue = _collectiveValue - ((1.0 / 4.0) * _deltaTime); };
+            _collectiveValue = (round (_collectiveValue / 0.005)) * 0.005;
+            _collectiveValue = [_collectiveValue, 0.0, 1.0] call bis_fnc_clamp;
+        };
         //systemChat format ["KB collective! -- %1", (_heli getVariable "bmkhs_collectiveOutput") toFixed 3];
     } else {
-        _collectiveValue = _joyCollectiveUp - _joyCollectiveDn;
-        _collectiveValue = [_collectiveValue, -1.0, 1.0] call BIS_fnc_clamp;
-        _collectiveValue = linearConversion[ -1.0, 1.0, _collectiveValue, 0.0, 1.0];
+        private _axis = _joyCollectiveUp - _joyCollectiveDn;
+        _axis = [_axis, -1.0, 1.0] call BIS_fnc_clamp;
+        _axis = linearConversion[ -1.0, 1.0, _axis, 0.0, 1.0];
+        private _axisPrev = _heli getVariable ["bmkhs_collectiveAxisPrev", _axis];
+        _heli setVariable ["bmkhs_collectiveAxisPrev", _axis];
+        //Once the director has had the lever, the axis waits to meet it - however the mode let go
+        if (_fdColl isNotEqualTo []) then { _heli setVariable ["bmkhs_collectivePickup", true] };
+        if ((_heli getVariable ["bmkhs_collectivePickup", false])
+            && {abs (_axis - _axisPrev) > 0.0005} && {abs (_axis - _collectiveValue) < 0.03}) then {
+            call _fdTakeover;
+            _heli setVariable ["bmkhs_collectivePickup", false];
+        };
+        if !(_heli getVariable ["bmkhs_collectivePickup", false]) then { _collectiveValue = _axis };
         //systemChat format ["HOTAS collective! -- %1", (_heli getVariable "bmkhs_collectiveOutput") toFixed 3];
     };
     if (_isPlaying) then {

@@ -169,14 +169,14 @@ def math_linear_interp_2d(grid, rowKey, colKey):
 
 
 def pid_create(kp, ki, kd, kiClamp):
-    return {'kp': kp, 'ki': ki, 'kd': kd, 'ki_clamp': kiClamp, 'prevError': 0.0, 'integral': 0.0}
+    return {'kp': kp, 'ki': ki, 'kd': kd, 'ki_clamp': kiClamp, 'integral': 0.0}
 
 
 def pid_run(pid, dt, desired, actual):
     """fn_pidRun."""
     error = desired - actual
     integral = clamp(pid['integral'] + error * dt, -pid['ki_clamp'], pid['ki_clamp'])
-    raw = 0.0 if dt == 0 else (error - pid['prevError']) / dt
+    raw = 0.0 if dt == 0 else (error - pid.get('prevError', error)) / dt
     dCoef = pid.get('dCoef', 0.3)
     prev = pid.get('derivFilt', raw)
     derivative = prev + dCoef * (raw - prev)
@@ -187,7 +187,8 @@ def pid_run(pid, dt, desired, actual):
 
 def pid_reset(pid):
     """fn_pidReset."""
-    pid['prevError'], pid['integral'], pid['derivFilt'] = 0.0, 0.0, 0.0
+    pid.pop('prevError', None)
+    pid['integral'], pid['derivFilt'] = 0.0, 0.0
 
 
 # ---------------------------------------------------------------------------------------------
@@ -311,14 +312,14 @@ BASE_FAT = 15.0
 def environment(H):
     baroAlt = H['baroAltM'] * METERS_TO_FEET
     baseAlt, baseFAT = 0, BASE_FAT
-    altitude = sqf_round((baseAlt + baroAlt) / 10) * 10
+    altitude = baseAlt + baroAlt                     # exact, as fn_environment
     altimeter = 29.92
-    temperature = baseFAT - sqf_round((baroAlt / 1000) * 2)
+    temperature = baseFAT - ((baroAlt / 1000) * 2)
     refPressure = altimeter * IN_MG_TO_HPA
     exp_ = (-GRAVITY * MOLAR_MASS_OF_AIR * ((altitude - 0) * FEET_TO_METERS)
             / (UNIVERSAL_GAS_CONSTANT * (temperature + DEG_C_TO_KELVIN)))
     pressure = ((refPressure / 0.01) * math.exp(exp_)) * 0.01
-    H['bmkhs_pa'] = altitude
+    H['bmkhs_barAlt'] = altitude
     H['bmkhs_fat'] = temperature
     H['bmkhs_rho'] = (pressure / 0.01) / (287.05 * (temperature + DEG_C_TO_KELVIN))
 
@@ -354,7 +355,8 @@ def engine_governor(H, i, eng, ng, np_, tgt, lever, fat, dt):
             npRef = np_
         npTarget = npRef + (1.0 - npRef) * linear_conversion(eng['fuelIdle'], eng['fuelFly'], sched, 0.0, 1.0, True)
         integral = pid['integral']
-        govFuel = pid_run(pid, dt, npTarget, np_) + H['bmkhs_collectiveOutput'] * eng['ffwdGain']
+        coll = clamp(H['bmkhs_collectiveOutput'] + H.get('bmkhs_fmcAltHoldCollOut', 0.0), 0.0, 1.0)
+        govFuel = pid_run(pid, dt, npTarget, np_) + coll * eng['ffwdGain']
         tgtLim = eng['maxTgtSe'] if H['bmkhs_isSingleEng'] else eng['maxTgt']
         ngLim = min(eng['ngLimitMax'], eng['ngLimitBase'] + eng['ngLimitSlope'] * fat)
         err = min((tgtLim - tgt) / GT_TGT_LIMIT_BAND, (ngLim - ng) / GT_NG_LIMIT_BAND)

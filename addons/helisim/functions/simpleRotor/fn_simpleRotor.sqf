@@ -82,7 +82,7 @@ private _uVec           = [[0.0, 0.0, 1.0], _p, _r, _y] call bmkhs_fnc_mathVecto
 private _pos     		= _pivot vectorAdd (_uVec vectorMultiply _mastLength);
 private _heliCom 		= getCenterOfMass _heli;
 //Environment
-private _altitude       = _heli getVariable "bmkhs_pa";
+private _altitude       = _heli getVariable "bmkhs_barAlt";
 private _temperature    = _heli getVariable "bmkhs_fat";
 private _dryAirDensity  = _heli getVariable "bmkhs_rho";
 
@@ -187,7 +187,7 @@ for "_i" from 0 to 3 do {
     };
 
     //Ground effect - strongest on the deck, gone by one rotor diameter up
-    private _heightAgl    = _heli getVariable "bmkhs_radAltRaw";
+    private _heightAgl    = _heli getVariable "bmkhs_radAlt";
     private _gndEffLimit  = _bladeRadius * 2.0;
     private _gndEffScalar = if (_heightAgl >= _gndEffLimit) then { 1.0 } else {
         1.0 + ((_gndEffValue - 1.0) * (1.0 - ((_heightAgl max 0.0) / _gndEffLimit)))

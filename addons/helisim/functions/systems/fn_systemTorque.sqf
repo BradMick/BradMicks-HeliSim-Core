@@ -81,12 +81,13 @@ private _driveDmg = _engines apply {0};
         };
     };
 
-    //Where no role claims this component, it damages named hitpoints instead - and reads
-    //its current damage from the worst of them.
+    //Its damage is its role's hitpoint. Where it has no role, it damages named hitpoints
+    //instead and reads the worst of them - or, naming none, Core keeps it (fn_systemsComponents).
     private _direct = _comp get "damages";
-    private _damage = if (_direct isEqualTo []) then {
-        [_heli, _role, _index] call bmkhs_fnc_damageGet
-    } else {
+    private _ownVar = _comp getOrDefault ["damageVar", ""];
+    private _damage = call {
+        if (_ownVar != "") exitWith { _heli getVariable [_ownVar, 0] };
+        if (_direct isEqualTo []) exitWith { [_heli, _role, _index] call bmkhs_fnc_damageGet };
         private _worst = 0;
         { _worst = _worst max ((_heli getHitPointDamage _x) max 0) } forEach _direct;
         _worst
@@ -156,9 +157,9 @@ private _driveDmg = _engines apply {0};
 
     if (_accrue > 0) then {
         _damage = (_damage + (_accrue * _deltaTime)) min 1.0;
-        if (_direct isEqualTo []) then {
-            [_heli, _role, _damage, _index] call bmkhs_fnc_damageSet;
-        } else {
+        call {
+            if (_ownVar != "") exitWith { _heli setVariable [_ownVar, _damage] };
+            if (_direct isEqualTo []) exitWith { [_heli, _role, _damage, _index] call bmkhs_fnc_damageSet };
             { _heli setHitPointDamage [_x, _damage] } forEach _direct;
         };
     };

@@ -34,7 +34,7 @@ if (cameraView != "INTERNAL") exitWith {};
 private _velNoWind    = _heli getVariable "bmkhs_velModelSpaceNoWind";
 private _velXYNoWind  = vectorMagnitude [_velNoWind select 0, _velNoWind select 1];
 private _velZ         = _velNoWind select 2;
-private _vel2d        = (_heli getVariable "bmkhs_vel2D") * KNOTS_TO_MPS;
+private _vel2d        = _heli getVariable "bmkhs_vel2D";
 private _isOnGnd      = [_heli] call bmkhs_fnc_stateOnGround;
 private _inputRPM     = _heli getVariable "bmkhs_rtrRpm";
 

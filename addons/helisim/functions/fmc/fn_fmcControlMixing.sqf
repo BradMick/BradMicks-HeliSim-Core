@@ -17,6 +17,7 @@ Description:
 
 Parameters:
     _heli - The helicopter [Object]
+    _coll - The collective the rotor gets, pilot's and holds', 0..1 [Number]
 
 Returns:
     Added travel, [pitch (+ fwd), roll (+ left), yaw (+ right pedal)] [Array]
@@ -26,14 +27,13 @@ Author:
 ---------------------------------------------------------------------------- */
 #include "\bmkhs_helisim\functions\core\core.hpp"
 
-params ["_heli"];
+params ["_heli", "_coll"];
 
 private _out = [0.0, 0.0, 0.0];
 if (bmkhs_helisimRealismSetting != REALISTIC) exitWith {_out};
 
-private _coll  = _heli getVariable "bmkhs_collectiveOutput";
 private _pedal = [_heli getVariable "bmkhs_pedalLeftRight", _heli getVariable "bmkhs_forceTrimPosYaw"] call bmkhs_fnc_inputGetInterp;
-private _kts   = _heli getVariable "bmkhs_vel2D";
+private _kts   = (_heli getVariable "bmkhs_vel2D") * MPS_TO_KNOTS;   //the airspeed[] table is in knots
 
 private _apply = {
     params ["_mix", "_src"];

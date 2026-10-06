@@ -4,7 +4,7 @@ params ["_heli", "_alt", "_on"];
 if (count _alt == 0) exitWith {0.0};
 
 private _deltaTime  = _heli getVariable "bmkhs_deltaTime";
-private _gndSpeed   = (_heli getVariable "bmkhs_gndSpeed") * KNOTS_TO_MPS;
+private _gndSpeed   = _heli getVariable "bmkhs_gndSpeed";
 private _pidRadAlt  = _alt get "rad";
 private _pidBarAlt  = _alt get "bar";
 private _curAltAGL  = ASLToAGL getPosASL _heli # 2;

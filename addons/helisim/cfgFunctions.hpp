@@ -212,6 +212,7 @@ class CfgFunctions
             class debugDrawCircle {R;};
             class debugDrawCross {R;};
             class debugDrawLine {R;};
+            class debugFlightLog {R;};
         };
         class mathQuaternion {
             file = "\bmkhs_helisim\functions\math\quaternion";
@@ -226,11 +227,6 @@ class CfgFunctions
             class smoothAverageAdd {R;};
             class smoothAverageGet {R;};
             class smoothAverageInit {R;};
-        };
-        class performance {
-            file = "\bmkhs_helisim\functions\performance";
-            class perfData {R;};
-            class perfVariables {R;};
         };
         class rotor {
             file = "\bmkhs_helisim\functions\rotor";

@@ -74,33 +74,50 @@
 //
 //  gate[]
 //  modes[]      the modes the aircraft has, of "ralt" "alt" "altp" "ias" "hdg" "nav" "hvr"
-//  class Targets  {min, max, step, wraps} for each target the aircraft has, in its units:
+//  class Targets  {min, max, step, wraps} for each target the aircraft has:
 //                 ralt[] / alt[] / altp[] ft, ias[] kt, hdg[] deg (wraps = 1)
 //  altGain      climb rate per foot of altitude error, fpm/ft. 10
 //  vsMaxFpm     climb rate limit. 1000
-//  tqBand       torque fraction below continuous over which the climb tapers. 0.05
-//  tqFpmGain    climb rate taken off per unit of torque over continuous, fpm. 20000
+//  vsAccelFpm   how fast the climb rate asked for may change, fpm per second. 200
+//  tqBand       torque fraction below continuous inside which the limit acts. 0.1
+//  tqFpmGain    climb allowed per unit of torque headroom, fpm. 1000 (10 fpm per 1 %)
 //               The vertical modes never take the engines past continuous torque - each
 //               engine's first tqLimits[] tier, or tqLimitsSe[]'s single-engine. Inside tqBand
-//               of it, the climb asked for beyond the present one tapers with the headroom left,
-//               to none at the limit; over it, a little less than the present one.
+//               of it the climb allowed is the present one plus headroom x tqFpmGain - a little
+//               more with room, the present climb at the limit, less over it - so torque eases
+//               onto the limit and stops there, in any mode. Too high a gain and it bounces off
+//               the limit. The climb rate then eases onto that at vsAccelFpm, like any other change.
+//               ALT / ALTP fly pressure altitude (bmkhs_barAlt, with the environment's base
+//               altitude) - what the barometric altimeter reads; RALT flies radar height.
 //  captureFt    ALTP hands over to ALT inside this. 50
+//  iasAccelKts  how fast the airspeed asked for may change, kt per second. 2
 //  maxPitchDeg  IAS pitch limit. 15
+//  pitchRateDps how fast the pitch asked for may change, deg/s. 3
 //  maxBankDeg   HDG / NAV bank limit. 30
 //  turnRateDps  turn rate HDG / NAV bank for, deg/s - standard rate. The bank comes from the
-//               speed: tan(bank) = V * rate / g. 3
+//               airspeed: tan(bank) = V * rate / g. 3
 //  bankPerDeg   bank per degree of heading error, so it rolls out onto the heading. 1
-//  bankAboveKts turns by bank above this; below it, by pedal with the wings level. 20
+//  rollRateDps  how fast the bank asked for may change, deg/s. 5
+//  bankAboveKts turns by bank above this ground speed; below it, by pedal with the wings level. 20
+//  hvrDecelKts  HVR's deceleration to the hover, kt per second. 2
 //  collAuthority / cycAuthority / pedAuthority   output limits. 1.0 / 0.1 / 0.1 - the
 //               collective is full travel, continuous torque limits it
-//  vs[]         gains, climb rate to collective
-//  ias[]        gains, airspeed to pitch attitude
-//  pitch[] roll[]   gains, attitude to cyclic
-//  yaw[]        gains, heading to pedal
+//  vs[]         gains, climb rate (m/s) to collective
+//  ias[]        gains, airspeed (m/s) to pitch attitude (deg)
+//  pitch[] roll[]   gains, attitude (deg) to cyclic
+//  yaw[]        gains, heading (deg) to pedal
+//  hvrPitch[] hvrRoll[]   gains, ground velocity (m/s) to cyclic, slowing to the hover
+//
+//Each command is eased onto at its rate from where the aircraft is, so a step in a target is
+//never a step in a control. Fields are in pilot units; the director works, and publishes its
+//targets, in m, m/s and deg.
 //
 //An axis the director holds replaces that axis's hold. Engaging a mode cancels the others on
-//its axis: vertical {ralt, alt, altp}, longitudinal {ias, hvr}, lateral {hdg, nav}. HVR is the
-//aircraft's AttitudeHold. Only the vertical modes engage on the ground; NAV needs a waypoint.
+//its axis: vertical {ralt, alt, altp}, longitudinal {ias, hvr}, lateral {hdg, nav}. HVR takes
+//the ground velocity it is engaged at down to nothing at hvrDecelKts, then engages the
+//AttitudeHold - in position hold by then - over the spot, and drops if that drops. HVR has the
+//cyclic, so HDG / NAV turn by pedal under it. Only the vertical modes engage on the ground; NAV
+//needs a waypoint.
 //
 //Inputs are Core's own actions, through the established dispatchers - the cockpit calls them
 //by the same names:
@@ -110,7 +127,7 @@
 //                                    fraction 0..1 of its range, so an axis and a knob are alike
 //    bmkhs_fdWaypoint                the active waypoint, posASL or [] - the aircraft writes it
 //
-//Published: bmkhs_fd_<mode> (engaged), bmkhs_fdTgt_<target>, bmkhs_fdWptBearing and
+//Published: bmkhs_fd_<mode> (engaged), bmkhs_fdTgt_<target> (m, m/s, deg), bmkhs_fdWptBearing and
 //bmkhs_fdWptDistance (-1 with none), all networked. Event fdModeChanged [mode, engaged].
 //
 //Published: bmkhs_fmcSasAvail, bmkhs_fmcAttHoldAvail, bmkhs_fmcAltHoldAvail,

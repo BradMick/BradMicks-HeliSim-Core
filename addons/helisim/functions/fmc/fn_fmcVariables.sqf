@@ -13,6 +13,7 @@ Returns:
     Nothing
 ---------------------------------------------------------------------------- */
 params ["_heli", "_config"];
+#include "\bmkhs_helisim\functions\core\core.hpp"
 
 //The FMC - one entry per declared feature; an undeclared feature does not exist. Field
 //reference: \bmkhs_helisim\fmc.hpp
@@ -48,22 +49,26 @@ private _fmc = createHashMap;
     ["HeadingHold",  ["hdg", "trn"],
                      [["hdgBelowKts", 5], ["blendToKts", 40], ["authority", 0.1]],
                      [["breakout", [0.05, 0.10, 0.20]]]],
-    ["FlightDirector", ["vs", "ias", "pitch", "roll", "yaw"],
-                     [["altGain", 10], ["vsMaxFpm", 1000], ["tqBand", 0.05], ["tqFpmGain", 20000], ["captureFt", 50], ["maxPitchDeg", 15],
-                      ["maxBankDeg", 30], ["turnRateDps", 3], ["bankPerDeg", 1], ["bankAboveKts", 20],
+    ["FlightDirector", ["vs", "ias", "pitch", "roll", "yaw", "hvrPitch", "hvrRoll"],
+                     [["altGain", 10], ["vsMaxFpm", 1000], ["vsAccelFpm", 200], ["tqBand", 0.1], ["tqFpmGain", 1000], ["captureFt", 50],
+                      ["iasAccelKts", 2], ["maxPitchDeg", 15], ["pitchRateDps", 3],
+                      ["maxBankDeg", 30], ["turnRateDps", 3], ["bankPerDeg", 1], ["rollRateDps", 5], ["bankAboveKts", 20],
+                      ["hvrDecelKts", 2],
                       ["collAuthority", 1.0], ["cycAuthority", 0.1], ["pedAuthority", 0.1]],
                      [["modes", []]]]
 ];
 
-//The flight director's targets - {min, max, step, wraps} each, and only the modes Core knows
+//The flight director's targets - {min, max, step, wraps} each, and only the modes Core knows.
+//Declared in ft, kt and deg; held in m, m/s and deg.
 private _fd = _fmc getOrDefault ["FlightDirector", createHashMap];
 if (count _fd > 0) then {
     _fd set ["modes", (_fd get "modes") select {_x in ["ralt", "alt", "altp", "ias", "hdg", "nav", "hvr"]}];
     private _targets = createHashMap;
     {
-        private _t = getArray (_config >> "FMC" >> "FlightDirector" >> "Targets" >> _x);
-        if (count _t >= 3) then { _targets set [_x, [_t select 0, _t select 1, _t select 2, (_t param [3, 0]) > 0]] };
-    } forEach ["ralt", "alt", "altp", "ias", "hdg"];
+        _x params ["_name", "_si"];
+        private _t = getArray (_config >> "FMC" >> "FlightDirector" >> "Targets" >> _name);
+        if (count _t >= 3) then { _targets set [_name, [(_t select 0) * _si, (_t select 1) * _si, (_t select 2) * _si, (_t param [3, 0]) > 0]] };
+    } forEach [["ralt", FEET_TO_METERS], ["alt", FEET_TO_METERS], ["altp", FEET_TO_METERS], ["ias", KNOTS_TO_MPS], ["hdg", 1]];
     _fd set ["targets", _targets];
 };
 _heli setVariable ["bmkhs_fmc", _fmc];

@@ -294,6 +294,8 @@ class BMKHS_HeliSim {
     numEngines = 2;
 
     //The drivetrain is rated by each engine's tqLimits / tqLimitsSe in helisim_engine.hpp.
+    //With useSystems = 0 Core builds it: a transmission, plus a gearbox per engine on a
+    //multi-engine aircraft (components.hpp).
 
     #include "bmkhs_config\helisim_airfoils.hpp"
     #include "bmkhs_config\helisim_engine.hpp"
@@ -301,7 +303,7 @@ class BMKHS_HeliSim {
     #include "bmkhs_config\helisim_fuel.hpp"
     #include "bmkhs_config\helisim_fuselage.hpp"
     #include "bmkhs_config\helisim_mass.hpp"
-    #include "bmkhs_config\helisim_misc.hpp"
+    #include "bmkhs_config\helisim_misc.hpp"      //the pack's own data, which Core does not read
     #include "bmkhs_config\helisim_rotor.hpp"
     #include "bmkhs_config\helisim_simpleRotor.hpp"
     #include "bmkhs_config\helisim_wings.hpp"
@@ -652,6 +654,13 @@ keybind uses, and passes the aircraft. A dragged knob passes its position as a f
 target's range - the pack converts its animation to that, Core does the rest. The aircraft
 writes `bmkhs_fdWaypoint` for NAV.
 
+The director works in m, m/s and deg and publishes its targets that way; its config is in
+pilot units (ft, kt, fpm), converted as read. A readout converts the target to whatever the
+cockpit shows. Every command is eased onto at a declared rate, so a target step never steps a
+control. ALT and ALTP fly pressure altitude, `bmkhs_barAlt` - the environment's base altitude
+included, as the barometric altimeter reads it; RALT flies radar height. HVR slows the aircraft to a stop at `hvrDecelKts` and engages the attitude hold's
+position hold over the spot; it has the cyclic, so HDG / NAV turn by pedal under it.
+
 ### Control mixing
 
 For an airframe whose controls are mixed - the UH-60's mixing unit, compensating its canted
@@ -686,6 +695,9 @@ class ControlMixing {
     };
 };
 ```
+
+A `"collective"` source is the collective the rotor gets - the pilot's plus what the altitude
+hold or flight director adds - so the mixes work against coupled power changes too.
 
 **No gate means mechanical** - linkage, always applied. **A gate makes it electronic**: every
 entry must hold, in the same form as a component gate. Gate an FCC-driven mix on its FMC
@@ -834,6 +846,15 @@ Rules worth knowing before you write them:
 - **Damage is read AT THE MEMBER'S INDEX.** Reading a role without one returns
   the WORST member, which would fail all three generators because one is
   destroyed.
+- **Arma's default hitpoints stand in where no role is claimed:** `hitengine`
+  for every engine, `hithrotor` for `mainRotor`, `hitvrotor` for `tailRotor`.
+  An aircraft config-patched onto another mod declares none of these.
+- **`transmission` is required with `useSystems = 1`** - logged at load as a
+  DAMAGE CONFIG ERROR if missing. With `useSystems = 0` Core keeps the
+  drivetrain's damage itself.
+- **A gearbox per engine with no gearbox hitpoints:** declare it with no
+  `damageRole` and `perEngine = 1`, and Core keeps its damage
+  (`components.hpp`).
 
 ---
 
@@ -1284,15 +1305,16 @@ Damage is read through `bmkhs_fnc_damageGet` (see Read functions), by role - not
 |---|---|---|---|
 | storage `bmkhs_<variableName>[n]` | as above | as above | An undamaged or role-less store is refilled (internal charge set to 1.0). The published value follows on the next solve. |
 | `bmkhs_engineOverspeed`, `bmkhs_engChips`, `bmkhs_engFailed`, `bmkhs_lowOilPsiFailure`, `bmkhs_engOilPsiLow` | Array of Bool per engine (engine outputs) | net | Each repaired engine (damage 0) has its entry cleared to false. These are engine-owned outputs, documented with the engine. |
+| `bmkhs_<variableName>[n]Dmg` | Number, 0..1 | local | Damage of a torque-rated part with no damage role, which Core keeps instead of a hitpoint - every useSystems = 0 drive part (`bmkhs_noseGearbox<n>Dmg`, `bmkhs_transmissionDmg`), and a declared `perEngine` gearbox. Accrued in `systems/fn_systemTorque.sqf`; set to 0 by a repair. |
 
 ### State and air data
 
 | Variable | Type / units | Net | Meaning |
 |---|---|---|---|
-| `bmkhs_vel2D` | Number, knots, integer, clamped 0 to 180 | local (owner only) | Indicated-style airspeed. Forward (y) component of the air-relative model-space velocity, rounded. Never negative. (set in `state/fn_stateVelocities.sqf`) |
-| `bmkhs_vel3D` | Number, knots, integer | local (owner only) | Magnitude of the air-relative model-space velocity, rounded. (set in `state/fn_stateVelocities.sqf`) |
-| `bmkhs_gndSpeed` | Number, knots, integer | local (owner only) | Ground speed. Magnitude of model-space x and y ground velocity (no wind). Body axes, so it reads low when pitched or rolled. (set in `state/fn_stateVelocities.sqf`) |
-| `bmkhs_velClimb` | Number, ft/min, not rounded | local (owner only) | Vertical speed. World z of smoothed velocity. Positive = climbing. Wind has no vertical part, so this is ground-referenced. (set in `state/fn_stateVelocities.sqf`) |
+| `bmkhs_vel2D` | Number, m/s, clamped 0 to 180 kt | local (owner only) | Indicated-style airspeed. Forward (y) component of the air-relative model-space velocity. Never negative. (set in `state/fn_stateVelocities.sqf`) |
+| `bmkhs_vel3D` | Number, m/s | local (owner only) | Magnitude of the air-relative model-space velocity. (set in `state/fn_stateVelocities.sqf`) |
+| `bmkhs_gndSpeed` | Number, m/s | local (owner only) | Ground speed. Magnitude of model-space x and y ground velocity (no wind). Body axes, so it reads low when pitched or rolled. (set in `state/fn_stateVelocities.sqf`) |
+| `bmkhs_velClimb` | Number, m/s | local (owner only) | Vertical speed. World z of smoothed velocity. Positive = climbing. Wind has no vertical part, so this is ground-referenced. (set in `state/fn_stateVelocities.sqf`) |
 | `bmkhs_velModelSpace` | Array [x, y, z], m/s, model space | local (owner only) | Smoothed air-relative velocity (ground velocity minus wind). Wind is rotated by heading only, not pitch or roll. (set in `state/fn_stateVelocities.sqf`) |
 | `bmkhs_velModelSpaceNoWind` | Array [x, y, z], m/s, model space | local (owner only) | Smoothed ground-relative velocity in body axes. (set in `state/fn_stateVelocities.sqf`) |
 | `bmkhs_velWorldSpace` | Array [x, y, z], m/s, world space | local (owner only) | Smoothed air-relative velocity in world axes (velocity minus wind). (set in `state/fn_stateVelocities.sqf`) |
@@ -1308,22 +1330,20 @@ Damage is read through `bmkhs_fnc_damageGet` (see Read functions), by role - not
 | `bmkhs_accelX` | Number, m/s², body x (right) | local (owner only) | Smoothed time derivative of `bmkhs_velModelSpaceNoWind # 0`. Gravity not included. Derivative of a body-axis velocity, so rotation terms are included as they fall. (set in `state/fn_stateAccelerations.sqf`) |
 | `bmkhs_accelY` | Number, m/s², body y (forward) | local (owner only) | Same as above for the forward axis. (set in `state/fn_stateAccelerations.sqf`) |
 | `bmkhs_accelZ` | Number, m/s², body z (up) | local (owner only) | Same as above for the up axis. (set in `state/fn_stateAccelerations.sqf`) |
-| `bmkhs_barAlt` | Number, feet | local (owner only) | Copy of `bmkhs_pa` (pressure altitude, rounded to 10 ft) clamped 0 to 20000. (set in `state/fn_stateAltitude.sqf`) |
-| `bmkhs_radAlt` | Number, metres | local (owner only) | Radar altimeter display value. Height from `getPos`; above 15.24 m (50 ft) rounded to 3.048 m (10 ft) steps; clamped 0 to 432.816 m (1420 ft). Convert to feet yourself. (set in `state/fn_stateAltitude.sqf`) |
-| `bmkhs_radAltRaw` | Number, metres | local (owner only) | Unrounded, unclamped `getPos _heli # 2`. (set in `state/fn_stateAltitude.sqf`) |
+| `bmkhs_radAlt` | Number, metres, exact | local (owner only) | Height above the ground, `getPos _heli # 2`, unrounded and unclamped. A radar altimeter's steps and range are the reader's to apply - Core publishes no display values. (set in `state/fn_stateAltitude.sqf`) |
 | `bmkhs_rtrRpm` | Number, ratio (1.0 = 100 % Nr) | local (owner only) | Rotor speed: `bmkhs_xmsnOutputRpm` / `bmkhs_engDesignRpm`. Forced to 0 when main rotor damage is 1.0. (set in `state/fn_stateRtrRpm.sqf`) |
 
-Ground contact is not a variable. Call `[_heli] call bmkhs_fnc_stateOnGround`. It returns true when `isTouchingGround` is true or `bmkhs_radAltRaw` < 0.15 m (`state/fn_stateOnGround.sqf`). It works only where `bmkhs_radAltRaw` is updated (the owner).
+Ground contact is not a variable. Call `[_heli] call bmkhs_fnc_stateOnGround`. It returns true when `isTouchingGround` is true or `bmkhs_radAlt` < 0.15 m (`state/fn_stateOnGround.sqf`). It works only where `bmkhs_radAlt` is updated (the owner).
 
 ### Environment
 
 | Variable | Type / units | Net | Meaning |
 |---|---|---|---|
-| `bmkhs_pa` | Number, feet, rounded to 10 ft | local (owner only) | Pressure altitude. MSL height in feet plus a base altitude set by the CBA setting `bmkhs_helisimEnvironment` (ISA 0, Europe 800, Middle East 1800, Central Asia 5000, Asia 3100 ft). Altimeter setting is fixed at 29.92 inHg; mission weather does not change it. (set in `environment/fn_environment.sqf`) |
-| `bmkhs_fat` | Number, °C, integer steps | local (owner only) | Free air temperature. Base temperature of the selected environment (ISA 15, Europe summer 20 / winter 0, Middle East 30, Central Asia summer 30 / winter -5, Asia 25) minus round(2 °C per 1000 ft of MSL height). (set in `environment/fn_environment.sqf`) |
-| `bmkhs_rho` | Number, kg/m³ | local (owner only) | Dry air density from barometric pressure at `bmkhs_pa` and `bmkhs_fat` (p / (287.05 × T)). Init value is 1.225. (set in `environment/fn_environment.sqf`) |
-| `bmkhs_windSpeedKts` | Number, knots, integer | local (owner only) | Mission wind speed (`vectorMagnitude wind`). 0 when `bmkhs_windDisabled` is set. (set in `environment/fn_environment.sqf`) |
-| `bmkhs_windDirFrom` | Number, degrees 0-359, integer | local (owner only) | Wind direction for display, computed as `(windDir + 180) mod 360`. 0 when `bmkhs_windDisabled` is set. (set in `environment/fn_environment.sqf`) |
+| `bmkhs_barAlt` | Number, feet, exact | local (owner only) | Pressure altitude - what the barometric altimeter reads, before any display rounding, which is the reader's. MSL height in feet plus a base altitude set by the CBA setting `bmkhs_helisimEnvironment` (ISA 0, Europe 800, Middle East 1800, Central Asia 5000, Asia 3100 ft). Altimeter setting is fixed at 29.92 inHg; mission weather does not change it. (set in `environment/fn_environment.sqf`) |
+| `bmkhs_fat` | Number, °C, exact | local (owner only) | Free air temperature. Base temperature of the selected environment (ISA 15, Europe summer 20 / winter 0, Middle East 30, Central Asia summer 30 / winter -5, Asia 25) minus 2 °C per 1000 ft of MSL height. (set in `environment/fn_environment.sqf`) |
+| `bmkhs_rho` | Number, kg/m³ | local (owner only) | Dry air density from barometric pressure at `bmkhs_barAlt` and `bmkhs_fat`, both exact (p / (287.05 × T)). Init value is 1.225. (set in `environment/fn_environment.sqf`) |
+| `bmkhs_windSpeed` | Number, m/s | local (owner only) | Mission wind speed (`vectorMagnitude wind`). 0 when `bmkhs_windDisabled` is set. (set in `environment/fn_environment.sqf`) |
+| `bmkhs_windDirFrom` | Number, degrees true 0-359, integer | local (owner only) | The direction the wind blows FROM - the meteorological convention a pilot reads (a wind from the west is 270). It is already converted from Arma's `windDir`, `(windDir + 180) mod 360` - a readout of where the wind is from uses it as published. A wind arrow drawn pointing the way the wind BLOWS needs the opposite, `(bmkhs_windDirFrom + 180) mod 360`, converted in the pack (the UH-60's PFD / ND arrows do this). 0 when `bmkhs_windDisabled` is set. (set in `environment/fn_environment.sqf`) |
 | `bmkhs_velWindWorldSpace` | Array [east, north, 0], m/s | local (owner only) | Wind velocity vector (direction the air moves toward). [0,0,0] unless `bmkhs_rotorModel == 0`; also zero when wind is disabled. (set in `environment/fn_environment.sqf`) |
 
 Pressure (hPa) and density altitude are computed in `fn_environment.sqf` but not stored.
@@ -1339,34 +1359,6 @@ Pressure (hPa) and density altitude are computed in `fn_environment.sqf` but not
 | `bmkhs_fsDatum` | Number, metres | local (owner only) | Fuselage-station 0 reference, config `fsDatum`. Empty-airframe arm = fsDatum − emptyMom/emptyMass. Static. (set in `mass/fn_massVariables.sqf`) |
 | `bmkhs_emptyMass` | Number, kg | local (owner only) | Config `emptyMass`. Does not reflect `EmptyMassVariants`; the variant is only applied inside the gross-weight sum. Static. (set in `mass/fn_massVariables.sqf`) |
 | `bmkhs_maxGrossMass` | Number, kg | local (owner only) | Config `maxGrossMass`. Used to bound the test weight. Static. (set in `mass/fn_massVariables.sqf`) |
-
-### Performance
-
-All values are recomputed only when rounded GWT (kg), `bmkhs_pa`, `bmkhs_fat` or the environment setting changes. They are interpolated from the aircraft's config tables by PA (ft) and FAT (°C, rows -40/-20/0/20/40). Units are whatever the pack's tables hold; the H-60 units are given as the example. All are local (owner only), set in `performance/fn_perfData.sqf`.
-
-| Variable | Type / units | Net | Meaning |
-|---|---|---|---|
-| `bmkhs_maxTq_cont` | Number, config units (H-60: torque fraction, 1.0 = 100 %) | local (owner only) | Max continuous torque, `perfTable*` column 1. |
-| `bmkhs_maxTq_de` | Number, config units (H-60: torque fraction) | local (owner only) | Max torque available, dual engine, column 2. |
-| `bmkhs_maxTq_se` | Number, config units (H-60: torque fraction) | local (owner only) | Max torque available, single engine, column 3. |
-| `bmkhs_maxGwt_de_ige` | Number, config units (H-60 table values look like lb; units unclear) | local (owner only) | Max gross weight, dual engine, in ground effect, column 4. H-60 config notes this column is AH-64D data. |
-| `bmkhs_maxGwt_de_oge` | Number, config units (units unclear) | local (owner only) | Max gross weight, dual engine, out of ground effect, column 5. Same caveat. |
-| `bmkhs_maxGwt_se_ige` | Number, config units (units unclear) | local (owner only) | Max gross weight, single engine, IGE, column 6. Same caveat. |
-| `bmkhs_maxGwt_se_oge` | Number, config units (units unclear) | local (owner only) | Max gross weight, single engine, OGE, column 7. Same caveat. |
-| `bmkhs_goNoGoTq_ige` | Number, config units (H-60: torque fraction) | local (owner only) | Go/no-go torque IGE, column 8. AH-64D data in H-60 config. |
-| `bmkhs_goNoGoTq_oge` | Number, config units (H-60: torque fraction) | local (owner only) | Go/no-go torque OGE, column 9. AH-64D data in H-60 config. |
-| `bmkhs_hvrTq_ige` | Number, config units (H-60: torque fraction) | local (owner only) | Hover torque IGE at current GWT. `hoverTable*` interpolated by PA, FAT, then GWT over fixed breakpoints 6804/7711/8618/9525 kg (15/17/19/21k lb; hard-coded in Core). |
-| `bmkhs_hvrTq_oge` | Number, config units (H-60: torque fraction) | local (owner only) | Hover torque OGE, same method. |
-| `bmkhs_tas_vne` | Number, knots TAS | local (owner only) | Never-exceed speed, `TASTable*` column 1. Not GWT-dependent (H-60 tables are for 18000 lb). |
-| `bmkhs_tas_vsse` | Number, knots TAS | local (owner only) | Minimum single-engine speed, column 2. 0 in the table means not achievable. |
-| `bmkhs_tas_rngTas` | Number, knots TAS | local (owner only) | Max-range airspeed, column 3. |
-| `bmkhs_tas_rngTq` | Number, config units (H-60: torque fraction) | local (owner only) | Torque at max-range speed, column 4. |
-| `bmkhs_tas_rngFf` | Number, lb/hr total (if `engFFTable` is kg/s per engine, as in the H-60) | local (owner only) | Fuel flow at max-range torque: `engFFTable`(rngTq) × `bmkhs_numEngines` × 7936.64. |
-| `bmkhs_tas_endTas` | Number, knots TAS | local (owner only) | Max-endurance airspeed, column 5. |
-| `bmkhs_tas_endTq` | Number, config units (H-60: torque fraction) | local (owner only) | Torque at max-endurance speed, column 6. |
-| `bmkhs_tas_endFf` | Number, lb/hr total (same condition as rngFf) | local (owner only) | Fuel flow at max-endurance torque. |
-
-Cruise tables (`cruiseTable**`) are interpolated but the result is not stored.
 
 ### Stabilator
 
@@ -1386,7 +1378,7 @@ Fuselage and airfoil folders publish no designer-facing values.
 | `bmkhs_fmcCollOn` | Bool, default true | net | FMC collective channel on. When false, the altitude hold output is zeroed (the flight director's too). (set in `fmc/fn_fmcVariables.sqf`, `fmc/fn_fmcSetChannel.sqf`) |
 | `bmkhs_fmcSasAvail`, `bmkhs_fmcAttHoldAvail`, `bmkhs_fmcAltHoldAvail`, `bmkhs_fmcHdgHoldAvail`, `bmkhs_fmcFdAvail` | Bool | net on change | The feature is declared in `class FMC` and its `gate[]` holds. (set in `fmc/fn_fmc.sqf`) |
 | `bmkhs_fd_<mode>` | Bool, one per declared mode | net on change | Flight director mode engaged (`ralt`, `alt`, `altp`, `ias`, `hdg`, `nav`, `hvr`). (set in `fmc/fn_fmcFdMode.sqf`) |
-| `bmkhs_fdTgt_<target>` | Number, ft / kt / deg | net on change | Flight director target, clamped or wrapped and snapped to its declared step. (set in `fmc/fn_fmcFdTarget.sqf`) |
+| `bmkhs_fdTgt_<target>` | Number, m / m/s / deg | net on change | Flight director target, clamped or wrapped and snapped to its declared step. (set in `fmc/fn_fmcFdTarget.sqf`) |
 | `bmkhs_fdWptBearing`, `bmkhs_fdWptDistance` | Number, deg / m, -1 with no waypoint | net on change | To `bmkhs_fdWaypoint`. NAV flies the bearing. (set in `fmc/fn_fmcFlightDirector.sqf`) |
 | `bmkhs_fdWaypoint` | Array posASL, or [] | input | The aircraft's active waypoint. The aircraft writes it; seeded [] locally if unset. |
 | `bmkhs_fmcTrimOn` | Bool, default true | net | Trim channel flag. Core stores it but never reads it, so it changes nothing in Core. A pack can use it as a switch state. (set in `fmc/fn_fmcVariables.sqf`, `fmc/fn_fmcSetChannel.sqf`) |
@@ -1410,9 +1402,9 @@ Fuselage and airfoil folders publish no designer-facing values.
 | `bmkhs_fmcSasPitchOut` | Number, ±0.2 cyclic fraction | local (owner only) | Pitch SAS rate-damping command added to the cyclic pitch. Same sign as `cyclicFwdAft`. Zero if the channel is off or the SAS `gate[]` is shut. (set in `fmc/fn_fmc.sqf`) |
 | `bmkhs_fmcSasRollOut` | Number, ±0.1 cyclic fraction | local (owner only) | Roll SAS command added to the cyclic roll. Same sign as `cyclicLeftRight`. (set in `fmc/fn_fmc.sqf`) |
 | `bmkhs_fmcSasYawOut` | Number, ±0.1 pedal fraction | local (owner only) | Yaw SAS command added to the pedals. Same sign as `pedalLeftRight`. (set in `fmc/fn_fmc.sqf`) |
-| `bmkhs_fmcAttHoldCycPitchOut` | Number, ±1 cyclic fraction | local (owner only) | Attitude/position/velocity hold command added to the cyclic pitch - or the flight director's, while IAS holds pitch. 0 when neither is flying it, force trim is held, the channel is off, or the `gate[]` is shut. (set in `fmc/fn_fmc.sqf`) |
-| `bmkhs_fmcAttHoldCycRollOut` | Number, ±1 cyclic fraction | local (owner only) | Same as the pitch output, for cyclic roll - the flight director's while HDG or NAV holds roll. (set in `fmc/fn_fmc.sqf`) |
-| `bmkhs_fmcHdgHoldPedalYawOut` | Number, ±0.1 pedal fraction | local (owner only) | Heading hold / turn coordination command added to the pedals - or the flight director's, while HDG or NAV turns by pedal below `bankAboveKts`. Forced to 0 when the springless-pedal or auto-pedal setting is on. (set in `fmc/fn_fmc.sqf`) |
+| `bmkhs_fmcAttHoldCycPitchOut` | Number, ±1 cyclic fraction | local (owner only) | Attitude/position/velocity hold command added to the cyclic pitch - or the flight director's, while IAS holds pitch or HVR slows to the hover. 0 when neither is flying it, force trim is held, the channel is off, or the `gate[]` is shut. (set in `fmc/fn_fmc.sqf`) |
+| `bmkhs_fmcAttHoldCycRollOut` | Number, ±1 cyclic fraction | local (owner only) | Same as the pitch output, for cyclic roll - the flight director's while HDG or NAV holds roll, or HVR slows to the hover. (set in `fmc/fn_fmc.sqf`) |
+| `bmkhs_fmcHdgHoldPedalYawOut` | Number, ±0.1 pedal fraction | local (owner only) | Heading hold / turn coordination command added to the pedals - or the flight director's, while HDG or NAV turns by pedal below `bankAboveKts` ground speed or under HVR. Forced to 0 when the springless-pedal or auto-pedal setting is on. (set in `fmc/fn_fmc.sqf`) |
 | `bmkhs_fmcAltHoldCollOut` | Number, collective fraction. Range is set by the PID config. | local (owner only) | Altitude hold command added to the collective - or the flight director's, while RALT, ALT or ALTP holds it. 0 when neither is flying it. (set in `fmc/fn_fmc.sqf`) |
 
 ### Pilot inputs
@@ -1455,6 +1447,7 @@ Registered in `event/fn_eventPreInit.sqf`. These are missionNamespace globals, n
 | `bmkhs_rotorModel` | Number, 0 = Simple, 1 = BET | CBA setting | Rotor model. |
 | `bmkhs_vrsWarning` | Bool | CBA setting | VRS warning on. |
 | `bmkhs_sysDebug` / `bmkhs_fmDebug` / `bmkhs_engDisplay` / `bmkhs_forcesDebug` | Bool | CBA setting | Debug displays on. |
+| `bmkhs_flightLog` | Bool | CBA setting | Writes the flight to the RPT at 10 Hz - `BMKHSLOG` lines under a `BMKHSLOG_HDR` header naming the columns (`debug/fn_debugFlightLog.sqf`). `python/dev/flightlog.py` reads them back. |
 | `bmkhs_cyclicCenterTrimMode`, `bmkhs_pedalCenterTrimMode`, `bmkhs_springlessCyclic`, `bmkhs_springlessPedals`, `bmkhs_keyboardStickyPitch/Roll/Yaw`, `bmkhs_autoPedal`, `bmkhs_autoPitch`, `bmkhs_autoRoll`, `bmkhs_mouseAsJoystick` | Bool | CBA setting | Input options. |
 | `bmkhs_mouseSense` | Number 0.1..1.0 | CBA setting | Mouse sensitivity. |
 | `bmkhs_testGwtEnabled` / `bmkhs_testGwtLbs` | Bool / String (lb) | CBA setting | Fixed test gross weight. |
@@ -1602,7 +1595,6 @@ Working state, solver bookkeeping, filters and debug. These change without notic
 - `bmkhs_worldAccelX_avg` - acceleration smoothing buffer.
 - `bmkhs_worldAccelY_avg` - acceleration smoothing buffer.
 - `bmkhs_worldAccelZ_avg` - acceleration smoothing buffer.
-- `bmkhs_perfDataChange` - change-detection key for perf recompute.
 - `bmkhs_emptyMom` - raw config moment, frame-specific.
 - `bmkhs_emptyMassVariants` - cached config table.
 - `bmkhs_comCorrection` - config centre-of-mass offset.

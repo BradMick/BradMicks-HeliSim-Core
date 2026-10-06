@@ -37,9 +37,10 @@ switch (bmkhs_helisimEnvironment) do {
 };
 
 //Environment
-private _altitude          = round ((_baseAlt + _baroAlt) / 10) * 10;; //PA  feet
+//Exact - the physics computes from these; a display rounds them for itself
+private _altitude          = _baseAlt + _baroAlt; //PA  feet
 private _altimeter         = 29.92; //in mg
-private _temperature       = _baseFAT - round((_baroAlt / 1000) * 2); //FAT deg C
+private _temperature       = _baseFAT - ((_baroAlt / 1000) * 2); //FAT deg C
 
 //pressure and air density calculations below so rho stays consistent.
 if (false) then {
@@ -57,7 +58,7 @@ private _pressure          = ((_referencePressure / 0.01) * (exp _exp)) * 0.01;
 private _densityAltitude   = (_altitude + ((SEA_LEVEL_PRESSURE - _altimeter) * 1000)) + (120 * (_temperature - (STANDARD_TEMP - ((_altitude / 1000) * 2))));
 private _dryAirDensity     = (_pressure / 0.01) / (287.05 * (_temperature + DEG_C_TO_KELVIN));
 
-_heli setVariable ["bmkhs_pa",  _altitude];
+_heli setVariable ["bmkhs_barAlt", _altitude];
 _heli setVariable ["bmkhs_fat", _temperature];
 _heli setVariable ["bmkhs_rho", _dryAirDensity];
 
@@ -71,7 +72,7 @@ if (bmkhs_windDisabled) then {
     _windDirFrom = 0.0;
 };
 
-_heli setVariable ["bmkhs_windSpeedKts", round (_windSpeed * MPS_TO_KNOTS)];
+_heli setVariable ["bmkhs_windSpeed",    _windSpeed];
 _heli setVariable ["bmkhs_windDirFrom",  round _windDirFrom];
 
 private _velWindWorldSpace = [0,0,0];

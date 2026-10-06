@@ -56,12 +56,27 @@ params ["_heli", "_config"];
     ["torqueSum",    getNumber (cfg >> "torqueSum") > 0], \
     ["jitters",      getNumber (cfg >> "jittersTorque") > 0], \
     ["damages",      getArray  (cfg >> "damagesHitpoints")], \
+    ["perEngine",    getNumber (cfg >> "perEngine") > 0], \
     ["fuelSource",   getText   (cfg >> "fuelSource")], \
     ["fuelTank",     ""], \
     ["fuelFlow",     (getNumber (cfg >> "fuelFlow")) / KG_TO_LBS / 3600] \
 ]
 
 private _circuits = createHashMap;
+
+//Engines are counted by their hitpoints, or by numEngines where there are none (the shared
+//hitengine fn_damageVariables fills in) - fn_engineVariables, which publishes it, runs later.
+private _engineCount = [_heli, "engines"] call bmkhs_fnc_damageCount;
+
+//Members. A role is counted by the hitpoints that claim it. No role is not the same as a role
+//nothing claims: it means present but with no hitpoint of its own - one member, or one per
+//engine with perEngine, which is how a gearbox per engine exists without hitpoints.
+private _members = {
+    params ["_c"];
+    private _role = _c get "damageRole";
+    if (_role != "") exitWith { [_heli, _role] call bmkhs_fnc_damageCount };
+    [1, _engineCount] select (_c get "perEngine")
+};
 
 //What a component puts where. One entry per Outputs class, or the single output field
 //for something that only feeds one circuit.
@@ -100,12 +115,8 @@ private _readOutputs = {
 //given whatever drives it.
 private _producers = [];
 {
-    private _c    = COMPONENT_FIELDS(_x);
-    private _role = _c get "damageRole";
-
-    //No role is not the same as a role nothing claims: it means present but not
-    //separately damageable, so one member that never fails.
-    private _count = if (_role == "") then {1} else {[_heli, _role] call bmkhs_fnc_damageCount};
+    private _c     = COMPONENT_FIELDS(_x);
+    private _count = [_c] call _members;
     for "_i" from 0 to (_count - 1) do {
         private _m = +_c;
         _m set ["index",   _i];
@@ -121,10 +132,8 @@ private _producers = [];
 //Converters - consume from one circuit and produce onto another. They create nothing.
 private _converters = [];
 {
-    private _c    = COMPONENT_FIELDS(_x);
-    private _role = _c get "damageRole";
-
-    private _count = if (_role == "") then {1} else {[_heli, _role] call bmkhs_fnc_damageCount};
+    private _c     = COMPONENT_FIELDS(_x);
+    private _count = [_c] call _members;
     for "_i" from 0 to (_count - 1) do {
         private _m = +_c;
         _m set ["index",   _i];
@@ -142,7 +151,6 @@ _heli setVariable ["bmkhs_sysConverters", _converters];
 private _storage = [];
 {
     private _c    = COMPONENT_FIELDS(_x);
-    private _role = _c get "damageRole";
 
     _c set ["rechargedBy", (getArray (_x >> "rechargedBy")) param [0, ""]];
     _c set ["minRecharge", (getArray (_x >> "rechargedBy")) param [1, 0]];
@@ -160,8 +168,7 @@ private _storage = [];
     _c set ["leakStartDmg", getNumber (_x >> "leakStartDmg")];
     _c set ["drainedBy",    getArray  (_x >> "drainedBy")];
 
-    //As above: no role means present but not separately damageable, not absent.
-    private _count = if (_role == "") then {1} else {[_heli, _role] call bmkhs_fnc_damageCount};
+    private _count = [_c] call _members;
     for "_i" from 0 to (_count - 1) do {
         private _m = +_c;
         _m set ["index",   _i];
@@ -207,35 +214,47 @@ private _consumers = [];
 private _torqued = (_producers + _converters + _storage)
                         select {(_x get "tqLimitsFrom") != "" || {(_x get "tqLimitsSeFrom") != ""}};
 
-//No systems modelled - the drivetrain is still rated.
+//No systems modelled - the drivetrain still is, as an airframe that models it declares it:
+//a gearbox per engine on a multi-engine aircraft, then the transmission.
 if !(_heli getVariable ["bmkhs_useSystems", false]) then {
     _torqued = [];
-    {
-        _x params ["_role", "_torqueVar", "_sums", "_limitsFrom", "_limitsSeFrom", "_breaks"];
-        private _count = [_heli, _role] call bmkhs_fnc_damageCount;
-        for "_i" from 0 to ((_count max 1) - 1) do {
-            _torqued pushBack (createHashMapFromArray [
-                ["damageRole", _role],
-                ["index",      _i],
-                ["varName",    format ["bmkhs_%1%2", _role, _i]],
-                ["jitters",    false],
-                ["torqueFrom", _torqueVar],
-                ["torqueSum",  _sums],
-                ["tqLimitsFrom",   _limitsFrom],
-                ["tqLimitsSeFrom", _limitsSeFrom],
-                ["breaksVar",  _breaks],
-                //With no systems modelled the damage lands on the rotors themselves -
-                //Arma's own hitpoints, which every helicopter has - rather than on
-                //whatever drivetrain parts the airframe happens to declare.
-                ["damages",    ["hithrotor", "hitvrotor"]]
-            ]);
+    private _part = {
+        params ["_varName", "_index", "_sums", "_limitsFrom", "_limitsSeFrom", "_breaks"];
+        createHashMapFromArray [
+            ["damageRole",     ""],
+            ["index",          _index],
+            ["varName",        _varName],
+            ["jitters",        true],
+            ["torqueFrom",     "bmkhs_engPctTq"],
+            ["torqueSum",      _sums],
+            ["tqLimitsFrom",   _limitsFrom],
+            ["tqLimitsSeFrom", _limitsSeFrom],
+            ["breaksVar",      _breaks],
+            ["damages",        []]
+        ]
+    };
+    //A gearbox carries its own engine, and only enough to hurt it when that engine is doing
+    //the work of two. Come apart, it unloads and overspeeds that engine.
+    if (_engineCount > 1) then {
+        for "_i" from 0 to (_engineCount - 1) do {
+            _torqued pushBack ([format ["bmkhs_noseGearbox%1", _i + 1], _i, false, "", "tqLimitsSe",
+                                ["bmkhs_engineOverspeed"]] call _part);
         };
-    } forEach [
-        //The transmission carries both engines summed, and has no single-engine case -
-        //one engine can never overtorque what is rated for two.
-        ["transmission",  "bmkhs_engPctTq", true, "tqLimits", "tqLimitsSe", []]
-    ];
+    };
+    //The transmission carries every engine summed, rated to their twin limits - one engine can
+    //never overtorque what is rated for all of them. It holds the rotors up, so it takes them
+    //with it, and unloaded every engine overspeeds.
+    _torqued pushBack (["bmkhs_transmission", 0, true, "tqLimits", "",
+                        ["mainRotor", "tailRotor", "bmkhs_engineOverspeed"]] call _part);
 };
+
+//A torque-rated part with no damage role has no hitpoint to hold its damage, so Core keeps it.
+{
+    if ((_x get "damageRole") == "" && {(_x get "damages") isEqualTo []}) then {
+        _x set ["damageVar", (_x get "varName") + "Dmg"];
+        _heli setVariable [(_x get "varName") + "Dmg", 0];
+    };
+} forEach _torqued;
 _heli setVariable ["bmkhs_sysTorqued", _torqued];
 
 _heli setVariable ["bmkhs_sysProducers", _producers];

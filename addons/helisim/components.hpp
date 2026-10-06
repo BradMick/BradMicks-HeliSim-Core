@@ -115,8 +115,16 @@
 //                count with torqueSum, else its own engine's
 //  tqLimitsSeFrom  the same while single engine, "tqLimitsSe"
 //  damagesHitpoints[]  hitpoints to damage directly, for a component whose damageRole
-//                nothing claims. Core uses this for the useSystems = 0 drivetrain, so an
-//                airframe declaring no drivetrain still has something to break
+//                nothing claims
+//  perEngine     1 for one member per engine, for a component with no damageRole - a
+//                gearbox per engine on an airframe with no gearbox hitpoints
+//                A torque-rated component with no damageRole and no damagesHitpoints keeps
+//                its damage in Core (bmkhs_<variableName>Dmg), accrues and breaks exactly as
+//                one with a hitpoint does, and comes back undamaged on a repair. With
+//                useSystems = 0 Core builds the drivetrain this way itself: a NoseGearbox per
+//                engine on a multi-engine aircraft (tqLimitsSe, breaks its engine's
+//                bmkhs_engineOverspeed) and the Transmission (tqLimits summed, breaks
+//                mainRotor, tailRotor and bmkhs_engineOverspeed)
 //  jittersTorque  1 if damage to this component slips the clutch of each engine it carries
 //  breaksOnFailure[]  what a destroyed component takes with it. An entry naming a damage
 //                role destroys that role outright - a transmission is what holds the

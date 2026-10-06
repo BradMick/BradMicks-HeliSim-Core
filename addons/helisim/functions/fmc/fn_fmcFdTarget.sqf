@@ -8,7 +8,7 @@ Description:
 Parameters:
     _heli   - The helicopter [Object]
     _target - "ralt", "alt", "altp", "ias" or "hdg" [String]
-    _value  - In the target's units: ft, kt or deg [Number]
+    _value  - m, m/s or deg [Number]
 
 Returns:
     Nothing

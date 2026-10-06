@@ -3,8 +3,8 @@ Function: bmkhs_fnc_fmcFdMode
 
 Description:
     Toggles a flight director mode. Engaging one cancels the others on its axis -
-    vertical {ralt, alt, altp}, longitudinal {ias, hvr}, lateral {hdg, nav}. HVR is
-    the aircraft's attitude hold, engaged and released with it.
+    vertical {ralt, alt, altp}, longitudinal {ias, hvr}, lateral {hdg, nav}. HVR slows
+    to a stop and holds it on the attitude hold, releasing that when it disengages.
 
     Refused while the flight director's gate is shut, off the ground for anything
     but the vertical modes, and for NAV with no waypoint.
@@ -45,8 +45,9 @@ if (_mode == "hvr" && {!(_heli getVariable ["bmkhs_fmcAttHoldAvail", false])}) e
 private _axis = [["ralt", "alt", "altp"], ["ias", "hvr"], ["hdg", "nav"]] select {_mode in _x} select 0;
 { if (_x != _mode) then { _x call _off } } forEach _axis;
 
+//HVR slows the aircraft itself, then engages the attitude hold over the spot it stops on
 if (_mode == "hvr") then {
-    if !(_heli getVariable "bmkhs_attHoldActive") then { [_heli] call bmkhs_fnc_fmcAttitudeHoldEnable };
+    if (_heli getVariable "bmkhs_attHoldActive") then { [_heli] call bmkhs_fnc_fmcAttitudeHoldEnable };
 };
 
 [_heli, "bmkhs_fd_" + _mode, true] call bmkhs_fnc_utilUpdateNetworkGlobal;

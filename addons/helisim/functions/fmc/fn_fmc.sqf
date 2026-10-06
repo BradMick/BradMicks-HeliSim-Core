@@ -26,9 +26,6 @@ private _fdOn  = "FlightDirector" call _open;
 [_heli, "bmkhs_fmcHdgHoldAvail", _hdgOn] call bmkhs_fnc_utilUpdateNetworkGlobal;
 [_heli, "bmkhs_fmcFdAvail",      _fdOn]  call bmkhs_fnc_utilUpdateNetworkGlobal;
 
-//Control mixing - mechanical mixes always apply; electronic ones carry their own gates
-([_heli] call bmkhs_fnc_fmcControlMixing)
-    params ["_mixPitchOut", "_mixRollOut", "_mixYawOut"];
 //Attitude Hold
 ([_heli, _fmc getOrDefault ["AttitudeHold", createHashMap], _attOn] call bmkhs_fnc_fmcAttitudeHold)
     params ["_attHoldCycPitchOut", "_attHoldCycRollOut"];
@@ -69,6 +66,24 @@ if (!(_heli getVariable "bmkhs_fmcYawOn")) then {
 if (!(_heli getVariable "bmkhs_fmcCollOn")) then {
     _altHoldCollOut = 0.0;
 };
+
+//A flight director vertical mode drives the collective lever itself, from where the lever was
+//when the mode coupled - so the lever is always where the collective is, and whoever takes it
+//back takes it from there (fn_inputUpdate). The altitude hold still adds on top of the lever.
+private _fd = _fmc getOrDefault ["FlightDirector", createHashMap];
+if ("coll" in _fdOut && {_heli getVariable "bmkhs_fmcCollOn"}) then {
+    private _base = _fd getOrDefault ["collBase", _heli getVariable "bmkhs_collectiveOutput"];
+    _fd set ["collBase", _base];
+    _heli setVariable ["bmkhs_collectiveOutput", ((_base + _altHoldCollOut) max 0) min 1];
+    _altHoldCollOut = 0.0;
+} else {
+    _fd deleteAt "collBase";
+};
+
+//Control mixing - mechanical mixes always apply; electronic ones carry their own gates. It
+//sees the collective the rotor gets, the pilot's and the coupler's.
+([_heli, (((_heli getVariable "bmkhs_collectiveOutput") + _altHoldCollOut) max 0) min 1] call bmkhs_fnc_fmcControlMixing)
+    params ["_mixPitchOut", "_mixRollOut", "_mixYawOut"];
 
 //Control mixing outputs
 _heli setVariable ["bmkhs_mixPitchOut",                  _mixPitchOut];

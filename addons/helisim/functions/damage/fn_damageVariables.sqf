@@ -29,8 +29,10 @@ Author:
 ---------------------------------------------------------------------------- */
 params ["_heli", "_config"];
 
-//Without these the aircraft is not a helicopter.
-#define BMKHS_DAMAGE_REQUIRED ["mainRotor", "transmission"]
+//Without these the aircraft is not a helicopter. With no systems modelled Core keeps the
+//transmission itself (fn_systemsComponents), so it needs no hitpoint.
+private _required = ["mainRotor", "transmission"];
+if !(_heli getVariable ["bmkhs_useSystems", false]) then { _required = ["mainRotor"] };
 
 private _damage = createHashMap;
 
@@ -62,6 +64,12 @@ if ((_damage getOrDefault ["engines", []]) isEqualTo []) then {
     if (_shared isNotEqualTo []) then { _damage set ["engines", _shared] };
 };
 
+//No rotor hitpoints - Arma's own, which every helicopter has.
+{
+    _x params ["_role", "_hitpoint"];
+    if ((_damage getOrDefault [_role, []]) isEqualTo []) then { _damage set [_role, [_hitpoint]] };
+} forEach [["mainRotor", "hithrotor"], ["tailRotor", "hitvrotor"]];
+
 {
     if ((_damage getOrDefault [_x, []]) isEqualTo []) then {
         diag_log text format [
@@ -69,6 +77,6 @@ if ((_damage getOrDefault ["engines", []]) isEqualTo []) then {
             _x
         ];
     };
-} forEach BMKHS_DAMAGE_REQUIRED;
+} forEach _required;
 
 _heli setVariable ["bmkhs_damagePoints", _damage];
