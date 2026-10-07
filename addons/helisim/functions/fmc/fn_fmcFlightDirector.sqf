@@ -49,8 +49,8 @@ if (!_on) exitWith {
     createHashMap
 };
 
-private _dt     = _heli getVariable "bmkhs_deltaTime";
-private _hdgNow = getDir _heli;
+private _deltaTime = _heli getVariable "bmkhs_deltaTime";
+private _hdgNow    = getDir _heli;
 (_heli call BIS_fnc_getPitchBank) params ["_pitchNow", "_bankNow"];
 //Airspeed, forward through the air; ground velocity, model space - m/s
 private _airspeed = (_heli getVariable "bmkhs_velModelSpace") select 1;
@@ -65,7 +65,7 @@ private _altNow   = (_heli getVariable "bmkhs_barAlt") * FEET_TO_METERS;
 private _slew = {
     params ["_key", "_want", "_rate", "_now"];
     private _ref  = _fd getOrDefault [_key, _now];
-    private _step = _rate * _dt;
+    private _step = _rate * _deltaTime;
     _ref = _ref + (((_want - _ref) max -_step) min _step);
     _fd set [_key, _ref];
     _ref
@@ -128,7 +128,7 @@ if (_vMode isNotEqualTo []) then {
     private _cmd   = ["climbRef", _want, (_fd get "vsAccelFpm") * FPM_TO_MPS, _climbNow] call _slew;
 
     _log set [0, _cmd];
-    private _coll = [_fd get "vs", _dt, _cmd, _climbNow] call bmkhs_fnc_pidRun;
+    private _coll = [_fd get "vs", _deltaTime, _cmd, _climbNow] call bmkhs_fnc_pidRun;
     _out set ["coll", (_coll max -(_fd get "collAuthority")) min (_fd get "collAuthority")];
 } else {
     [_fd get "vs"] call bmkhs_fnc_pidReset;
@@ -140,11 +140,11 @@ if ("ias" call _engaged) then {
     private _maxPitch = _fd get "maxPitchDeg";
     private _spd = ["iasRef", _heli getVariable "bmkhs_fdTgt_ias", (_fd get "iasAccelKts") * KNOTS_TO_MPS, _airspeed] call _slew;
     //Slow is nose down
-    private _wantPitch = -([_fd get "ias", _dt, _spd, _airspeed] call bmkhs_fnc_pidRun);
+    private _wantPitch = -([_fd get "ias", _deltaTime, _spd, _airspeed] call bmkhs_fnc_pidRun);
     _wantPitch = (_wantPitch max -_maxPitch) min _maxPitch;
     _wantPitch = ["pitchRef", _wantPitch, _fd get "pitchRateDps", _pitchNow] call _slew;
     _log set [1, _wantPitch];
-    private _pitch = -([_fd get "pitch", _dt, 0.0, _pitchNow - _wantPitch] call bmkhs_fnc_pidRun);
+    private _pitch = -([_fd get "pitch", _deltaTime, 0.0, _pitchNow - _wantPitch] call bmkhs_fnc_pidRun);
     _out set ["pitch", (_pitch max -_cycAuth) min _cycAuth];
 } else {
     [_fd get "ias"] call bmkhs_fnc_pidReset;
@@ -159,12 +159,12 @@ private _hvr = "hvr" call _engaged;
 if (_hvr && {!(_fd getOrDefault ["hvrHeld", false])}) then {
     private _ref = _fd getOrDefault ["hvrRef", [_gndVelX, _gndVelY]];
     private _mag = vectorMagnitude [_ref select 0, _ref select 1, 0];
-    private _new = (_mag - ((_fd get "hvrDecelKts") * KNOTS_TO_MPS * _dt)) max 0;
+    private _new = (_mag - ((_fd get "hvrDecelKts") * KNOTS_TO_MPS * _deltaTime)) max 0;
     _ref = if (_mag > 0) then { [(_ref select 0) * (_new / _mag), (_ref select 1) * (_new / _mag)] } else { [0, 0] };
     _fd set ["hvrRef", _ref];
 
-    private _roll  = [_fd get "hvrRoll",  _dt, -(_ref select 0), -_gndVelX] call bmkhs_fnc_pidRun;
-    private _pitch = [_fd get "hvrPitch", _dt,  (_ref select 1),  _gndVelY] call bmkhs_fnc_pidRun;
+    private _roll  = [_fd get "hvrRoll",  _deltaTime, -(_ref select 0), -_gndVelX] call bmkhs_fnc_pidRun;
+    private _pitch = [_fd get "hvrPitch", _deltaTime,  (_ref select 1),  _gndVelY] call bmkhs_fnc_pidRun;
     _out set ["roll",  (_roll  max -_cycAuth) min _cycAuth];
     _out set ["pitch", (_pitch max -_cycAuth) min _cycAuth];
 
@@ -190,7 +190,7 @@ if (_lMode isNotEqualTo []) then {
         private _bank     = ((_rateBank min (_fd get "maxBankDeg")) min ((abs _hdgErr) * (_fd get "bankPerDeg")));
         private _wantBank = ["bankRef", _bank * ([1, -1] select (_hdgErr < 0)), _fd get "rollRateDps", _bankNow] call _slew;
         _log set [2, _wantBank];
-        private _roll = -([_fd get "roll", _dt, 0.0, _bankNow - _wantBank] call bmkhs_fnc_pidRun);
+        private _roll = -([_fd get "roll", _deltaTime, 0.0, _bankNow - _wantBank] call bmkhs_fnc_pidRun);
         _out set ["roll", (_roll max -_cycAuth) min _cycAuth];
         [_fd get "yaw"] call bmkhs_fnc_pidReset;
     } else {
@@ -198,13 +198,13 @@ if (_lMode isNotEqualTo []) then {
         if (!_hvr) then {
             private _wantBank = ["bankRef", 0.0, _fd get "rollRateDps", _bankNow] call _slew;
             _log set [2, _wantBank];
-            private _roll = -([_fd get "roll", _dt, 0.0, _bankNow - _wantBank] call bmkhs_fnc_pidRun);
+            private _roll = -([_fd get "roll", _deltaTime, 0.0, _bankNow - _wantBank] call bmkhs_fnc_pidRun);
             _out set ["roll", (_roll max -_cycAuth) min _cycAuth];
         } else {
             [_fd get "roll"] call bmkhs_fnc_pidReset;
             _fd deleteAt "bankRef";
         };
-        private _yaw = [_fd get "yaw", _dt, 0.0, [_hdgNow - _tgtHdg] call CBA_fnc_simplifyAngle180] call bmkhs_fnc_pidRun;
+        private _yaw = [_fd get "yaw", _deltaTime, 0.0, [_hdgNow - _tgtHdg] call CBA_fnc_simplifyAngle180] call bmkhs_fnc_pidRun;
         _out set ["yaw", (_yaw max -(_fd get "pedAuthority")) min (_fd get "pedAuthority")];
     };
 } else {

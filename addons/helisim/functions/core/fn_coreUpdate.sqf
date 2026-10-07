@@ -24,6 +24,17 @@ if (isGamePaused || CBA_missionTime < 0.1) exitWith {
     _heli setVariable ["bmkhs_deltaTime_avg", [bmkhs_movingAverageSize] call bmkhs_fnc_smoothAverageInit];
 };
 
+//Idle gate - no player aboard and nothing left running
+if (((crew _heli) findIf {isPlayer _x}) < 0
+    //AI pilot - enable with Preston
+    //&& {!(alive driver _heli && {!isPlayer driver _heli})}
+    && {((_heli getVariable "bmkhs_engState") findIf {_x != "OFF"}) < 0}
+    && {(_heli getVariable "bmkhs_rtrRpm") <= 0.01}
+    && {!(_heli getVariable "bmkhs_apuOn")}
+    && {!(_heli getVariable "bmkhs_battBusOn")}) exitWith {
+    _heli setVariable ["bmkhs_previousTime", diag_tickTime];
+};
+
 if (isAutoHoverOn _heli) then {
     _heli action ["AutoHoverCancel", _heli];
 };
