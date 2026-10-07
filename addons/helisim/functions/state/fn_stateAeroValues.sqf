@@ -40,8 +40,8 @@ private _bodyAccel   = _heli getVariable "bmkhs_bodyAccel";
 private _accel_x     = _bodyAccel # 0;
 private _beta_g_raw  = _accel_x / GRAVITY;
 _beta_g_raw = [_beta_g_raw, -1.0, 1.0] call BIS_fnc_clamp;
-private _dt          = _heli getVariable ["bmkhs_deltaTime", 0.03];
-private _alpha       = if (_dt > 0.0 && {_dt < 1.0}) then { 1.0 - (exp (-_dt / BETA_G_TAU)) } else { 1.0 };
+private _deltaTime   = _heli getVariable "bmkhs_deltaTime";
+private _alpha       = if (_deltaTime > 0.0 && {_deltaTime < 1.0}) then { 1.0 - (exp (-_deltaTime / BETA_G_TAU)) } else { 1.0 };
 private _beta_g_prev = _heli getVariable "bmkhs_aero_beta_g_prev";
 private _beta_g      = _beta_g_prev + ((_beta_g_raw - _beta_g_prev) * _alpha);
 

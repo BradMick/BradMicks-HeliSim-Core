@@ -22,6 +22,7 @@ Examples:
 Author:
     BradMick
 ---------------------------------------------------------------------------- */
+#include "\bmkhs_helisim\functions\core\core.hpp"
 #include "\bmkhs_helisim\functions\rotor\rotor.hpp"
 
 params ["_heli", "_config"];
@@ -71,6 +72,9 @@ for "_i" from 1 to _numSimpleRotors do {
 
     { _rotor set [_x, getNumber (_r >> _x)]; } forEach _numFields;
     { _rotor set [_x, getArray  (_r >> _x)]; } forEach _arrFields;
+
+    //Never-exceed speed, kts - optional, 180 when not declared; held in m/s
+    _rotor set ["vne", ([180, getNumber (_r >> "vne")] select (isNumber (_r >> "vne"))) * KNOTS_TO_MPS];
 
     //Authored grids, header row and all - the builder validates them and reports by name.
     {
