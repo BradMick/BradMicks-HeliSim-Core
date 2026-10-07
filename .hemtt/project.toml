@@ -18,7 +18,9 @@ include = [
     "README.md",
     "mod.cpp",
     "logo.paa",
+    "python/dev/airframe.py",
     "python/dev/engine.py",
+    "python/dev/forces.py",
     "python/tools/compressor_map.py",
     "python/tools/fm_generateAeroSurfacePoints.py",
 ]
