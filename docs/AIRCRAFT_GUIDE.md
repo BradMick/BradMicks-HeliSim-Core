@@ -629,6 +629,217 @@ pushes either way with the pedal, and its sideslip is read against whichever way
 Outside REALISTIC Core sets every tail rotor upright - pitch 0, roll 90 - so a canted tail rotor
 yaws without pitching or rolling the aircraft. Nothing to declare.
 
+### Fitting the main rotor tables
+
+The main rotor's `liftCoefTable` and `dragCoefTable` are solved in `python/dev/airframe.py` - the
+rig, the virtual wind tunnel. The rig is a 1:1 port of Core's force path (`fn_simpleRotor`, the
+fuselage, every wing and the stabilator schedule), so it IS the rotor model: fit the tables
+through it as it is written. Do not generate them from outside rotor theory, and do not change
+the rig to make a fit work - if the rig and the SQF disagree, the SQF is right.
+
+The UH-60 is fitted this way, at sea level. (The EC665 Tiger, pack commit `5106547`, was fitted
+by an earlier version of this method - rows built from fixed offsets, which put a step in the
+power above its 0.64 row; it has not been refitted.)
+
+The tables have two axes and each gets its own shape. Down the rows, collective: the blade's
+lift curve, which rises, peaks and stalls (step 4). Across the columns, airspeed: the standard
+power curve, which every column is fitted to (step 5).
+
+**1. Targets.** From the aircraft's performance data, at its mid gross weight, sea level, 15 C,
+out of ground effect:
+
+| Target | What it sets | UH-60 (18,000 lb) |
+|---|---|---|
+| OGE hover: torque, and the collective it should sit near | the collective shape's hover row | 81%, ~0.64 (lands at 0.621) |
+| Heavier OGE hovers: weight and torque | the collective shape above the hover | 22,000 lb 105%; 23,500 lb 115% (the heaviest) |
+| Max endurance: speed and torque | the power curve's sag | 68 kt, 44% |
+| Max range: speed, where torque is back to the OGE torque | the power curve's top | 140 kt, 81% |
+| Cruise attitude: the main rotor's mast tilt, as nose-low pitch | the front fuselage drag | 3 deg nose low at 140 kt |
+
+Every aerodynamic value that sets these trims is solved for them together - the rotor tables,
+the front fuselage drag and the stabilator schedule - not one at a time. Values Core takes as a
+convention stay as Core has them: `flapBackPitchMax` and the other flap values keep their sign
+and are not fitting variables.
+
+**2. Mass and centre of mass.** Load the aircraft to the target weight from its own
+`helisim_mass.hpp`, the way `fn_massUpdate` does:
+
+- The empty airframe: `emptyMass`, its arm `fsDatum - emptyMom / emptyMass`.
+- The variant's default equipment. A part is fitted when its animation source's `initPhase`
+  (from the vehicle's `AnimationSources`, the variant's own `ANIM_INIT` overrides first) is on
+  the same side of 0.5 as its `installedPhase`.
+- Crew in their seats, then troops or cargo; magazine rounds at `massPerRound`; fuel in each
+  tank at its arm. Trim the fuel to land on the target weight exactly.
+
+Then, with every arm `{right, forward, up}`:
+
+    longCG = (emptyMass * fsDatum - emptyMom + sum(mass * arm.forward)) / gwt
+    latCG  = sum(mass * arm.right) / gwt
+    CoM    = [latCG, longCG, 0] - boundingCenter + comCorrection
+
+Give the rig `--bc` (`boundingCenter vehicle player`, from the game) and `--cg` (the CoM above)
+and it solves cyclic for zero pitching moment. Without them it only balances forces, at a
+cyclic you hand it, and the pitch attitudes it prints are not the aircraft's.
+
+Check the CoM against the game before fitting: load the aircraft as above, then read
+`getCenterOfMass vehicle player` in REALISTIC (CASUAL sets `casualModeCom` instead). Fit with the
+game's value. The UH-60 at 18,000 lb reads [0.028, 1.787, 0.300]; the sum above gave 1.578, and
+the logged attitudes matched only the game's.
+
+**3. The stabilator - zero angle of attack at cruise.** An aircraft with a surface named
+`stabilator` flies its `heliSimStabTable` in the rig, settled where `fn_wing` puts it.
+
+At the cruise anchor the stabilator sits parallel to the airflow: zero angle of attack, carrying
+no lift. In level flight that is parallel to the ground, so its incidence there equals the cruise
+pitch attitude - and the cruise attitude is the main rotor's mast tilt. A mast tilted 3 deg
+forward (`rotation[] = {-3, 0, 0}`) flies 3 deg nose low, and the stabilator reads -3 there
+(negative is trailing edge down). The stabilator does not hold the attitude: a stabilator
+trimming the aircraft with lift at cruise is fighting a rotor or airframe that is wrong.
+
+The attitude itself comes from the force balance. The disc must lean forward far enough for its
+thrust to pull against the airframe's drag, and the airframe follows the disc; with the rotor's
+values as Core has them, the front fuselage drag sets how far. Solve it with the rotor tables
+(step 5) so the cruise anchor trims at the mast tilt with the stabilator at that incidence. The
+UH-60's front drag coefficient came out 0.497 at sea level, written flat across altitude.
+`fn_fuselageFront` reads that table by `bmkhs_barAlt`; altitude is not fitted yet.
+
+The schedule is rebuilt from the AH-64D's, the most complete stabilator schedule there is:
+scaled about its -25 deg low-speed end so the cruise anchor's collective and speed read the
+cruise attitude, which keeps its shape - trailing edge down at low speed against the rotor
+wash, easing toward the incidence at speed. Core reads 14 columns: 30, 40, 50, 57.5, 80, 82.5,
+100, 115, 120, 140, 150, 160, 165 and 180 kt.
+
+**4. The collective shape - a blade's lift curve.** Down the rows, lift behaves like an airfoil's
+lift against angle of attack: one straight line from collective 0 up to a peak, then a fall-off
+as the blade stalls. Do not build it from offsets or an airfoil table - offsets put a step in
+lift above a row, so a little collective buys a lot of thrust and torque stops answering density
+and speed.
+
+This step builds the HOVER COLUMN only - the 0 m/s column of both tables. Every rig call is a
+level hover at 0 m/s, sea level (`density(0, 15)`), out of ground effect, at the fitting CoM.
+Inputs: the hover points - weight and torque - from the lightest (the mid gross weight) to the
+heaviest; the pack's current drag at collective 0; the peak collective `cp` (UH-60: 0.85).
+
+CL (`liftCoefTable`), hover column:
+
+1. Rows: `0`, `cp`, and three fall-off rows evenly spaced from `cp` to 1.0 (UH-60: 0, 0.85,
+   0.90, 0.95, 1.00).
+2. Write the column in terms of the peak value `CLp`:
+   `CL(0) = 0.106 * CLp`, `CL(cp) = CLp`, then `0.957 * CLp`, `0.883 * CLp`, `0.766 * CLp`.
+   Collective 0 to `cp` is then one straight line; past `cp` the blade stalls.
+3. Solve `CLp`: the rotor's thrust at collective `cp` must equal the HEAVIEST hover weight, plus
+   0.1% so that weight still trims just below the peak (exactly at it, rounding can leave it a
+   hair short and the trim fails). Repeat `CLp = CLp * (Wmax * g * 1.001) / thrust(cp)` until
+   it settles, where `thrust(cp)` is the main rotor's vertical force from
+   `airframe.Airframe(...).forces` at 0 m/s, collective `cp`.
+4. Trim each lighter hover weight in the rig (`trim` with `solveCyc`, 0 m/s). The collective it
+   lands on is that weight's hover collective `ci` - it falls out of the line, it is not chosen.
+   UH-60: 18,000 lb at 0.621, 22,000 lb at 0.786.
+
+CD (`dragCoefTable`), hover column:
+
+5. Rows: `0`, each hover collective `ci` from step 4 (ascending), `cp`, and the same three
+   fall-off rows. The two grids are separate, so their rows need not match.
+6. `CD(0)` stays the pack's own value - the torque at flat pitch, idle, does not move.
+7. Solve `CD(ci)` for each lighter hover, and `CD(cp)` for the heaviest: trim each hover weight
+   and repeat `CD = CD * torqueTarget / torqueTrimmed` for its row until every hover takes its
+   torque (they couple, so iterate all together). Between rows drag runs in straight segments,
+   which bend gently upward from one hover to the next.
+8. Past the peak, the stall: `1.3 * CD(cp)`, `1.8 * CD(cp)`, `2.6 * CD(cp)` at the three fall-off
+   rows, so full collective overtorques.
+
+The UH-60's hover column:
+
+| Collective | 0 | 0.621 (18,000 lb, 81%) | 0.786 (22,000 lb, 105%) | 0.85 peak (23,500 lb, 115%) | 0.90 | 0.95 | 1.00 |
+|---|---|---|---|---|---|---|---|
+| Lift | 0.0390 | (on the line) | (on the line) | 0.3666 | 0.3510 | 0.3237 | 0.2808 |
+| Drag | 0.0078 | 0.0349 | 0.0455 | 0.0500 | 0.0650 | 0.0900 | 0.1300 |
+
+Lift and drag are separate grids, so their rows need not match. Every airspeed column has this
+same shape, scaled (step 6).
+
+**5. The standard power curve.** Across the columns, torque against airspeed follows one
+dimensionless shape - torque over the OGE hover torque, against airspeed over the max-range
+speed. It is the mid gross weight line: a steep fall out of the hover as translational lift
+builds, a flat bucket, then a hard climb as parasite power takes over:
+
+| V / V_maxrange | 0 | .071 | .143 | .214 | .286 | .357 | .429 | .486 | .500 | .571 | .643 | .714 | .786 | .857 | .929 | 1.000 | 1.071 | 1.143 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| TQ / TQ_OGE | 1.000 | .914 | .778 | .667 | .593 | .568 | .543 | .543 | .543 | .543 | .568 | .617 | .679 | .765 | .864 | 1.000 | 1.210 | 1.407 |
+| UH-60 kt | 0 | 10 | 20 | 30 | 40 | 50 | 60 | 68 | 70 | 80 | 90 | 100 | 110 | 120 | 130 | 140 | 150 | 160 |
+| UH-60 TQ% | 81 | 74 | 63 | 54 | 48 | 46 | 44 | 44 | 44 | 44 | 46 | 50 | 55 | 62 | 70 | 81 | 98 | 114 |
+
+Three set points place it for an aircraft: OGE hover torque `TQh`, max endurance (`Vme`, `TQme`)
+and max range `Vmr` (where torque is back to `TQh`). With `S(x)` the standard row above and
+`x = V / Vmr`:
+
+- Sag: `r = TQme / TQh`. Between the hover and max range (`x <= 1`) the curve deepens or
+  flattens toward its floor in the same shape: `S'(x) = 1 - (1 - S(x)) * (1 - r) / (1 - 0.543)`.
+  Past max range it keeps the standard: `S'(x) = S(x)`.
+- Bucket position: the standard's bucket sits at `x = 0.486`. If `Vme / Vmr` differs, move it
+  there by stretching the speed axis in two straight pieces, `0 -> 0.486` onto `0 -> Vme/Vmr` and
+  `0.486 -> 1` onto `Vme/Vmr -> 1`.
+- Torque target at any speed: `TQ(V) = TQh * S'(V / Vmr)`.
+
+For the UH-60 at 18,000 lb (`TQh` 81%, `Vme` 68 kt at 44%, `Vmr` 140 kt) this gives back the
+standard exactly.
+
+**6. Solve the airspeed columns.** The hover column (step 4) is scaled into every other column:
+
+1. Columns, in m/s: one at each power-curve speed - `kt * 0.514444` - plus one past the end at
+   92.60 (180 kt). Core reads any column set. UH-60: 0, 5.14, 10.29, 15.43, 20.58, 25.72, 30.87,
+   34.98, 36.01, 41.16, 46.30, 51.44, 56.59, 61.73, 66.88, 72.02, 77.17, 82.31, 92.60.
+2. Each column `k` is the hover column times two numbers: `CL(row, k) = sL[k] * CL(row, 0)` and
+   `CD(row, k) = sD[k] * CD(row, 0)`, every row. The hover column has `sL = sD = 1`.
+3. Each column's targets, at the mid gross weight, sea level, 15 C, level flight at that
+   column's speed, cyclic solved:
+   - torque: `TQ(V)` from step 5;
+   - collective: a straight line in torque through the hover point (`ch`, `TQh`) and the bucket
+     point (`cme`, `TQme`), with `cme = 0.54 * ch` (UH-60: 0.621 and 0.336). Past max range it
+     continues at the slope of the last two columns before it, so it stays below the peak.
+4. Solve every `sL[k]`, `sD[k]` together: Newton on the rig's trims - residuals are each
+   column's trimmed collective and torque minus its targets, the Jacobian by finite differences
+   (step 1e-4). Start from 1.0, or from a previous fit's columns.
+5. The extra column (92.60 m/s): each scale continues the line through the last two columns.
+6. Round to four places and write both tables: CL rows from step 1, CD rows from step 5, the
+   columns above.
+
+The UH-60 lands every power-curve point within 0.1%. The table's columns are the rotor's
+disc-plane speed, not the airspeed - the rig reads the trimmed velocity in the disc's own plane.
+
+**7. Control mixing.** The collective mixes in `ControlMixing` (`CollectiveToYaw`,
+`CollectiveToRoll`, `CollectiveToPitch`) are the hover trims of these tables, so they change
+with them. Regenerate them with `forces.py` at the same CoM and the pack's compensation
+fraction (the UH-60 uses 0.8, so the pilot still holds left pedal with power):
+
+    python python/dev/forces.py --cg X Y Z --gwt KG --fraction 0.8
+
+The yaw mixes (`YawToPitch`, `YawToRoll`) come from the tail rotor; they move only if its tables
+did.
+
+**8. Check.** The written tables are rounded to four places: sweep again with the written
+values, not the solver's. The fit is sea level; sweep at altitude (`--pa`, `--fat`) to see what
+it does there. A trim that reports `NO` at collective 1.0 past the cruise anchor may
+be the solver's starting guess, not the aircraft: the command line starts `trim` at pitch -1,
+collective 0.6, cyclic 0, and a sweep starts each speed from the last one's answer. Start it from
+the cruise anchor's trim before believing it:
+
+```python
+import airframe as A
+af = A.Airframe(bc, cg)
+t = A.trim(af, kt / A.MPS_TO_KNOTS, gwt, A.density(0, 15), 0, solveCyc=True,
+           guess=(cruisePitch, cruiseColl, cruiseCyc))
+```
+
+Then fly it with the flight log on and `replay` the log through the rig.
+
+```
+set BMKHS_CONFIG=<pack>\config\bmkhs_config
+python python/dev/airframe.py trim  --kt 140 --gwt 8165 --bc 0 0 0 --cg 0.028 1.787 0.300
+python python/dev/airframe.py sweep --gwt 8165 --bc 0 0 0 --cg 0.028 1.787 0.300
+python python/dev/airframe.py replay <Arma3.rpt> --gwt 8165
+```
+
 ### The FMC
 
 SAS, the attitude, altitude and heading holds and the flight director are declared in `class FMC`, beside the
