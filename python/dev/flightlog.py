@@ -5,6 +5,9 @@ Run it:  python python/dev/flightlog.py [rpt] [--csv out.csv]
 With no RPT given, takes the newest in %LOCALAPPDATA%\\Arma 3. Each BMKHSLOG_HDR starts a new
 table; the rows that follow it are parsed against its columns. Prints a summary of each table
 and, with --csv, writes the last one out.
+
+The RPT cuts long lines, so the log splits a header or row between columns: BMKHSLOG_HDR+ and
+BMKHSLOG+ lines continue the line before them.
 """
 import argparse
 import csv
@@ -19,21 +22,36 @@ def newest_rpt():
     return max(rpts, key=os.path.getmtime)
 
 
-def tables(path):
-    """[(columns, [row dicts])], one per header."""
-    out = []
+def lines(path):
+    """(tag, fields) per log line, continuation lines joined on: tag is BMKHSLOG_HDR or BMKHSLOG."""
+    tag, fields = None, []
     with open(path, encoding='utf-8', errors='replace') as f:
         for line in f:
             i = line.find('BMKHSLOG')
             if i < 0:
                 continue
             parts = line[i:].rstrip('\r\n').strip('"').split(',')
-            if parts[0] == 'BMKHSLOG_HDR':
-                out.append((parts[1:], []))
-            elif parts[0] == 'BMKHSLOG' and out:
-                cols = out[-1][0]
-                if len(parts) - 1 == len(cols):
-                    out[-1][1].append(dict(zip(cols, parts[1:])))
+            if parts[0].endswith('+'):
+                if tag == parts[0][:-1]:
+                    fields += parts[1:]
+                continue
+            if tag:
+                yield tag, fields
+            tag, fields = parts[0], parts[1:]
+    if tag:
+        yield tag, fields
+
+
+def tables(path):
+    """[(columns, [row dicts])], one per header."""
+    out = []
+    for tag, fields in lines(path):
+        if tag == 'BMKHSLOG_HDR':
+            out.append((fields, []))
+        elif tag == 'BMKHSLOG' and out:
+            cols = out[-1][0]
+            if len(fields) == len(cols):
+                out[-1][1].append(dict(zip(cols, fields)))
     return out
 
 

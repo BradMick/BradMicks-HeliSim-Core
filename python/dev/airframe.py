@@ -38,6 +38,7 @@ import sys
 sys.path.insert(0, os.path.dirname(__file__))
 import engine as E  # noqa: E402 - reads BMKHS_CONFIG at import
 import forces as FO  # noqa: E402
+import flightlog as FL  # noqa: E402
 
 _add, _sub, _mul, _dot, _cross = FO._add, FO._sub, FO._mul, FO._dot, FO._cross
 _sin, _cos = FO._sin, FO._cos
@@ -448,14 +449,7 @@ def report_parts(af, a, kt):
 
 def replay(af, path, gwt):
     """Steady stretches of the newest flight log, re-flown at the logged state."""
-    hdr, rows = None, []
-    for line in open(path, errors='ignore'):
-        if 'BMKHSLOG_HDR,' in line:
-            hdr = line.split('BMKHSLOG_HDR,')[1].strip().split(',')
-        elif 'BMKHSLOG,' in line and hdr:
-            v = line.split('BMKHSLOG,')[1].strip().split(',')
-            if len(v) == len(hdr):
-                rows.append(dict(zip(hdr, v)))
+    rows = [r for _, t in FL.tables(path) for r in t]
     fl = lambda r, k: float(r[k])
     seg, segs = [], []
     for i in range(1, len(rows)):

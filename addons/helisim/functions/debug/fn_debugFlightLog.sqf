@@ -6,6 +6,10 @@ Description:
     second as comma-separated BMKHSLOG lines. A BMKHSLOG_HDR line names the
     columns, once per aircraft and whenever the log is switched on.
 
+    The RPT cuts a line at about 1020 characters, so a header or row longer
+    than 900 goes out in pieces, split between columns: the first under its
+    own tag, the rest as BMKHSLOG_HDR+ and BMKHSLOG+ lines that continue it.
+
 Parameters:
     _heli - The helicopter [Object]
 
@@ -62,9 +66,28 @@ private _cols = [
   + (_ownDmg apply {"dmg_" + ((_x select 0) select [6])})
   + (_sysVars apply {"sys_" + (_x select [6])});
 
+//Writes [tag, columns] as lines under 900 characters, the pieces after the first tagged tag+
+private _logLines = {
+    params ["_tag", "_items"];
+    private _buf = [];
+    private _len = 0;
+    private _cont = "";
+    {
+        if (_len + (count _x) + 1 > 900 && {_buf isNotEqualTo []}) then {
+            diag_log text (_tag + _cont + "," + (_buf joinString ","));
+            _cont = "+";
+            _buf = [];
+            _len = 0;
+        };
+        _buf pushBack _x;
+        _len = _len + (count _x) + 1;
+    } forEach _items;
+    diag_log text (_tag + _cont + "," + (_buf joinString ","));
+};
+
 if !(_heli getVariable ["bmkhs_flightLogHdr", false]) then {
     _heli setVariable ["bmkhs_flightLogHdr", true];
-    diag_log text ("BMKHSLOG_HDR," + (_cols joinString ","));
+    ["BMKHSLOG_HDR", _cols] call _logLines;
 };
 
 private _f = { _this toFixed 3 };
@@ -119,4 +142,4 @@ private _row = [
         if (_v isEqualType true) then { str (_v call _b) } else { if (_v isEqualType 0) then { _v call _f } else { "?" } }
     });
 
-diag_log text ("BMKHSLOG," + (_row joinString ","));
+["BMKHSLOG", _row] call _logLines;
