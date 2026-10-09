@@ -183,6 +183,8 @@ def main():
     ap.add_argument('--mr', type=float, required=True)
     ap.add_argument('--peak', type=float, default=0.85)
     ap.add_argument('--etl-drop', type=float, default=0.05)
+    ap.add_argument('--cruise-pitch', type=float, default=None,
+                    help='deg, nose up positive: solve the front fuselage drag so max range trims here')
     a = ap.parse_args()
 
     hover = sorted(((_weight(w), float(t) / 100.0) for w, t in (h.split(':') for h in a.hover)), key=lambda p: p[0])
@@ -205,16 +207,6 @@ def main():
     n = len(cols)
     sd = drag_scales(curve, a.mr, a.etl_drop)
     G = [(3.0, ch, 0.0)] * n
-
-    def res(x):
-        fit.set_tables(lrows, lift, drows, drag, cols, x, sd)
-        r = []
-        for i, (kt, tq) in enumerate(curve):
-            t = fit.level(kt, wmid, G[i])
-            if t['ok']:
-                G[i] = (t['pitch'], t['coll'], t['cyc'])
-            r.append(t['tq'] - tq)
-        return r
 
     #One column at a time, bracketed: more lift needs less collective, so less torque. A trim that
     #fails is past the stall - too little lift. Later columns ride along on the first pass; then
@@ -246,18 +238,53 @@ def main():
                 break
         return with_(hi)
 
-    x = [1.0] * n
-    for i in range(1, n):
-        G[i] = G[i - 1]
-        x = solve_column(x, i, True)
-    for sweep in range(20):
-        before = list(x)
+    def solve_columns(x):
         for i in range(1, n):
-            x = solve_column(x, i, False)
-        moved = max(abs(p - q) for p, q in zip(x, before))
-        print('columns, pass %d: largest change %.6f' % (sweep, moved), flush=True)
-        if moved < 1e-5:
-            break
+            G[i] = G[i - 1]
+            x = solve_column(x, i, True)
+        for sweep in range(20):
+            before = list(x)
+            for i in range(1, n):
+                x = solve_column(x, i, False)
+            moved = max(abs(p - q) for p, q in zip(x, before))
+            print('columns, pass %d: largest change %.6f' % (sweep, moved), flush=True)
+            if moved < 1e-5:
+                break
+        return x
+
+    #Guide step 3: with --cruise-pitch, the front fuselage drag (flat across altitude) is solved
+    #with the columns so max range trims at that attitude. Each drag value gets its own column
+    #solve; a secant on the drag closes the attitude.
+    front = fit.af.fus['fuselageFront']
+    imr = min(range(n), key=lambda i: abs(curve[i][0] - a.mr))
+
+    def set_front(cd):
+        front['dragCoefTable'] = [[alt, cd] for alt in (0, 2000, 4000, 6000, 8000)]
+
+    def cruise_pitch(cd, x):
+        set_front(cd)
+        x = solve_columns(x)
+        fit.set_tables(lrows, lift, drows, drag, cols, x, sd)
+        t = fit.level(curve[imr][0], wmid, G[imr])
+        print('front drag %.4f: max range %.1f kt trims at %+.2f deg' % (cd, curve[imr][0], t['pitch']), flush=True)
+        return t['pitch'], x
+
+    x = [1.0] * n
+    if a.cruise_pitch is None:
+        x = solve_columns(x)
+        cd = None
+    else:
+        c0 = E.math_linear_interp(front['dragCoefTable'], 0.0)[1]
+        c1 = c0 * 1.5
+        p0, x = cruise_pitch(c0, x)
+        for _ in range(20):
+            p1, x = cruise_pitch(c1, x)
+            if abs(p1 - a.cruise_pitch) < 0.01:
+                break
+            c0, c1, p0 = c1, max(0.01, c1 + (a.cruise_pitch - p1) * (c1 - c0) / (p1 - p0)), p1
+        cd = round(c1, 3)
+        set_front(cd)
+        x = solve_columns(x)
 
     lt, dt = fit.set_tables(lrows, lift, drows, drag, cols, x, sd, nd=4)
     for name, t in (('liftCoefTable', lt), ('dragCoefTable', dt)):
@@ -266,6 +293,8 @@ def main():
         for row in t[1:]:
             print('                        ,{%.3f, ' % row[0] + ', '.join('%.4f' % v for v in row[1:]) + '}')
         print('                        };')
+    if cd is not None:
+        print('\nFront fuselage drag (helisim_fuselage.hpp, fuselageFront dragCoefTable): %.3f, flat' % cd)
 
     print('\nWritten tables, %.0f kg (%.0f lb), sea level, 15 C, cyclic solved:' % (wmid, wmid / LB_TO_KG))
     print('    kt   target   rig   coll   pitch')
