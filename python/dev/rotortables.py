@@ -45,8 +45,28 @@ PEAK_MARGIN = 1.001         #thrust at the peak over the heaviest hover weight, 
 CL_ZERO = 0.106
 CL_FALL = (0.957, 0.883, 0.766)
 CD_STALL = (1.3, 1.8, 2.6)
-BUCKET_COLL = 0.54          #bucket collective / hover collective
 EXTRA_COL = 92.60           #m/s, the column past the end
+
+
+STD_ETL = 40.0 / 140.0      #where translational lift is in, as a fraction of max range
+
+
+def drag_scales(curve, vmr, drop):
+    """Torque at a held collective, per column, as a fraction of the hover's (guide step 6):
+    falls by `drop` through ETL in the curve's own shape, holds flat to max range, then climbs
+    back to 1.0 at the last point so the top of the curve stays below the stall."""
+    tq0 = curve[0][1]
+    tq_etl = E.math_linear_interp(curve, STD_ETL * vmr)[1]
+    last = curve[-1][0]
+    out = []
+    for kt, tq in curve:
+        if kt <= STD_ETL * vmr:
+            out.append(1.0 - drop * (tq0 - tq) / (tq0 - tq_etl))
+        elif kt <= vmr:
+            out.append(1.0 - drop)
+        else:
+            out.append(1.0 - drop * (last - kt) / (last - vmr))
+    return out
 
 
 def _weight(s):
@@ -101,6 +121,7 @@ class Fit:
         drows, drag = [0.0, 1.0], [self.cd0, 0.1]
         for _ in range(100):
             self.set_hover_column(lrows, lift_of(clp), drows, drag)
+            #(drag here is a placeholder - thrust does not read it)
             _, _, _, parts = self.af.forces(self.vel0, 0.0, 0.0, 0.0, self.peak, RHO, 0.0, parts=True)
             thrust = parts['main rotor'][0][2]
             new = clp * wmax * E.GRAVITY * PEAK_MARGIN / thrust
@@ -131,11 +152,13 @@ class Fit:
         return lrows, lift, drows, drag, colls
 
     def set_tables(self, lrows, lift, drows, drag, cols, sl, sd, nd=None):
+        """Every airspeed column is the hover column, lift times sl, drag times sd. sd is fixed
+        by drag_scales (a collective is a torque, bar ETL); sl is what the column solve finds."""
         rd = (lambda a: round(a, nd)) if nd else (lambda a: a)
         allc = cols + [EXTRA_COL]
         k = (EXTRA_COL - cols[-1]) / (cols[-1] - cols[-2])
         sl = list(sl) + [sl[-1] + (sl[-1] - sl[-2]) * k]
-        sd = list(sd) + [sd[-1] + (sd[-1] - sd[-2]) * k]
+        sd = list(sd) + [sd[-1]]
         lt = [['A/S'] + allc] + [[r] + [rd(v * s) for s in sl] for r, v in zip(lrows, lift)]
         dt = [['A/S'] + allc] + [[r] + [rd(v * s) for s in sd] for r, v in zip(drows, drag)]
         self.main['liftCoefTable'], self.main['dragCoefTable'] = lt, dt
@@ -159,6 +182,7 @@ def main():
     ap.add_argument('--me', required=True)
     ap.add_argument('--mr', type=float, required=True)
     ap.add_argument('--peak', type=float, default=0.85)
+    ap.add_argument('--etl-drop', type=float, default=0.05)
     a = ap.parse_args()
 
     hover = sorted(((_weight(w), float(t) / 100.0) for w, t in (h.split(':') for h in a.hover)), key=lambda p: p[0])
@@ -174,70 +198,68 @@ def main():
     for (w, t), c in zip(hover, colls + [a.peak]):
         print('  %7.0f kg (%6.0f lb)  %.0f%% at collective %.3f' % (w, w / LB_TO_KG, t * 100, c))
 
-    #Guide step 6: the airspeed columns
+    #Guide step 6: the airspeed columns. Drag is fixed per column by drag_scales, so torque fixes the
+    #collective; each column's lift scale is solved so level flight at its speed takes the curve's
+    #torque - the sag is in the collective it needs, not in torque drifting with speed.
     cols = [round(kt * KT_TO_MPS, 2) for kt, _ in curve]
-    cme = BUCKET_COLL * ch
-    slope = (ch - cme) / (tqh - tqme)
-    ctar = [ch + (tq - tqh) * slope for _, tq in curve]
-    imr = max(i for i, (kt, _) in enumerate(curve) if kt <= a.mr + 1e-6)
-    for i in range(imr + 1, len(curve)):
-        ctar[i] = ctar[i - 1] + (ctar[imr] - ctar[imr - 1]) * (curve[i][0] - curve[i - 1][0]) / (curve[imr][0] - curve[imr - 1][0])
     n = len(cols)
+    sd = drag_scales(curve, a.mr, a.etl_drop)
     G = [(3.0, ch, 0.0)] * n
 
     def res(x):
-        fit.set_tables(lrows, lift, drows, drag, cols, x[:n], x[n:])
+        fit.set_tables(lrows, lift, drows, drag, cols, x, sd)
         r = []
         for i, (kt, tq) in enumerate(curve):
             t = fit.level(kt, wmid, G[i])
             if t['ok']:
                 G[i] = (t['pitch'], t['coll'], t['cyc'])
-            r += [t['coll'] - ctar[i], t['tq'] - tq]
+            r.append(t['tq'] - tq)
         return r
 
-    #Start each column from the one below it, solving its own two scales (later columns ride
-    #along), then polish all together.
-    sl, sd = [1.0] * n, [1.0] * n
-    for i in range(1, n):
-        sl[i:], sd[i:] = [sl[i - 1]] * (n - i), [sd[i - 1]] * (n - i)
-        for _ in range(30):
-            fit.set_tables(lrows, lift, drows, drag, cols, sl, sd)
-            t = fit.level(curve[i][0], wmid, G[i - 1])
-            r0 = [t['coll'] - ctar[i], t['tq'] - curve[i][1]]
-            if max(abs(v) for v in r0) < 1e-5:
-                break
-            J = []
-            for which in (0, 1):
-                l2, d2 = list(sl), list(sd)
-                (l2 if which == 0 else d2)[i:] = [v * 1.001 for v in (l2 if which == 0 else d2)[i:]]
-                fit.set_tables(lrows, lift, drows, drag, cols, l2, d2)
-                tt = fit.level(curve[i][0], wmid, (t['pitch'], t['coll'], t['cyc']))
-                J.append([(tt['coll'] - ctar[i] - r0[0]) / 0.001, (tt['tq'] - curve[i][1] - r0[1]) / 0.001])
-            dx = A._solve([[J[k][j] for k in range(2)] for j in range(2)], [-v for v in r0])
-            if dx is None:
-                break
-            s = min([1.0] + [0.2 / abs(d) for d in dx if d != 0])
-            sl[i:] = [v * (1 + s * dx[0]) for v in sl[i:]]
-            sd[i:] = [v * (1 + s * dx[1]) for v in sd[i:]]
+    #One column at a time, bracketed: more lift needs less collective, so less torque. A trim that
+    #fails is past the stall - too little lift. Later columns ride along on the first pass; then
+    #sweep again with every column in place until none moves.
+    def column_tq(sl, i):
+        fit.set_tables(lrows, lift, drows, drag, cols, sl, sd)
+        t = fit.level(curve[i][0], wmid, G[i])
+        if t['ok']:
             G[i] = (t['pitch'], t['coll'], t['cyc'])
-    x = sl + sd
-    for it in range(30):
-        r0 = res(x)
-        print('columns, iteration %d: worst residual %.5f' % (it, max(abs(v) for v in r0)), flush=True)
-        if max(abs(v) for v in r0) < 1e-4:
-            break
-        J = []
-        for k in range(2 * n):
-            xx = list(x)
-            xx[k] += 1e-4
-            J.append([(p - q) / 1e-4 for p, q in zip(res(xx), r0)])
-        dx = A._solve([[J[k][j] for k in range(2 * n)] for j in range(2 * n)], [-v for v in r0])
-        if dx is None:
-            raise SystemExit('the column solve went singular')
-        s = min([1.0] + [0.05 / abs(d) for d in dx if d != 0])
-        x = [p + s * d for p, d in zip(x, dx)]
+            return t['tq']
+        return float('inf')
 
-    lt, dt = fit.set_tables(lrows, lift, drows, drag, cols, x[:n], x[n:], nd=4)
+    def solve_column(sl, i, ride):
+        def with_(s):
+            return sl[:i] + [s] * (n - i if ride else 1) + ([] if ride else sl[i + 1:])
+        target = curve[i][1]
+        lo, hi = sl[i], sl[i]
+        while column_tq(with_(lo), i) <= target:
+            lo *= 0.8
+        while column_tq(with_(hi), i) > target:
+            hi *= 1.25
+        for _ in range(60):
+            mid = 0.5 * (lo + hi)
+            if column_tq(with_(mid), i) > target:
+                lo = mid
+            else:
+                hi = mid
+            if hi - lo < 1e-7:
+                break
+        return with_(hi)
+
+    x = [1.0] * n
+    for i in range(1, n):
+        G[i] = G[i - 1]
+        x = solve_column(x, i, True)
+    for sweep in range(20):
+        before = list(x)
+        for i in range(1, n):
+            x = solve_column(x, i, False)
+        moved = max(abs(p - q) for p, q in zip(x, before))
+        print('columns, pass %d: largest change %.6f' % (sweep, moved), flush=True)
+        if moved < 1e-5:
+            break
+
+    lt, dt = fit.set_tables(lrows, lift, drows, drag, cols, x, sd, nd=4)
     for name, t in (('liftCoefTable', lt), ('dragCoefTable', dt)):
         print('\n            %s[] = {' % name)
         print('                        {"A/S", ' + ', '.join('%.2f' % c for c in t[0][1:]) + '}')
