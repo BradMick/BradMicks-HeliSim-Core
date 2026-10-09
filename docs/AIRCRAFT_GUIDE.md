@@ -791,20 +791,27 @@ standard exactly.
    34.98, 36.01, 41.16, 46.30, 51.44, 56.59, 61.73, 66.88, 72.02, 77.17, 82.31, 92.60.
 2. Each column `k` is the hover column times two numbers: `CL(row, k) = sL[k] * CL(row, 0)` and
    `CD(row, k) = sD[k] * CD(row, 0)`, every row. The hover column has `sL = sD = 1`.
-3. Each column's targets, at the mid gross weight, sea level, 15 C, level flight at that
-   column's speed, cyclic solved:
-   - torque: `TQ(V)` from step 5;
-   - collective: a straight line in torque through the hover point (`ch`, `TQh`) and the bucket
-     point (`cme`, `TQme`), with `cme = 0.54 * ch` (UH-60: 0.621 and 0.336). Past max range it
-     continues at the slope of the last two columns before it, so it stays below the peak.
-4. Solve every `sL[k]`, `sD[k]` together: Newton on the rig's trims - residuals are each
-   column's trimmed collective and torque minus its targets, the Jacobian by finite differences
-   (step 1e-4). Start from 1.0, or from a previous fit's columns.
-5. The extra column (92.60 m/s): each scale continues the line through the last two columns.
-6. Round to four places and write both tables: CL rows from step 1, CD rows from step 5, the
+3. `sD` is set, not solved - a collective is a torque, so a pilot holding collective holds
+   torque through an acceleration. With `xe = 40/140` of max range (translational lift in):
+   - through ETL, `V <= xe * Vmr`: `sD = 1 - drop * (TQh - TQ(V)) / (TQh - TQ(xe * Vmr))` -
+     torque at a held collective falls by `drop` in the power curve's own shape (UH-60: 0.05);
+   - from ETL to max range: `sD = 1 - drop`, flat;
+   - past max range: back up in a straight line to `sD = 1` at the last curve point, so the top
+     of the curve is reached below the stall peak.
+4. `sL` is solved: at the mid gross weight, sea level, 15 C, level flight at the column's speed,
+   cyclic solved, must take `TQ(V)` from step 5. Drag fixes which collective gives that torque;
+   lift decides whether that collective holds the weight - more lift, less collective, less
+   torque. Solve each column by bracketing `sL` (a trim that fails is past the stall: too little
+   lift), lowest speed first with the columns above riding along, then repeat passes over all
+   columns until none moves. The power curve's sag is carried by collective: UH-60 0.620 in the
+   hover, 0.267 in the bucket, 0.845 at 160 kt.
+5. The extra column (92.60 m/s): `sL` continues the line through the last two columns; `sD`
+   repeats the last.
+6. Round to four places and write both tables: CL rows from step 4.1, CD rows from step 4.5, the
    columns above.
 
-The UH-60 lands every power-curve point within 0.1%. The table's columns are the rotor's
+The UH-60 lands every power-curve point within 0.2%, and holding 0.58 collective gives 73.3%
+from 40 to 140 kt. `rotortables.py --etl-drop` sets the drop. The table's columns are the rotor's
 disc-plane speed, not the airspeed - the rig reads the trimmed velocity in the disc's own plane.
 
 **7. Control mixing.** The collective mixes in `ControlMixing` (`CollectiveToYaw`,
