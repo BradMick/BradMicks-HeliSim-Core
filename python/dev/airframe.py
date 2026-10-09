@@ -21,9 +21,11 @@ fn_wingVariables). Forces do not depend on position at zero rotation rate, so a 
 neither --bc nor --cg; moments do. Both come from the game:
     boundingCenter vehicle player        getCenterOfMass vehicle player
 
-Not ported: ground effect (out of ground effect only), damage, the stabilator schedule (an
-aircraft whose surface is named "stabilator"; the Tiger has none), CASUAL's overrides
-(REALISTIC only), rotation-rate terms (trim is steady, so they are zero).
+The stabilator (a surface named "stabilator") sits where fn_wing's schedule settles it - trim is
+steady, so the 1.5 s lerp has arrived - undamaged and on a live DC bus.
+
+Not ported: ground effect (out of ground effect only), damage, CASUAL's overrides (REALISTIC
+only), rotation-rate terms (trim is steady, so they are zero).
 
 If this file and the SQF ever disagree, the SQF is right and this file is the bug.
 """
@@ -40,6 +42,7 @@ import forces as FO  # noqa: E402
 _add, _sub, _mul, _dot, _cross = FO._add, FO._sub, FO._mul, FO._dot, FO._cross
 _sin, _cos = FO._sin, FO._cos
 MPS_TO_KNOTS = 1.94384
+KNOTS_TO_MPS = 0.51444
 FT = E.FEET_TO_METERS
 
 
@@ -259,13 +262,28 @@ _FACINGS = {'right': [1.0, 0.0, 0.0], 'left': [-1.0, 0.0, 0.0], 'forward': [0.0,
             'backward': [0.0, -1.0, 0.0], 'up': [0.0, 0.0, 1.0], 'down': [0.0, 0.0, -1.0]}
 
 
-def wing(w, vel, rho, com):
-    if w['name'] == 'stabilator':
-        raise SystemExit('stabilator schedule not ported - this aircraft has one')
+#heliSimStabTable's columns, as fn_wing keys them: 30 to 180 kt
+_STAB_SPEEDS = (15.43, 20.58, 25.72, 29.58, 41.16, 42.44, 51.44, 59.16, 61.73, 72.02, 77.17, 82.31, 84.88, 92.60)
+
+
+def stabilator_theta(vel, coll):
+    """fn_wing's stabilator incidence (deg), settled."""
+    row = E.math_linear_interp(_WINGS['heliSimStabTable'], coll)
+    vel2D = E.clamp(vel[1], 0.0, 180.0 * KNOTS_TO_MPS)  #fn_stateVelocities
+    return E.math_linear_interp([[k, row[i + 1]] for i, k in enumerate(_STAB_SPEEDS)], vel2D)[1]
+
+
+def wing(w, vel, rho, com, coll):
     F, M = [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]
     facing = _FACINGS[w['facing']]
     n, cp = w['numElements'], w['chordLinePos']
+    isStab = w['name'] == 'stabilator'
+    stabTheta = stabilator_theta(vel, coll) if isStab else 0.0
     for A, B, C, D in w['panels']:
+        if isStab:
+            #Trailing edges rotate about the leading edge
+            D = _sub(A, FO.math_vector_rotate_around_axis(_sub(A, D), [1.0, 0.0, 0.0], stabTheta))
+            C = _sub(B, FO.math_vector_rotate_around_axis(_sub(B, C), [1.0, 0.0, 0.0], stabTheta))
         for j in range(n):
             a = _add(A, _mul(_sub(B, A), j / n))
             b = _add(A, _mul(_sub(B, A), (j + 1) / n))
@@ -327,7 +345,7 @@ class Airframe:
         out['fuse top'] = _lifting_panels(self.fus['fuselageTop'], vel, rho, self.cg, False)
         out['fuse side'] = _lifting_panels(self.fus['fuselageSide'], vel, rho, self.cg, True)
         for w in self.wings:
-            out[w['name']] = wing(w, vel, rho, self.cg)
+            out[w['name']] = wing(w, vel, rho, self.cg, coll)
         F, M = [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]
         for f, m in out.values():
             F, M = _add(F, f), _add(M, m)
