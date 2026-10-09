@@ -653,7 +653,7 @@ out of ground effect:
 | OGE hover: torque, and the collective it should sit near | the collective shape's hover row | 81%, ~0.64 (lands at 0.621) |
 | Heavier OGE hovers: weight and torque | the collective shape above the hover | 22,000 lb 105%; 23,500 lb 115% (the heaviest) |
 | Max endurance: speed and torque | the power curve's sag | 68 kt, 44% |
-| Max range: speed, where torque is back to the OGE torque | the power curve's top | 140 kt, 81% |
+| Max range: speed, from the performance data | where the drag starts to climb (step 6.3) | 140 kt, 81% |
 | Cruise attitude: the main rotor's mast tilt, as nose-low pitch | the front fuselage drag | 3 deg nose low at 140 kt |
 
 Every aerodynamic value that sets these trims is solved for them together - the rotor tables,
@@ -703,6 +703,14 @@ values as Core has them, the front fuselage drag sets how far. Solve it with the
 UH-60's front drag coefficient came out 0.497 at sea level, written flat across altitude.
 `fn_fuselageFront` reads that table by `bmkhs_barAlt`; altitude is not fitted yet.
 
+`--cruise-pitch` is the attitude and `--cruise-kt` the speed it is flown at, max range by
+default; give the speed when the data gives the attitude at another - the fastest speed it gives
+one for anchors the most drag. The AH-64D's is 10 deg nose low at 130 kt (max range 120 kt). Only the front drag moves
+for it - a stabilator schedule already vetted against the real aircraft is kept as it is - and
+the attitude at every other speed is whatever the force balance then gives, so check it against
+what the aircraft flies rather than fitting it: the AH-64D should come out near 5 deg nose low
+at 90 kt.
+
 The schedule is rebuilt from the AH-64D's, the most complete stabilator schedule there is:
 scaled about its -25 deg low-speed end so the cruise anchor's collective and speed read the
 cruise attitude, which keeps its shape - trailing edge down at low speed against the rotor
@@ -719,6 +727,17 @@ This step builds the HOVER COLUMN only - the 0 m/s column of both tables. Every 
 level hover at 0 m/s, sea level (`density(0, 15)`), out of ground effect, at the fitting CoM.
 Inputs: the hover points - weight and torque - from the lightest (the mid gross weight) to the
 heaviest; the pack's current drag at collective 0; the peak collective `cp` (UH-60: 0.85).
+
+Every hover point between the lightest and the heaviest gets its own drag row, so the more points
+the data gives, the closer the hover torque follows it - give them all. The heaviest is the
+peak: past it the blade stalls, so pick the most torque the aircraft can pull in a hover, not
+its continuous limit, or the pilot runs out of collective at 100%. AH-64D: 18,000 lb 94%,
+19,200 lb 100%, 20,260 lb 112%, 21,000 lb 125% (the peak).
+
+If the aircraft's hover collective is known, solve `cp` to land it instead of choosing it:
+`--hover-coll` takes the mid gross weight's hover collective and walks `cp` (a secant, starting
+from `--peak`) until step 4.4 puts that weight there. The peak sets the slope of the lift line,
+so it alone decides where each lighter weight lands. AH-64D: 0.64 at 18,000 lb.
 
 CL (`liftCoefTable`), hover column:
 
@@ -770,8 +789,9 @@ builds, a flat bucket, then a hard climb as parasite power takes over:
 | UH-60 TQ% | 81 | 74 | 63 | 54 | 48 | 46 | 44 | 44 | 44 | 44 | 46 | 50 | 55 | 62 | 70 | 81 | 98 | 114 |
 
 Three set points place it for an aircraft: OGE hover torque `TQh`, max endurance (`Vme`, `TQme`)
-and max range `Vmr` (where torque is back to `TQh`). With `S(x)` the standard row above and
-`x = V / Vmr`:
+and max range `Vmr`. The standard's own max range is where its torque is back to `TQh` - true of
+the UH-60, not of every aircraft, so with your own curve take max range from the data. With
+`S(x)` the standard row above and `x = V / Vmr`:
 
 - Sag: `r = TQme / TQh`. Between the hover and max range (`x <= 1`) the curve deepens or
   flattens toward its floor in the same shape: `S'(x) = 1 - (1 - S(x)) * (1 - r) / (1 - 0.543)`.
@@ -783,6 +803,21 @@ and max range `Vmr` (where torque is back to `TQh`). With `S(x)` the standard ro
 
 For the UH-60 at 18,000 lb (`TQh` 81%, `Vme` 68 kt at 44%, `Vmr` 140 kt) this gives back the
 standard exactly.
+
+**The aircraft's own curve.** When the performance data gives the whole curve at the mid gross
+weight, fit to that instead - it is the aircraft, the standard is only a shape for when you have
+three points. `--curve` takes it as `kt:torque%` pairs in place of `--me`, and every column is
+fitted to it as written. It must start at 0 kt on the first `--hover` point's torque.
+
+- Give max range with it, `--mr`, from the data. Without it, it is read off the curve where torque
+  climbs back to the hover's - the standard's definition, and wrong for the AH-64D: 135.6 kt
+  read, 120 kt real.
+- Every point becomes a fitted column. Give every 10 kt the chart has; a speed it skips is
+  filled in its shape - the AH-64D's 10 kt is 89.4%, the standard's share of the 0 to 20 kt fall.
+- Run the curve to 160 kt, like the other packs. A chart that stops short is extended along its
+  last slope: the AH-64D's stops at 140 kt (130 kt 85%, 140 kt 101%), so 150 kt is 117% and
+  160 kt 133%. Those can sit above the hover peak's torque; step 6.3 raises the drag there so
+  they are reachable.
 
 **6. Solve the airspeed columns.** The hover column (step 4) is scaled into every other column:
 
@@ -796,8 +831,13 @@ standard exactly.
    - through ETL, `V <= xe * Vmr`: `sD = 1 - drop * (TQh - TQ(V)) / (TQh - TQ(xe * Vmr))` -
      torque at a held collective falls by `drop` in the power curve's own shape (UH-60: 0.05);
    - from ETL to max range: `sD = 1 - drop`, flat;
-   - past max range: back up in a straight line to `sD = 1` at the last curve point, so the top
-     of the curve is reached below the stall peak.
+   - past max range: up in a straight line to `top` at the last curve point. The stall caps
+     every column's torque at what its drag gives at the peak collective, so `top` is whatever
+     puts the top of the curve just below that: `1.03 * TQ(last) / TQ(peak hover)`, never less
+     than 1. In forward flight the stall comes a little before the peak collective, so if the
+     last column still falls short the tool raises `top` by the shortfall and solves again, and
+     says so. UH-60: 114% against a 115% peak, `top` 1.02. AH-64D: 133% against 125%, `top` 1.10,
+     raised to 1.15.
 4. `sL` is solved: at the mid gross weight, sea level, 15 C, level flight at the column's speed,
    cyclic solved, must take `TQ(V)` from step 5. Drag fixes which collective gives that torque;
    lift decides whether that collective holds the weight - more lift, less collective, less
@@ -805,14 +845,70 @@ standard exactly.
    lift), lowest speed first with the columns above riding along, then repeat passes over all
    columns until none moves. The power curve's sag is carried by collective: UH-60 0.620 in the
    hover, 0.267 in the bucket, 0.845 at 160 kt.
-5. The extra column (92.60 m/s): `sL` continues the line through the last two columns; `sD`
-   repeats the last.
+5. The extra columns (`--extra-cols`, default 180 kt alone): `sL` continues the line through
+   the last two fitted columns; `sD` repeats the last.
 6. Round to four places and write both tables: CL rows from step 4.1, CD rows from step 4.5, the
    columns above.
 
 The UH-60 lands every power-curve point within 0.2%, and holding 0.58 collective gives 73.3%
 from 40 to 140 kt. `rotortables.py --etl-drop` sets the drop. The table's columns are the rotor's
 disc-plane speed, not the airspeed - the rig reads the trimmed velocity in the disc's own plane.
+
+**Running steps 3 to 6 - `rotortables.py`.** One command does the cruise-attitude drag (step 3),
+the hover column (step 4), the power curve (step 5) and every airspeed column (step 6), through
+the rig, with the pack's own config:
+
+```
+set BMKHS_CONFIG=<pack>\config\bmkhs_config
+python python/dev/rotortables.py --bc <boundingCenter> --cg <CoM> --hover <points> <curve> [options]
+```
+
+| Option | What it takes | Default |
+|---|---|---|
+| `--cg X Y Z` | The fitting CoM (step 2), model space. Required. | - |
+| `--bc X Y Z` | `boundingCenter vehicle player`. | 0 0 0 |
+| `--hover W:TQ ...` | OGE hover points, sea level, 15 C: weight (kg, or lb with an `lb` suffix) and torque %. The lightest is the mid gross weight, the heaviest the peak. | - |
+| `--curve KT:TQ ...` | The aircraft's own power curve at the mid gross weight (step 5). Replaces `--me`. | - |
+| `--mr KT` | Max range from the data. With `--curve`, give it; without, it is read off the curve (step 5). | - |
+| `--me KT:TQ` | Max endurance, with `--mr` to place the standard curve instead of `--curve`. | - |
+| `--peak C` | The peak collective `cp`. With `--hover-coll`, only the first guess. | 0.85 |
+| `--hover-coll C` | The mid gross weight's hover collective: solves `cp` to land it (step 4). | - |
+| `--etl-drop F` | How far torque at a held collective falls through ETL (step 6.3). | 0.05 |
+| `--cruise-pitch DEG` | Cruise attitude, nose up positive: solves the front fuselage drag (step 3). | not solved |
+| `--cruise-kt KT` | The speed `--cruise-pitch` is flown at, when the data gives the attitude near max range rather than at it. | max range |
+| `--extra-cols KT ...` | Columns past the curve's last point, extrapolated rather than fitted (step 6.5). | 180 |
+
+It prints, in order: max range; each peak tried, with `--hover-coll`; the hover collectives;
+each front drag tried, with `--cruise-pitch`; both tables as `helisim_simpleRotor.hpp` blocks; the
+front drag; then the written (rounded) tables flown against every curve point, every extra
+column and every hover. It does not edit the pack - paste the blocks in, and write the front
+drag flat across altitude in `helisim_fuselage.hpp`.
+
+**When it fails, it says so.** Every column prints a line with its torque and time as it is
+solved, so a slow one shows. Anything that misses or does not converge - a column that cannot
+reach its torque, a secant out of steps, a written point or hover off by more than 0.5% (1% for
+a hover) - prints `FAILED:` at once with what it got. The run ends with either `Fit OK` or a list
+of every problem and exit code 1; do not paste tables from a run that ends in problems. Every
+loop is bounded, so it cannot sit there indefinitely.
+
+A plain fit takes under a minute (the AH-64D's, 58 s, including one raise of `top`).
+`--hover-coll` reruns the hover column for each peak it tries, and `--cruise-pitch` reruns the
+whole column solve for each drag it tries - starting from the pack's own drag and stepping 10%
+from it - so with both expect a few minutes. Once they have answered, rerun with `--peak` and the
+drag written into the pack. A failing trim costs about 50 times a good one, so a column that
+takes many seconds is fighting the stall.
+
+The AH-64D (the game's CoM at 18,000 lb; front drag 1.046 already in the pack, which trims
+130 kt at 9.9 deg nose low and 90 kt at 5.1):
+
+```
+python python/dev/rotortables.py --bc -0.00205 -0.7246 1.39499 --cg 0.002 1.976 -0.895 ^
+    --hover 18000lb:94 19200lb:100 20260lb:112 21000lb:125 --peak 0.766 ^
+    --curve 0:94 10:89.4 20:82 30:72 40:62 50:54 60:50 70:48 80:49 90:52 100:56 110:63 ^
+            120:72 130:85 140:101 150:117 160:133 --mr 120
+```
+
+Its first fit found the peak and the drag with `--hover-coll 0.64 --cruise-pitch -10 --cruise-kt 130`.
 
 **7. Control mixing.** The collective mixes in `ControlMixing` (`CollectiveToYaw`,
 `CollectiveToRoll`, `CollectiveToPitch`) are the hover trims of these tables, so they change
@@ -823,6 +919,9 @@ fraction (the UH-60 uses 0.8, so the pilot still holds left pedal with power):
 
 The yaw mixes (`YawToPitch`, `YawToRoll`) come from the tail rotor; they move only if its tables
 did.
+
+An aircraft without mechanical mixing - the AH-64D has none - declares no `ControlMixing`, and
+this step does not apply.
 
 **8. Check.** The written tables are rounded to four places: sweep again with the written
 values, not the solver's. The fit is sea level; sweep at altitude (`--pa`, `--fat`) to see what

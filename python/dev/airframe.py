@@ -38,6 +38,7 @@ import sys
 sys.path.insert(0, os.path.dirname(__file__))
 import engine as E  # noqa: E402 - reads BMKHS_CONFIG at import
 import forces as FO  # noqa: E402
+import flightlog as FL  # noqa: E402
 
 _add, _sub, _mul, _dot, _cross = FO._add, FO._sub, FO._mul, FO._dot, FO._cross
 _sin, _cos = FO._sin, FO._cos
@@ -446,16 +447,16 @@ def report_parts(af, a, kt):
     print('  %-22s %+9.0f %+9.0f %+9.0f' % ('TOTAL aero', F[0], F[1], F[2]))
 
 
+def input_interp(current, previous):
+    """fn_inputGetInterp - the stick deflected from the force trim position, as a fraction of the
+    way from the trim to the stop it points at."""
+    target = 1.0 if current > 0.0 else (-1.0 if current < 0.0 else previous)
+    return E.clamp(previous + (target - previous) * abs(current), -1.0, 1.0)
+
+
 def replay(af, path, gwt):
     """Steady stretches of the newest flight log, re-flown at the logged state."""
-    hdr, rows = None, []
-    for line in open(path, errors='ignore'):
-        if 'BMKHSLOG_HDR,' in line:
-            hdr = line.split('BMKHSLOG_HDR,')[1].strip().split(',')
-        elif 'BMKHSLOG,' in line and hdr:
-            v = line.split('BMKHSLOG,')[1].strip().split(',')
-            if len(v) == len(hdr):
-                rows.append(dict(zip(hdr, v)))
+    rows = [r for _, t in FL.tables(path) for r in t]
     fl = lambda r, k: float(r[k])
     seg, segs = [], []
     for i in range(1, len(rows)):
@@ -480,9 +481,13 @@ def replay(af, path, gwt):
         vz = -m('vsFpm') / 196.85 * 0.0  # level: vertical speed small, taken as zero
         vel = [0.0, vy, -vy * math.tan(math.radians(pitch))]
         down = [0.0, -_sin(pitch), -_cos(pitch)]
-        cycP = m('cyc') + m('sasP') + m('attP') + m('mixP')
-        cycR = m('cycLR') + m('sasR') + m('attR') + m('mixR')
-        yaw = m('pedal') + m('sasY') + m('hdgY') + m('mixY')
+        #fn_simpleRotorControl: the stick moves away from the force trim, then the FMC outputs add
+        def ctl(stick, trim, *adds):
+            return E.clamp(sum(input_interp(fl(r, stick), fl(r, trim)) + sum(fl(r, k) for k in adds)
+                               for r in s) / len(s), -1.0, 1.0)
+        cycP = ctl('cyc', 'ftPitch', 'sasP', 'attP', 'mixP')
+        cycR = ctl('cycLR', 'ftRoll', 'sasR', 'attR', 'mixR')
+        yaw = ctl('pedal', 'ftYaw', 'sasY', 'hdgY', 'mixY')
         paFt = m('altFt')
         rho = density(paFt, 15.0 - 2.0 * paFt / 1000.0)
         F, M, g = af.forces(vel, cycP, cycR, yaw, m('coll'), rho, paFt)
