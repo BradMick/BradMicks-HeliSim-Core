@@ -447,6 +447,13 @@ def report_parts(af, a, kt):
     print('  %-22s %+9.0f %+9.0f %+9.0f' % ('TOTAL aero', F[0], F[1], F[2]))
 
 
+def input_interp(current, previous):
+    """fn_inputGetInterp - the stick deflected from the force trim position, as a fraction of the
+    way from the trim to the stop it points at."""
+    target = 1.0 if current > 0.0 else (-1.0 if current < 0.0 else previous)
+    return E.clamp(previous + (target - previous) * abs(current), -1.0, 1.0)
+
+
 def replay(af, path, gwt):
     """Steady stretches of the newest flight log, re-flown at the logged state."""
     rows = [r for _, t in FL.tables(path) for r in t]
@@ -474,9 +481,13 @@ def replay(af, path, gwt):
         vz = -m('vsFpm') / 196.85 * 0.0  # level: vertical speed small, taken as zero
         vel = [0.0, vy, -vy * math.tan(math.radians(pitch))]
         down = [0.0, -_sin(pitch), -_cos(pitch)]
-        cycP = m('cyc') + m('sasP') + m('attP') + m('mixP')
-        cycR = m('cycLR') + m('sasR') + m('attR') + m('mixR')
-        yaw = m('pedal') + m('sasY') + m('hdgY') + m('mixY')
+        #fn_simpleRotorControl: the stick moves away from the force trim, then the FMC outputs add
+        def ctl(stick, trim, *adds):
+            return E.clamp(sum(input_interp(fl(r, stick), fl(r, trim)) + sum(fl(r, k) for k in adds)
+                               for r in s) / len(s), -1.0, 1.0)
+        cycP = ctl('cyc', 'ftPitch', 'sasP', 'attP', 'mixP')
+        cycR = ctl('cycLR', 'ftRoll', 'sasR', 'attR', 'mixR')
+        yaw = ctl('pedal', 'ftYaw', 'sasY', 'hdgY', 'mixY')
         paFt = m('altFt')
         rho = density(paFt, 15.0 - 2.0 * paFt / 1000.0)
         F, M, g = af.forces(vel, cycP, cycR, yaw, m('coll'), rho, paFt)
