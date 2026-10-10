@@ -6,6 +6,9 @@
 //
 //Latches and switch positions are not here: they are published when they change. The governor
 //PIDs travel alongside, as their integral and last error only - the gains come from config.
+//
+//An aircraft adds values it computes itself - Core never names them - with netStateVars[] in its
+//BMKHS_HeliSim config; fn_coreConfig appends them to this list as bmkhs_netStateVars.
 #define NET_STATE_VARS [ \
     "bmkhs_barAlt", \
     "bmkhs_fat", \

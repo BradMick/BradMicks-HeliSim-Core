@@ -17,7 +17,6 @@ Author:
     BradMick
 ---------------------------------------------------------------------------- */
 params ["_heli"];
-#include "\bmkhs_helisim\functions\core\netState.hpp"
 
 //The frame clock stays current, so the first frame as owner is one frame long.
 _heli setVariable ["bmkhs_previousTime", diag_tickTime];
@@ -26,7 +25,7 @@ _heli setVariable ["bmkhs_previousTime", diag_tickTime];
 if (_sent < 0 || {_sent == (_heli getVariable ["bmkhs_netStateApplied", -1])}) exitWith {};
 _heli setVariable ["bmkhs_netStateApplied", _sent];
 
-{ _heli setVariable [_x, _values select _forEachIndex] } forEach NET_STATE_VARS;
+{ _heli setVariable [_x, _values select _forEachIndex] } forEach (_heli getVariable "bmkhs_netStateVars");
 
 private _localPids = _heli getVariable ["bmkhs_pid_engine", []];
 {

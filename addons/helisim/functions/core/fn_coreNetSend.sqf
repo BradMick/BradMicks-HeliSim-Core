@@ -16,12 +16,12 @@ Author:
     BradMick
 ---------------------------------------------------------------------------- */
 params ["_heli"];
-#include "\bmkhs_helisim\functions\core\netState.hpp"
 
 //Copies of the arrays, not the live ones - the model keeps writing to those after this has gone out.
+//The list is Core's plus the aircraft's own, as fn_coreConfig built it.
 _heli setVariable ["bmkhs_netState", [
     CBA_missionTime,
-    NET_STATE_VARS apply {
+    (_heli getVariable "bmkhs_netStateVars") apply {
         private _v = _heli getVariable _x;
         if (isNil "_v") then { nil } else { if (_v isEqualType []) then { +_v } else { _v } }
     },

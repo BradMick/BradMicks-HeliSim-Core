@@ -17,6 +17,7 @@ Author:
     BradMick
 ---------------------------------------------------------------------------- */
 params ["_heli", ["_configIn", configNull]];
+#include "\bmkhs_helisim\functions\core\netState.hpp"
 
 //Caller supplies the config; fall back to the vehicle class for legacy callers
 private _config = if (isNull _configIn) then { configOf _heli >> "BMKHS_HeliSim" } else { _configIn };
@@ -24,6 +25,11 @@ bmkhs_movingAverageSize = 10;
 
 //Built on this machine - every machine builds its own copy, the config is never sent.
 _heli setVariable ["bmkhs_configured", true];
+
+//What the packed running state carries: Core's own list, then any values the aircraft computes
+//itself and declares in netStateVars[]. Built from config on every machine, so the sender and
+//every receiver agree on the order.
+_heli setVariable ["bmkhs_netStateVars", NET_STATE_VARS + getArray (_config >> "netStateVars")];
 
 //On a machine that does not own the aircraft, what has already arrived from the owner stands:
 //the build makes this machine's copy of the config and seeds only what is missing, then puts

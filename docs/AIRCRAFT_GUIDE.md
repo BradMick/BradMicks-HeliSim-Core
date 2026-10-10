@@ -1412,6 +1412,17 @@ from `event/fn_eventPreInit.sqf`). The list is
 owner needs to carry on rather than start cold. A value the model carries from one
 frame to the next and that a handover must not reset belongs in it.
 
+**Your own computed values ride along with `netStateVars[]`.** Anything your pack
+computes on the owner that the other crew station displays - the AH-64's PERF page
+results, for one - is declared by name in your `BMKHS_HeliSim` config:
+
+```cpp
+netStateVars[] = {"yourAircraft_perfMaxTq", "yourAircraft_perfHoverTq"};
+```
+
+Core appends them to its own list and carries them in the same packet. Keep computing
+them where you do now; the other machine receives them rather than computing them.
+
 ---
 
 ## Things that will catch you
