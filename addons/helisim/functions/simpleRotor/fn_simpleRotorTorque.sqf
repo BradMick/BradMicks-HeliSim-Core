@@ -20,6 +20,7 @@ Parameters:
     _bladeRadius - Blade radius (m) [Number].
     _torqueTau   - Torque filter time constant (s) [Number].
     _deltaTime   - Frame time (s) [Number].
+    _destroyed   - The rotor has come apart, so there is nothing left to spin [Bool].
 
 Returns:
     Nothing. Publishes bmkhs_reqEngTorque and bmkhs_rtrMoi.
@@ -27,9 +28,15 @@ Returns:
 Author:
     BradMick
 ---------------------------------------------------------------------------- */
-params ["_heli", "_rotorIndex", "_rotorTorque", "_gearRatio", "_numBlades", "_bladeMass", "_bladeRadius", "_torqueTau", "_deltaTime"];
+params ["_heli", "_rotorIndex", "_rotorTorque", "_gearRatio", "_numBlades", "_bladeMass", "_bladeRadius", "_torqueTau", "_deltaTime", "_destroyed"];
 
 if (!local _heli) exitWith {};
+
+//A destroyed rotor produces nothing
+if (_destroyed) then {
+    _numBlades = 0;
+    _bladeMass = 0.0;
+};
 
 //The transmission divides by it, so zero means Nr never moves.
 private _rtrMoi = _numBlades * ((1.0 / 3.0) * _bladeMass * (_bladeRadius * _bladeRadius));

@@ -9,7 +9,10 @@ private _numRotor = _heli getVariable "bmkhs_numSimpleRotors";
 private _rotors   = _heli getVariable "bmkhs_simpleRotors";
 
 for "_rotorIndex" from 0 to (_numRotor - 1) do {
-    [_heli, _rotorIndex, _rotors select _rotorIndex] call bmkhs_fnc_simpleRotor;
+    private _rotor     = _rotors select _rotorIndex;
+    private _destroyed = ([_heli, _rotor get "damageRole"] call bmkhs_fnc_damageGet) > RTR_DMG_THRESH;
+
+    [_heli, _rotorIndex, _rotor, _destroyed] call bmkhs_fnc_simpleRotor;
 };
 
 [_heli] call bmkhs_fnc_rotorEffects;
