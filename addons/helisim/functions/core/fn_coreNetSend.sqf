@@ -23,7 +23,7 @@ _heli setVariable ["bmkhs_netState", [
     CBA_missionTime,
     NET_STATE_VARS apply {
         private _v = _heli getVariable _x;
-        if (_v isEqualType []) then { +_v } else { _v }
+        if (isNil "_v") then { nil } else { if (_v isEqualType []) then { +_v } else { _v } }
     },
     (_heli getVariable "bmkhs_pid_engine") apply { [_x get "integral", _x getOrDefault ["prevError", 0.0]] }
 ], true];

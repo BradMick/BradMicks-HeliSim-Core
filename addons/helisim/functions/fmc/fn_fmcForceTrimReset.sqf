@@ -13,10 +13,10 @@ Returns:
 ---------------------------------------------------------------------------- */
 params ["_heli"];
 
-//Force-trim reference positions
-_heli setVariable ["bmkhs_forceTrimPosPitch", 0.0, true];
-_heli setVariable ["bmkhs_forceTrimPosRoll",  0.0, true];
-_heli setVariable ["bmkhs_forceTrimPosYaw",   0.0, true];
+//Force-trim reference positions - local, the packed state carries them (core/netState.hpp)
+_heli setVariable ["bmkhs_forceTrimPosPitch", 0.0];
+_heli setVariable ["bmkhs_forceTrimPosRoll",  0.0];
+_heli setVariable ["bmkhs_forceTrimPosYaw",   0.0];
 //Keyboard sticky input accumulated values
 _heli setVariable ["bmkhs_cyclicPitchValue",     0.0];
 _heli setVariable ["bmkhs_cyclicRollValue",      0.0];

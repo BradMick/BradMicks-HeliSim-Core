@@ -17,7 +17,7 @@ if (!_autoPitch) then {
     if (bmkhs_springlessCyclic || bmkhs_keyboardStickyPitch) then {
         _heli setVariable ["bmkhs_forceTrimPosPitch", 0.0];
     } else {
-        _heli setVariable ["bmkhs_forceTrimPosPitch", _pitchTrimVal, true];
+        _heli setVariable ["bmkhs_forceTrimPosPitch", _pitchTrimVal];
     };
 };
 //Cyclic roll trim
@@ -28,7 +28,7 @@ if (!_autoRoll) then {
     if (bmkhs_springlessCyclic || bmkhs_keyboardStickyRoll) then {
         _heli setVariable ["bmkhs_forceTrimPosRoll",  0.0];
     } else {
-        _heli setVariable ["bmkhs_forceTrimPosRoll", _rollTrimVal, true];
+        _heli setVariable ["bmkhs_forceTrimPosRoll", _rollTrimVal];
     };
 };
 //Pedal trim
@@ -39,6 +39,6 @@ if (!bmkhs_autoPedal) then {
     if (bmkhs_springlessPedals || bmkhs_keyboardStickyYaw) then {
         _heli setVariable ["bmkhs_forceTrimPosYaw", 0.0];
     } else {
-        _heli setVariable ["bmkhs_forceTrimPosYaw", _pedalTrimVal, true];
+        _heli setVariable ["bmkhs_forceTrimPosYaw", _pedalTrimVal];
     };
 };

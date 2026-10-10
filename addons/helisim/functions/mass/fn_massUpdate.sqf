@@ -157,8 +157,9 @@ if (bmkhs_helisimRealismSetting != REALISTIC) then {
 //Update mass
 _heli setMass _curMass;
 
-_heli setVariable ["bmkhs_gwt", _curMass,   true];
-_heli setVariable ["bmkhs_cg",  _curLongCG, true];
+//Local - they change every frame; the packed state carries them (core/netState.hpp)
+_heli setVariable ["bmkhs_gwt", _curMass];
+_heli setVariable ["bmkhs_cg",  _curLongCG];
 
 if (BMKHS_FM_DEBUG) then {
     private _vecX = [5.0, 0.0, 0.0];

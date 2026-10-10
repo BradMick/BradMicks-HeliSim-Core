@@ -91,8 +91,11 @@ private _charge  = _heli getVariable [_varName + "Charge", 1.0];
                 _heli setVariable [_latchVar, true, true];
             };
         } else {
-            _heli setVariable [_latchVar, false, true];
-            _heli setVariable [_okVar,    true,  true];
+            //On change only - this branch runs every frame the store is not starting.
+            if ((_heli getVariable [_latchVar, false]) || {!(_heli getVariable [_okVar, true])}) then {
+                _heli setVariable [_latchVar, false, true];
+                _heli setVariable [_okVar,    true,  true];
+            };
         };
     };
 

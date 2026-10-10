@@ -89,7 +89,7 @@ _heli setVariable ["bmkhs_kbPedalLeftRight", _kbPedalLeftRight];
 if (_yawBreakout || _velFwd > AUTOPEDAL_NTT_SPD) then {
     _desiredHdg     = getDir _heli;
     _pedalLeftRight = _kbPedalLeftRight;
-    _heli setVariable ["bmkhs_autoPedalHdg", _desiredHdg, true];
+    _heli setVariable ["bmkhs_autoPedalHdg", _desiredHdg];
 };
 
 //ERROR SIGNS ARE VETTED - do not unify them. Heading is (actual - desired); the slip channels
@@ -151,7 +151,7 @@ if (_yawBreakout) then {
     [_pidAutoPedalNtt]  call bmkhs_fnc_pidReset;
     [_pidAutoPedalAero] call bmkhs_fnc_pidReset;
 } else {
-    _heli setVariable ["bmkhs_forceTrimPosYaw", _yawOutput, true];
+    _heli setVariable ["bmkhs_forceTrimPosYaw", _yawOutput];
 };
 
 [_pedalLeftRight, _yawBreakout]

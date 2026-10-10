@@ -7,6 +7,20 @@
 //Latches and switch positions are not here: they are published when they change. The governor
 //PIDs travel alongside, as their integral and last error only - the gains come from config.
 #define NET_STATE_VARS [ \
+    "bmkhs_barAlt", \
+    "bmkhs_fat", \
+    "bmkhs_radAlt", \
+    "bmkhs_windSpeed", \
+    "bmkhs_windDirFrom", \
+    "bmkhs_gwt", \
+    "bmkhs_cg", \
+    "bmkhs_aero_beta_deg", \
+    "bmkhs_aero_beta_g", \
+    "bmkhs_aero_beta_g_prev", \
+    "bmkhs_forceTrimPosPitch", \
+    "bmkhs_forceTrimPosRoll", \
+    "bmkhs_forceTrimPosYaw", \
+    "bmkhs_autoPedalHdg", \
     "bmkhs_apuRpm_pct", \
     "bmkhs_collectiveOutput", \
     "bmkhs_engState", \

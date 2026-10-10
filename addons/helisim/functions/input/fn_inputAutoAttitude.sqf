@@ -86,7 +86,7 @@ if (!bmkhs_autoRoll)  then { [_pidRoll]  call bmkhs_fnc_pidReset; };
 _pitchOut = [_pitchOut, -AUTOATT_PITCH_OUT_CLAMP, AUTOATT_PITCH_OUT_CLAMP] call BIS_fnc_clamp;
 _rollOut  = [_rollOut,  -AUTOATT_ROLL_OUT_CLAMP,  AUTOATT_ROLL_OUT_CLAMP]  call BIS_fnc_clamp;
 
-if (bmkhs_autoPitch) then { _heli setVariable ["bmkhs_forceTrimPosPitch", _pitchOut, true]; };
+if (bmkhs_autoPitch) then { _heli setVariable ["bmkhs_forceTrimPosPitch", _pitchOut]; };
 //Written either way - skipping it would leave a stale roll command summed at the rotor
 _heli setVariable ["bmkhs_autoAttCycRollOut", [0.0, _rollOut] select bmkhs_autoRoll, true];
 
