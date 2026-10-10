@@ -262,6 +262,17 @@ bmkhs_keyboardCollective         = true;
 bmkhs_keyboardCollectivePrevious = true;
 bmkhs_lastFrameGetIn             = false;
 
+//The aircraft this player crews but does not own. A pack ticks only what its machine owns, so
+//Core hands this one to coreUpdate itself - there is nothing for a pack to add.
+if (hasInterface) then {
+    bmkhs_crewedRemoteHandler = addMissionEventHandler ["EachFrame", {
+        private _heli = vehicle player;
+        if (!local _heli && {alive _heli} && {_heli getVariable ["bmkhs_initialised", false]}) then {
+            [_heli] call bmkhs_fnc_coreUpdate;
+        };
+    }];
+};
+
 //private _nonAnalogEvents = ["Activate", "Deactivate"];
 //
 //{

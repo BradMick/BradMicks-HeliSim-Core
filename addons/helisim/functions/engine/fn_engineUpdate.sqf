@@ -163,8 +163,10 @@ if (local _heli) then {
                     if ((_heli getVariable "bmkhs_engPctNg" select _e) < (GT_IDLE_STABLE_FRAC * (_x get "idleNg"))) then {
                         _since = -1;
                     } else {
-                        if (_since < 0) then { _since = time };
-                        if (time >= _since + GT_IDLE_TO_FLY_SEC) then {
+                        //The mission clock, not time - this travels in the packed state, so the
+                        //next owner reads it against its own clock.
+                        if (_since < 0) then { _since = CBA_missionTime };
+                        if (CBA_missionTime >= _since + GT_IDLE_TO_FLY_SEC) then {
                             [_heli, "bmkhs_engPowerLeverState", _e, "FLY", true] call bmkhs_fnc_utilSetArrayVariable;
                             [format ["eng%1PwrLvr", _e + 1], 2, _heli] call bmkhs_fnc_controlSet;
                             _since = -1;
@@ -194,27 +196,6 @@ if !_pneuAvail then {
             [_heli, "bmkhs_engState", _forEachIndex, "OFF", true] call bmkhs_fnc_utilSetArrayVariable;
         };
     } forEach _engState;
-};
-
-if (isMultiplayer && (currentPilot _heli == player || local _heli) && (_heli getVariable "bmkhs_lastTimePropagated") + 0.1 < time) then {
-    {
-        _heli setVariable [_x, _heli getVariable _x, true];
-    } forEach [
-        "bmkhs_apuRpm_pct",
-        "bmkhs_engFuelFlow",
-        "bmkhs_engPctNg",
-        "bmkhs_engPctNp",
-        "bmkhs_engPctTq",
-        "bmkhs_engTgt",
-        "bmkhs_engOilPsi",
-        "bmkhs_engLimitTimers",
-        "bmkhs_engTqTimer",
-        "bmkhs_engState",
-        "bmkhs_collectiveOutput",
-        "bmkhs_xmsnOutputRpm",
-        "bmkhs_xmsnDeltaRpm"
-    ];
-    _heli setVariable ["bmkhs_lastTimePropagated", time, true];
 };
 
 [_heli, _heli getVariable "bmkhs_deltaTime"] call bmkhs_fnc_engineFuelAvail;

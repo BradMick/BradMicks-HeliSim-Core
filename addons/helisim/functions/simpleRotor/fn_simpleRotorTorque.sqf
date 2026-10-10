@@ -50,4 +50,6 @@ private _tqAlpha    = 1.0 - (exp (-_deltaTime / _torqueTau));
 _tqSmoothed         = _tqSmoothed + ((_reqEngTorque - _tqSmoothed) * _tqAlpha);
 if ([_tqSmoothed] call bmkhs_fnc_mathIsNan || [_tqSmoothed] call bmkhs_fnc_mathIsInf) then { _tqSmoothed = 0.0; };
 
-[_heli, "bmkhs_reqEngTorque", _rotorIndex, _tqSmoothed, true] call bmkhs_fnc_utilSetArrayVariable;
+//Local - it changes every frame, and only this machine's transmission reads it. It travels in
+//the packed state (fn_coreNetSend) for whoever takes the aircraft next.
+[_heli, "bmkhs_reqEngTorque", _rotorIndex, _tqSmoothed] call bmkhs_fnc_utilSetArrayVariable;

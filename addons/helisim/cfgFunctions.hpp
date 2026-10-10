@@ -48,6 +48,8 @@ class CfgFunctions
             file = "\bmkhs_helisim\functions\core";
             class coreConfig {R;};
             class coreInit {R;};
+            class coreNetReceive {R;};
+            class coreNetSend {R;};
             class coreUpdate  {R;};
             class coreUpdateFlightModel {R;};
         };

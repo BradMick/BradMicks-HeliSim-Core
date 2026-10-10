@@ -256,6 +256,13 @@ on that machine, not this one.
 An empty aircraft is still ticked: it still burns fuel, and its engines and
 gearboxes still take damage.
 
+**Tick only what this machine owns - Core handles the rest.** The aircraft a
+player is crewing but does not own is Core's job, not yours: Core passes it to
+`coreUpdate` itself, which keeps it current from what its owner publishes
+rather than solving it. Never widen your handler to include it - your
+`fn_perFrame` would then run owner-only work, publishing included, on a machine
+that does not own the aircraft.
+
 **Use your own base class and nothing else.** Every installed pack has its own
 handler for its own aircraft type. If yours also ticked another pack's aircraft,
 they would be ticked twice a frame and every force on them doubled.
@@ -1395,6 +1402,16 @@ results.** Anything a crew station displays or acts on needs `networked = 1`.
 This fails SILENTLY in singleplayer, which looks perfect either way. If a value
 is read outside the flight model, network it.
 
+**Running state travels packed.** What changes continuously - engine speeds,
+temperatures, the governor's terms, drivetrain rpm - is sent by the owner as the
+one variable `bmkhs_netState`, 10 times a second (`core/fn_coreNetSend.sqf`), and
+unpacked on the crew's machines (`core/fn_coreNetReceive.sqf`, which `coreUpdate`
+runs for an aircraft this machine does not own - Core schedules that one itself,
+from `event/fn_eventPreInit.sqf`). The list is
+`core/netState.hpp`: everything a crew station displays, and everything a new
+owner needs to carry on rather than start cold. A value the model carries from one
+frame to the next and that a handover must not reset belongs in it.
+
 ---
 
 ## Things that will catch you
@@ -1445,13 +1462,15 @@ machines, and what it means. Inputs are the config field references
 
 - **Where it lives.** Every variable is on the aircraft - `_heli getVariable "bmkhs_..."` - except
   the CBA settings, which are globals.
-- **Where it exists.** Core does not schedule itself; the pack calls `bmkhs_fnc_coreUpdate`, on
-  the machine where the aircraft is local (see Step 2). **local** means the value is written only
+- **Where it exists.** The pack calls `bmkhs_fnc_coreUpdate`, on the machine where the aircraft
+  is local (see Step 2); the only aircraft Core schedules itself is the one a player crews but does
+  not own, which it keeps current from the packed state rather than solving. **local** means the value is written only
   there; every other machine sees its init seed or nil. Anything another crew station displays
   must be **net**.
 - **net** means Core publishes it. *On change* - sent when the value changes (through
-  `bmkhs_fnc_utilUpdateNetworkGlobal` / `bmkhs_fnc_utilSetArrayVariable`). *10 Hz* - engine
-  values `engine/fn_engineUpdate.sqf` re-broadcasts every 0.1 s in multiplayer. *Every frame* -
+  `bmkhs_fnc_utilUpdateNetworkGlobal` / `bmkhs_fnc_utilSetArrayVariable`). *10 Hz* - in the
+  packed running state (`core/netState.hpp`) the owner sends every 0.1 s in multiplayer, unpacked
+  only on the machines of the crew of that aircraft. *Every frame* -
   written with a public `setVariable` each update.
 - **Per engine / per rotor** means an array with one slot each, in `Engine01`, `Engine02`... order.
 - **Fractions**: 1.0 = 100%.
@@ -1510,7 +1529,7 @@ machines, and what it means. Inputs are the config field references
 | `bmkhs_numSimpleRotors` | number | local | Rotor count, from config `numSimpleRotors` (set in `simpleRotor/fn_simpleRotorVariables.sqf`). |
 | `bmkhs_simpleRotors` | array of hashmaps, per rotor | local | Each simple rotor's config, keyed by config property name (`type`, `dir`, `gearRatio`, `numBlades`, `bladeRadius`, ...). `gearRatio` converts `bmkhs_xmsnOutputRpm` to rotor rpm (set in `simpleRotor/fn_simpleRotorVariables.sqf`). |
 | `bmkhs_nrLimits` | array of 4 numbers, fraction | local | From config `nrLimits[]`: {normal low, normal high, high rotor, maximum} (e.g. {0.96, 1.05, 1.06, 1.10}). Core only stores it (set in `simpleRotor/fn_simpleRotorVariables.sqf`). |
-| `bmkhs_reqEngTorque` | array of numbers, per rotor, Nm at the engine shaft | net on change (effectively every frame) | Rotor torque demand referred to the engine shaft, filtered. Sum it for total load. Seeded as 2 slots (set in `simpleRotor/fn_simpleRotorTorque.sqf`, or `rotor/fn_rotor.sqf` with the BET model). |
+| `bmkhs_reqEngTorque` | array of numbers, per rotor, Nm at the engine shaft | 10 Hz | Rotor torque demand referred to the engine shaft, filtered. Sum it for total load. Seeded as 2 slots (set in `simpleRotor/fn_simpleRotorTorque.sqf`, or `rotor/fn_rotor.sqf` with the BET model). |
 | `bmkhs_rtrThrust` | array of numbers, per rotor, N | net on change | Rotor thrust. Only written by the BET rotor model (`bmkhs_rotorModel` = 1). With the Simple model (default) it stays 0 (set in `rotor/fn_rotor.sqf`). |
 
 ### Controls - named by your config
@@ -1556,7 +1575,7 @@ Core seeds these by name, whether or not the config declares them (`systems/fn_s
 | `bmkhs_acBusOn` | Bool | net | As battBusOn. |
 | `bmkhs_dcBusOn` | Bool | net | As battBusOn. Core also reads it: an armed APU fire handle shuts APU fuel only while DC is up. |
 | `bmkhs_apuBtnOn` | Bool | net | Seeded false. It is the `On` of a control named `apuBtn`. |
-| `bmkhs_apuRpm_pct` | Number, 0..1 fraction (H-60 `nominal = 1.0`) | net | Seeded 0. Changes only if a producer declares this name (H-60: `apuRPM_pct`). Also re-broadcast every 0.1 s in multiplayer by `engine/fn_engineUpdate.sqf`. |
+| `bmkhs_apuRpm_pct` | Number, 0..1 fraction (H-60 `nominal = 1.0`) | net | Seeded 0. Changes only if a producer declares this name (H-60: `apuRPM_pct`). Also in the packed 10 Hz running state (`core/netState.hpp`). |
 | `bmkhs_apuOn` | Bool | net | Seeded false. Changes only if a component declares `stateName = "apuOn"`. |
 | `bmkhs_pneuAvail` | Bool | net | Seeded `!useSystems`, so true without systems. With systems, changes only if a Circuit declares it. |
 | `bmkhs_priHydPsi` | Number, psi | net | Seeded 0. With `useSystems = 0`: 3000 when `isEngineOn`, else 0. With systems, only if a producer declares it. |
@@ -1840,7 +1859,8 @@ Working state, solver bookkeeping, filters and debug. These change without notic
 - `bmkhs_engSlipDepth` - clutch slip depth (systems).
 - `bmkhs_engTimer_<np|ng|tgt><engIdx>_<band>` - per-band exceedance accumulators.
 - `bmkhs_shiftLocked` - stops shift spinning rotor.
-- `bmkhs_lastTimePropagated` - 10 Hz broadcast timer.
+- `bmkhs_lastTimePropagated` - when the packed running state was last sent (`core/fn_coreNetSend.sqf`).
+- `bmkhs_netState` - the packed running state itself; `bmkhs_netStateApplied` - the last packet unpacked.
 - `bmkhs_gtDiagLast<idx>`, `bmkhs_gtDiagSw<idx>` - debug logging only.
 - `bmkhs_govDiagLast<idx>` - debug logging only.
 - `bmkhs_hotDiagLast_<name>` (missionNamespace) - debug logging only.
