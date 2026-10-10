@@ -26,7 +26,11 @@ if (isGamePaused || CBA_missionTime < 0.1) exitWith {
 
 //Not this machine's - its owner solves it. This copy is kept current from what the owner
 //publishes, so the crew station shows it and taking the controls carries on from it.
-if (!local _heli) exitWith { [_heli] call bmkhs_fnc_coreNetReceive };
+if (!local _heli) exitWith {
+    //Its pack set it up on the machine that owns it; this one may never have built the config.
+    if !(_heli getVariable ["bmkhs_configured", false]) then { [_heli] call bmkhs_fnc_coreConfig };
+    [_heli] call bmkhs_fnc_coreNetReceive;
+};
 
 //Idle gate - no player aboard and nothing left running
 if (((crew _heli) findIf {isPlayer _x}) < 0

@@ -152,8 +152,8 @@ _heli setVariable ["bmkhs_engines",    _engines];
 
 private _zeros = _engines apply {0.0};
 
-if (!(_heli getVariable ["bmkhs_engineInitialised", false]) && local _heli) then {
-    _heli setVariable ["bmkhs_engineInitialised", true, true];
+if !(_heli getVariable ["bmkhs_engineInitialised", false]) then {
+    [_heli, "bmkhs_engineInitialised", true, true] call bmkhs_fnc_utilSeed;
 
     //Everything starts OFF, with or without modelled systems. Without them there is no
     //start PROCEDURE - no battery, APU or generators to sequence - but Arma's own startup
@@ -164,8 +164,8 @@ if (!(_heli getVariable ["bmkhs_engineInitialised", false]) && local _heli) then
     //Cold and dark either way: the levers start OFF. With no systems the controller moves
     //them to FLY when the player wakes the aircraft, through the same path a click takes
     //so the animation travels rather than snapping.
-    _heli setVariable ["bmkhs_engPowerLeverState", _engines apply {"OFF"}, true]; //OFF, IDLE, FLY
-    _heli setVariable ["bmkhs_engState",           _engines apply {"OFF"}, true]; //OFF, STARTING, ON
+    [_heli, "bmkhs_engPowerLeverState", _engines apply {"OFF"}, true] call bmkhs_fnc_utilSeed; //OFF, IDLE, FLY
+    [_heli, "bmkhs_engState",           _engines apply {"OFF"}, true] call bmkhs_fnc_utilSeed; //OFF, STARTING, ON
 };
 
 if(isMultiplayer) then {
@@ -186,15 +186,15 @@ _heli setVariable ["bmkhs_isSingleEng",           false];
 
 //Latched by either hard trip, cleared by a repair. Seeded here rather than in
 //systemsVariables, which runs before the engine count is known.
-_heli setVariable ["bmkhs_engineOverspeed",       _engines apply {false}, true];
+[_heli, "bmkhs_engineOverspeed",  _engines apply {false}, true] call bmkhs_fnc_utilSeed;
 
 //Damage ladder latches - cleared by a repair.
-_heli setVariable ["bmkhs_engChips",              _engines apply {false}, true];
-_heli setVariable ["bmkhs_engFailed",             _engines apply {false}, true];
-_heli setVariable ["bmkhs_lowOilPsiFailure",      _engines apply {false}, true];
+[_heli, "bmkhs_engChips",         _engines apply {false}, true] call bmkhs_fnc_utilSeed;
+[_heli, "bmkhs_engFailed",        _engines apply {false}, true] call bmkhs_fnc_utilSeed;
+[_heli, "bmkhs_lowOilPsiFailure", _engines apply {false}, true] call bmkhs_fnc_utilSeed;
 _heli setVariable ["bmkhs_engOilHealth",          _engines apply {1.0}];
 //Oil below its minimum, running with the lever out of OFF - latched, cleared by a repair.
-_heli setVariable ["bmkhs_engOilPsiLow",          _engines apply {false}, true];
+[_heli, "bmkhs_engOilPsiLow",     _engines apply {false}, true] call bmkhs_fnc_utilSeed;
 //Seconds left in the current band, {np, ng, tgt}: -1 none, 0 damage running.
 _heli setVariable ["bmkhs_engLimitTimers",        _engines apply {[-1, -1, -1]}];
 //The same for the drivetrain the engine's torque loads.

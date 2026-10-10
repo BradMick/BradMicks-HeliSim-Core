@@ -120,46 +120,44 @@ private _mixes = [];
 } forEach ("true" configClasses (_config >> "ControlMixing"));
 _heli setVariable ["bmkhs_mixes", _mixes];
 
-//Modes and holds - networked, so only the machine the aircraft is local to sets them.
-if (local _heli) then {
-    //FMC
-    _heli setVariable ["bmkhs_fmcPitchOn",                true,  true];
-    _heli setVariable ["bmkhs_fmcRollOn",                 true,  true];
-    _heli setVariable ["bmkhs_fmcYawOn",                  true,  true];
-    _heli setVariable ["bmkhs_fmcCollOn",                 true,  true];
-    _heli setVariable ["bmkhs_fmcTrimOn",                 true,  true];
-    //Declared and its gate holding - set by fn_fmc
-    _heli setVariable ["bmkhs_fmcSasAvail",               false, true];
-    _heli setVariable ["bmkhs_fmcAttHoldAvail",           false, true];
-    _heli setVariable ["bmkhs_fmcAltHoldAvail",           false, true];
-    _heli setVariable ["bmkhs_fmcHdgHoldAvail",           false, true];
-    _heli setVariable ["bmkhs_fmcFdAvail",                false, true];
-    //Flight director - a mode flag for each declared mode, a target for each declared target
-    if (count _fd > 0) then {
-        { _heli setVariable ["bmkhs_fd_" + _x, false, true] } forEach (_fd get "modes");
-        { _heli setVariable ["bmkhs_fdTgt_" + _x, _y select 0, true] } forEach (_fd get "targets");
-    };
-    _heli setVariable ["bmkhs_fdWptBearing",              -1,    true];
-    _heli setVariable ["bmkhs_fdWptDistance",             -1,    true];
-    //Force Trim
-    _heli setVariable ["bmkhs_forceTrimInterupted",       false, true];
-    _heli setVariable ["bmkhs_forceTrimPosPitch",         0.0,   true];
-    _heli setVariable ["bmkhs_forceTrimPosRoll",          0.0,   true];
-    _heli setVariable ["bmkhs_forceTrimPosYaw",           0.0,   true];
-    //Attitude Hold
-    _heli setVariable ["bmkhs_attHoldActive",             false, true];
-    _heli setVariable ["bmkhs_attHoldDesiredPos",         getPos _heli, true];
-    _heli setVariable ["bmkhs_attHoldDesiredVel",         [0.0, 0.0], true];
-    _heli setVariable ["bmkhs_attHoldDesiredAtt",         [0.0, 0.0], true];
-    _heli setVariable ["bmkhs_attHoldSubMode",            "pos", true];   //pos, vel, att
-    //Altitude Hold
-    _heli setVariable ["bmkhs_altHoldActive",             false, true];
-    _heli setVariable ["bmkhs_altHoldDesiredAlt",         0.0,   true];
-    _heli setVariable ["bmkhs_altHoldSubMode",            "rad", true];   //rad, bar
-    _heli setVariable ["bmkhs_altHoldCollRef",            0.0,   true];
-    //Heading Hold
-    _heli setVariable ["bmkhs_hdgHoldActive",             false, true];
-    _heli setVariable ["bmkhs_hdgHoldDesiredHdg",         0.0,   true];
-    _heli setVariable ["bmkhs_hdgHoldDesiredSideslip",    0.0,   true];
-    _heli setVariable ["bmkhs_hdgHoldSubMode",            "hdg", true];    //hdg, trn, yaw, aut
+//Modes and holds - networked; bmkhs_fnc_utilSeed publishes them from the owner only.
+//FMC
+[_heli, "bmkhs_fmcPitchOn",             true,  true] call bmkhs_fnc_utilSeed;
+[_heli, "bmkhs_fmcRollOn",              true,  true] call bmkhs_fnc_utilSeed;
+[_heli, "bmkhs_fmcYawOn",               true,  true] call bmkhs_fnc_utilSeed;
+[_heli, "bmkhs_fmcCollOn",              true,  true] call bmkhs_fnc_utilSeed;
+[_heli, "bmkhs_fmcTrimOn",              true,  true] call bmkhs_fnc_utilSeed;
+//Declared and its gate holding - set by fn_fmc
+[_heli, "bmkhs_fmcSasAvail",            false, true] call bmkhs_fnc_utilSeed;
+[_heli, "bmkhs_fmcAttHoldAvail",        false, true] call bmkhs_fnc_utilSeed;
+[_heli, "bmkhs_fmcAltHoldAvail",        false, true] call bmkhs_fnc_utilSeed;
+[_heli, "bmkhs_fmcHdgHoldAvail",        false, true] call bmkhs_fnc_utilSeed;
+[_heli, "bmkhs_fmcFdAvail",             false, true] call bmkhs_fnc_utilSeed;
+//Flight director - a mode flag for each declared mode, a target for each declared target
+if (count _fd > 0) then {
+    { [_heli, "bmkhs_fd_" + _x, false, true] call bmkhs_fnc_utilSeed } forEach (_fd get "modes");
+    { [_heli, "bmkhs_fdTgt_" + _x, _y select 0, true] call bmkhs_fnc_utilSeed } forEach (_fd get "targets");
 };
+[_heli, "bmkhs_fdWptBearing",           -1,    true] call bmkhs_fnc_utilSeed;
+[_heli, "bmkhs_fdWptDistance",          -1,    true] call bmkhs_fnc_utilSeed;
+//Force Trim - the positions travel in the packed state, so they are not published here
+[_heli, "bmkhs_forceTrimInterupted",    false, true] call bmkhs_fnc_utilSeed;
+[_heli, "bmkhs_forceTrimPosPitch",      0.0]         call bmkhs_fnc_utilSeed;
+[_heli, "bmkhs_forceTrimPosRoll",       0.0]         call bmkhs_fnc_utilSeed;
+[_heli, "bmkhs_forceTrimPosYaw",        0.0]         call bmkhs_fnc_utilSeed;
+//Attitude Hold
+[_heli, "bmkhs_attHoldActive",          false, true] call bmkhs_fnc_utilSeed;
+[_heli, "bmkhs_attHoldDesiredPos",      getPos _heli, true] call bmkhs_fnc_utilSeed;
+[_heli, "bmkhs_attHoldDesiredVel",      [0.0, 0.0], true] call bmkhs_fnc_utilSeed;
+[_heli, "bmkhs_attHoldDesiredAtt",      [0.0, 0.0], true] call bmkhs_fnc_utilSeed;
+[_heli, "bmkhs_attHoldSubMode",         "pos", true] call bmkhs_fnc_utilSeed;   //pos, vel, att
+//Altitude Hold
+[_heli, "bmkhs_altHoldActive",          false, true] call bmkhs_fnc_utilSeed;
+[_heli, "bmkhs_altHoldDesiredAlt",      0.0,   true] call bmkhs_fnc_utilSeed;
+[_heli, "bmkhs_altHoldSubMode",         "rad", true] call bmkhs_fnc_utilSeed;   //rad, bar
+[_heli, "bmkhs_altHoldCollRef",         0.0,   true] call bmkhs_fnc_utilSeed;
+//Heading Hold
+[_heli, "bmkhs_hdgHoldActive",          false, true] call bmkhs_fnc_utilSeed;
+[_heli, "bmkhs_hdgHoldDesiredHdg",      0.0,   true] call bmkhs_fnc_utilSeed;
+[_heli, "bmkhs_hdgHoldDesiredSideslip", 0.0,   true] call bmkhs_fnc_utilSeed;
+[_heli, "bmkhs_hdgHoldSubMode",         "hdg", true] call bmkhs_fnc_utilSeed;    //hdg, trn, yaw, aut

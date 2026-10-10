@@ -19,8 +19,8 @@ Author:
 ---------------------------------------------------------------------------- */
 params ["_heli"];
 
-if (!(_heli getVariable ["bmkhs_initialised", false]) && local _heli) then {
-    _heli setVariable ["bmkhs_initialised", true, true];
+if !(_heli getVariable ["bmkhs_initialised", false]) then {
+    [_heli, "bmkhs_initialised", true, true] call bmkhs_fnc_utilSeed;
 
     //Repair is an event, not something to poll for. HandleDamage fires whenever a
     //hitpoint changes, including downward, so a repair announces itself - and "Repaired"
