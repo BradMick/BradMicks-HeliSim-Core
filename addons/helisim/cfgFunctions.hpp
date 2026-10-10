@@ -48,6 +48,8 @@ class CfgFunctions
             file = "\bmkhs_helisim\functions\core";
             class coreConfig {R;};
             class coreInit {R;};
+            class coreNetReceive {R;};
+            class coreNetSend {R;};
             class coreUpdate  {R;};
             class coreUpdateFlightModel {R;};
         };
@@ -203,6 +205,7 @@ class CfgFunctions
             class utilSmoothAverage {R;};
             class utilNotify {R;};
             class utilNotifyRegister {R;};
+            class utilSeed {R;};
             class utilSetArrayVariable {R;};
             class utilSetMultiArrayVariable {R;};
             class utilUpdateNetworkGlobal {R;};

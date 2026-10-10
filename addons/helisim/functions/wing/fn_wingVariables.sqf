@@ -61,6 +61,4 @@ private _modelOffset = boundingCenter _heli;
 _heli setVariable ["bmkhs_numWings", count _wings];
 _heli setVariable ["bmkhs_wings",    _wings];
 
-if (local _heli) then {
-    _heli setVariable ["bmkhs_stabilatorPosition", 0.0, true];
-};
+[_heli, "bmkhs_stabilatorPosition", 0.0, true] call bmkhs_fnc_utilSeed;

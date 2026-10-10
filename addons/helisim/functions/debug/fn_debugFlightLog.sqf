@@ -52,7 +52,7 @@ private _sysVars = [];
 
 private _cols = [
     "t", "id", "realism",
-    "kts", "gsKts", "altFt", "radAltFt", "vsFpm", "pitch", "bank", "hdg", "betaG", "betaDeg",
+    "kts", "gsKts", "altFt", "radAltFt", "baroAltFt", "fatC", "vsFpm", "pitch", "bank", "hdg", "betaG", "betaDeg",
     "pRateDps", "rRateDps", "yRateDps",
     "tq1", "tq2", "np1", "np2", "nr",
     "cyc", "cycLR", "pedal", "coll", "ftPitch", "ftRoll", "ftYaw",
@@ -106,6 +106,8 @@ private _row = [
     ((_heli getVariable "bmkhs_gndSpeed") * MPS_TO_KNOTS) toFixed 1,
     (((getPosASL _heli) select 2) * METERS_TO_FEET) toFixed 1,
     ((_heli getVariable "bmkhs_radAlt") * METERS_TO_FEET) toFixed 1,
+    //Pressure altitude and FAT as the environment solves them - already ft and deg C
+    (_heli getVariable "bmkhs_barAlt") toFixed 1, (_heli getVariable "bmkhs_fat") toFixed 1,
     ((_heli getVariable "bmkhs_velClimb") * MPS_TO_FPM) toFixed 0,
     _pitch toFixed 2, _bank toFixed 2, (getDir _heli) toFixed 2,
     (_heli getVariable "bmkhs_aero_beta_g") call _f, (_heli getVariable "bmkhs_aero_beta_deg") toFixed 2,

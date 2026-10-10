@@ -256,6 +256,13 @@ on that machine, not this one.
 An empty aircraft is still ticked: it still burns fuel, and its engines and
 gearboxes still take damage.
 
+**Tick only what this machine owns - Core handles the rest.** The aircraft a
+player is crewing but does not own is Core's job, not yours: Core passes it to
+`coreUpdate` itself, which keeps it current from what its owner publishes
+rather than solving it. Never widen your handler to include it - your
+`fn_perFrame` would then run owner-only work, publishing included, on a machine
+that does not own the aircraft.
+
 **Use your own base class and nothing else.** Every installed pack has its own
 handler for its own aircraft type. If yours also ticked another pack's aircraft,
 they would be ticked twice a frame and every force on them doubled.
@@ -1395,6 +1402,27 @@ results.** Anything a crew station displays or acts on needs `networked = 1`.
 This fails SILENTLY in singleplayer, which looks perfect either way. If a value
 is read outside the flight model, network it.
 
+**Running state travels packed.** What changes continuously - engine speeds,
+temperatures, the governor's terms, drivetrain rpm - is sent by the owner as the
+one variable `bmkhs_netState`, 10 times a second (`core/fn_coreNetSend.sqf`), and
+unpacked on the crew's machines (`core/fn_coreNetReceive.sqf`, which `coreUpdate`
+runs for an aircraft this machine does not own - Core schedules that one itself,
+from `event/fn_eventPreInit.sqf`). The list is
+`core/netState.hpp`: everything a crew station displays, and everything a new
+owner needs to carry on rather than start cold. A value the model carries from one
+frame to the next and that a handover must not reset belongs in it.
+
+**Your own computed values ride along with `netStateVars[]`.** Anything your pack
+computes on the owner that the other crew station displays - the AH-64's PERF page
+results, for one - is declared by name in your `BMKHS_HeliSim` config:
+
+```cpp
+netStateVars[] = {"yourAircraft_perfMaxTq", "yourAircraft_perfHoverTq"};
+```
+
+Core appends them to its own list and carries them in the same packet. Keep computing
+them where you do now; the other machine receives them rather than computing them.
+
 ---
 
 ## Things that will catch you
@@ -1445,13 +1473,15 @@ machines, and what it means. Inputs are the config field references
 
 - **Where it lives.** Every variable is on the aircraft - `_heli getVariable "bmkhs_..."` - except
   the CBA settings, which are globals.
-- **Where it exists.** Core does not schedule itself; the pack calls `bmkhs_fnc_coreUpdate`, on
-  the machine where the aircraft is local (see Step 2). **local** means the value is written only
+- **Where it exists.** The pack calls `bmkhs_fnc_coreUpdate`, on the machine where the aircraft
+  is local (see Step 2); the only aircraft Core schedules itself is the one a player crews but does
+  not own, which it keeps current from the packed state rather than solving. **local** means the value is written only
   there; every other machine sees its init seed or nil. Anything another crew station displays
   must be **net**.
 - **net** means Core publishes it. *On change* - sent when the value changes (through
-  `bmkhs_fnc_utilUpdateNetworkGlobal` / `bmkhs_fnc_utilSetArrayVariable`). *10 Hz* - engine
-  values `engine/fn_engineUpdate.sqf` re-broadcasts every 0.1 s in multiplayer. *Every frame* -
+  `bmkhs_fnc_utilUpdateNetworkGlobal` / `bmkhs_fnc_utilSetArrayVariable`). *10 Hz* - in the
+  packed running state (`core/netState.hpp`) the owner sends every 0.1 s in multiplayer, unpacked
+  only on the machines of the crew of that aircraft. *Every frame* -
   written with a public `setVariable` each update.
 - **Per engine / per rotor** means an array with one slot each, in `Engine01`, `Engine02`... order.
 - **Fractions**: 1.0 = 100%.
@@ -1510,7 +1540,7 @@ machines, and what it means. Inputs are the config field references
 | `bmkhs_numSimpleRotors` | number | local | Rotor count, from config `numSimpleRotors` (set in `simpleRotor/fn_simpleRotorVariables.sqf`). |
 | `bmkhs_simpleRotors` | array of hashmaps, per rotor | local | Each simple rotor's config, keyed by config property name (`type`, `dir`, `gearRatio`, `numBlades`, `bladeRadius`, ...). `gearRatio` converts `bmkhs_xmsnOutputRpm` to rotor rpm (set in `simpleRotor/fn_simpleRotorVariables.sqf`). |
 | `bmkhs_nrLimits` | array of 4 numbers, fraction | local | From config `nrLimits[]`: {normal low, normal high, high rotor, maximum} (e.g. {0.96, 1.05, 1.06, 1.10}). Core only stores it (set in `simpleRotor/fn_simpleRotorVariables.sqf`). |
-| `bmkhs_reqEngTorque` | array of numbers, per rotor, Nm at the engine shaft | net on change (effectively every frame) | Rotor torque demand referred to the engine shaft, filtered. Sum it for total load. Seeded as 2 slots (set in `simpleRotor/fn_simpleRotorTorque.sqf`, or `rotor/fn_rotor.sqf` with the BET model). |
+| `bmkhs_reqEngTorque` | array of numbers, per rotor, Nm at the engine shaft | 10 Hz | Rotor torque demand referred to the engine shaft, filtered. Sum it for total load. Seeded as 2 slots (set in `simpleRotor/fn_simpleRotorTorque.sqf`, or `rotor/fn_rotor.sqf` with the BET model). |
 | `bmkhs_rtrThrust` | array of numbers, per rotor, N | net on change | Rotor thrust. Only written by the BET rotor model (`bmkhs_rotorModel` = 1). With the Simple model (default) it stays 0 (set in `rotor/fn_rotor.sqf`). |
 
 ### Controls - named by your config
@@ -1556,7 +1586,7 @@ Core seeds these by name, whether or not the config declares them (`systems/fn_s
 | `bmkhs_acBusOn` | Bool | net | As battBusOn. |
 | `bmkhs_dcBusOn` | Bool | net | As battBusOn. Core also reads it: an armed APU fire handle shuts APU fuel only while DC is up. |
 | `bmkhs_apuBtnOn` | Bool | net | Seeded false. It is the `On` of a control named `apuBtn`. |
-| `bmkhs_apuRpm_pct` | Number, 0..1 fraction (H-60 `nominal = 1.0`) | net | Seeded 0. Changes only if a producer declares this name (H-60: `apuRPM_pct`). Also re-broadcast every 0.1 s in multiplayer by `engine/fn_engineUpdate.sqf`. |
+| `bmkhs_apuRpm_pct` | Number, 0..1 fraction (H-60 `nominal = 1.0`) | net | Seeded 0. Changes only if a producer declares this name (H-60: `apuRPM_pct`). Also in the packed 10 Hz running state (`core/netState.hpp`). |
 | `bmkhs_apuOn` | Bool | net | Seeded false. Changes only if a component declares `stateName = "apuOn"`. |
 | `bmkhs_pneuAvail` | Bool | net | Seeded `!useSystems`, so true without systems. With systems, changes only if a Circuit declares it. |
 | `bmkhs_priHydPsi` | Number, psi | net | Seeded 0. With `useSystems = 0`: 3000 when `isEngineOn`, else 0. With systems, only if a producer declares it. |
@@ -1642,12 +1672,12 @@ Damage is read through `bmkhs_fnc_damageGet` (see Read functions), by role - not
 | `bmkhs_worldAccelFiltered` | Array [x, y, z], m/s², world space | local (owner only) | `bmkhs_worldAccel` smoothed per axis. Source for the ball terms and body accel. (set in `state/fn_stateAccelerations.sqf`) |
 | `bmkhs_bodyAccel` | Array [right, forward, up], m/s², body axes | local (owner only) | Specific force (what an accelerometer reads): filtered world accel plus 1 g up, projected onto the body right, forward and up vectors. Level and still reads about [0, 0, +9.806]. Element 0 equals `bmkhs_ballTerms # 2`. (set in `state/fn_stateAccelerations.sqf`) |
 | `bmkhs_ballTerms` | Array [kLat, gLat, sum], m/s² | local (owner only) | Lateral ball breakdown along the body right axis. `# 0` kLat = filtered kinematic acceleration toward the right. `# 1` gLat = 9.806 × (z component of the body right vector); negative when the right side is low. `# 2` = kLat + gLat = lateral specific force, positive to the right. A physical ball deflects opposite to this: sum positive = ball LEFT, sum negative = ball RIGHT (e.g. right side low in a hover gives a negative sum, ball right). Not clamped or filtered beyond the accel smoothing. (set in `state/fn_stateAccelerations.sqf`) |
-| `bmkhs_aero_beta_g` | Number, g, clamped -1 to +1 | net | Trim-ball value: `bmkhs_bodyAccel # 0` / 9.806, then first-order low-pass (tau 0.60 s). Positive = lateral specific force to the right, so a physical ball sits LEFT; negative = ball RIGHT. Core autopilot code relies on this raw sign; flip it only in your display. The AH-64D pack also blends the display sign with speed (`fn_avionicsSlipIndicator.sqf`). (set in `state/fn_stateAeroValues.sqf`) |
-| `bmkhs_aero_beta_deg` | Number, degrees | net | Aerodynamic sideslip: asin(x / |v|) of `bmkhs_velModelSpace`. Positive = aircraft moving right through the air (relative wind from the right). 0 when the velocity is zero. (set in `state/fn_stateAeroValues.sqf`) |
+| `bmkhs_aero_beta_g` | Number, g, clamped -1 to +1 | 10 Hz | Trim-ball value: `bmkhs_bodyAccel # 0` / 9.806, then first-order low-pass (tau 0.60 s). Positive = lateral specific force to the right, so a physical ball sits LEFT; negative = ball RIGHT. Core autopilot code relies on this raw sign; flip it only in your display. The AH-64D pack also blends the display sign with speed (`fn_avionicsSlipIndicator.sqf`). (set in `state/fn_stateAeroValues.sqf`) |
+| `bmkhs_aero_beta_deg` | Number, degrees | 10 Hz | Aerodynamic sideslip: asin(x / |v|) of `bmkhs_velModelSpace`. Positive = aircraft moving right through the air (relative wind from the right). 0 when the velocity is zero. (set in `state/fn_stateAeroValues.sqf`) |
 | `bmkhs_accelX` | Number, m/s², body x (right) | local (owner only) | Smoothed time derivative of `bmkhs_velModelSpaceNoWind # 0`. Gravity not included. Derivative of a body-axis velocity, so rotation terms are included as they fall. (set in `state/fn_stateAccelerations.sqf`) |
 | `bmkhs_accelY` | Number, m/s², body y (forward) | local (owner only) | Same as above for the forward axis. (set in `state/fn_stateAccelerations.sqf`) |
 | `bmkhs_accelZ` | Number, m/s², body z (up) | local (owner only) | Same as above for the up axis. (set in `state/fn_stateAccelerations.sqf`) |
-| `bmkhs_radAlt` | Number, metres, exact | local (owner only) | Height above the ground, `getPos _heli # 2`, unrounded and unclamped. A radar altimeter's steps and range are the reader's to apply - Core publishes no display values. (set in `state/fn_stateAltitude.sqf`) |
+| `bmkhs_radAlt` | Number, metres, exact | 10 Hz | Height above the ground, `getPos _heli # 2`, unrounded and unclamped. A radar altimeter's steps and range are the reader's to apply - Core publishes no display values. (set in `state/fn_stateAltitude.sqf`) |
 | `bmkhs_rtrRpm` | Number, ratio (1.0 = 100 % Nr) | local (owner only) | Rotor speed: `bmkhs_xmsnOutputRpm` / `bmkhs_engDesignRpm`. Forced to 0 when main rotor damage is 1.0. (set in `state/fn_stateRtrRpm.sqf`) |
 
 Ground contact is not a variable. Call `[_heli] call bmkhs_fnc_stateOnGround`. It returns true when `isTouchingGround` is true or `bmkhs_radAlt` < 0.15 m (`state/fn_stateOnGround.sqf`). It works only where `bmkhs_radAlt` is updated (the owner).
@@ -1656,11 +1686,11 @@ Ground contact is not a variable. Call `[_heli] call bmkhs_fnc_stateOnGround`. I
 
 | Variable | Type / units | Net | Meaning |
 |---|---|---|---|
-| `bmkhs_barAlt` | Number, feet, exact | local (owner only) | Pressure altitude - what the barometric altimeter reads, before any display rounding, which is the reader's. MSL height in feet plus a base altitude set by the CBA setting `bmkhs_helisimEnvironment` (ISA 0, Europe 800, Middle East 1800, Central Asia 5000, Asia 3100 ft). Altimeter setting is fixed at 29.92 inHg; mission weather does not change it. (set in `environment/fn_environment.sqf`) |
-| `bmkhs_fat` | Number, °C, exact | local (owner only) | Free air temperature. Base temperature of the selected environment (ISA 15, Europe summer 20 / winter 0, Middle East 30, Central Asia summer 30 / winter -5, Asia 25) minus 2 °C per 1000 ft of MSL height. (set in `environment/fn_environment.sqf`) |
+| `bmkhs_barAlt` | Number, feet, exact | 10 Hz | Pressure altitude - what the barometric altimeter reads, before any display rounding, which is the reader's. MSL height in feet plus a base altitude set by the CBA setting `bmkhs_helisimEnvironment` (ISA 0, Europe 800, Middle East 1800, Central Asia 5000, Asia 3100 ft). Altimeter setting is fixed at 29.92 inHg; mission weather does not change it. (set in `environment/fn_environment.sqf`) |
+| `bmkhs_fat` | Number, °C, exact | 10 Hz | Free air temperature. Base temperature of the selected environment (ISA 15, Europe summer 20 / winter 0, Middle East 30, Central Asia summer 30 / winter -5, Asia 25) minus 2 °C per 1000 ft of MSL height. (set in `environment/fn_environment.sqf`) |
 | `bmkhs_rho` | Number, kg/m³ | local (owner only) | Dry air density from barometric pressure at `bmkhs_barAlt` and `bmkhs_fat`, both exact (p / (287.05 × T)). Init value is 1.225. (set in `environment/fn_environment.sqf`) |
-| `bmkhs_windSpeed` | Number, m/s | local (owner only) | Mission wind speed (`vectorMagnitude wind`). 0 when `bmkhs_windDisabled` is set. (set in `environment/fn_environment.sqf`) |
-| `bmkhs_windDirFrom` | Number, degrees true 0-359, integer | local (owner only) | The direction the wind blows FROM - the meteorological convention a pilot reads (a wind from the west is 270). It is already converted from Arma's `windDir`, `(windDir + 180) mod 360` - a readout of where the wind is from uses it as published. A wind arrow drawn pointing the way the wind BLOWS needs the opposite, `(bmkhs_windDirFrom + 180) mod 360`, converted in the pack (the UH-60's PFD / ND arrows do this). 0 when `bmkhs_windDisabled` is set. (set in `environment/fn_environment.sqf`) |
+| `bmkhs_windSpeed` | Number, m/s | 10 Hz | Mission wind speed (`vectorMagnitude wind`). 0 when `bmkhs_windDisabled` is set. (set in `environment/fn_environment.sqf`) |
+| `bmkhs_windDirFrom` | Number, degrees true 0-359, integer | 10 Hz | The direction the wind blows FROM - the meteorological convention a pilot reads (a wind from the west is 270). It is already converted from Arma's `windDir`, `(windDir + 180) mod 360` - a readout of where the wind is from uses it as published. A wind arrow drawn pointing the way the wind BLOWS needs the opposite, `(bmkhs_windDirFrom + 180) mod 360`, converted in the pack (the UH-60's PFD / ND arrows do this). 0 when `bmkhs_windDisabled` is set. (set in `environment/fn_environment.sqf`) |
 | `bmkhs_velWindWorldSpace` | Array [east, north, 0], m/s | local (owner only) | Wind velocity vector (direction the air moves toward). [0,0,0] unless `bmkhs_rotorModel == 0`; also zero when wind is disabled. (set in `environment/fn_environment.sqf`) |
 
 Pressure (hPa) and density altitude are computed in `fn_environment.sqf` but not stored.
@@ -1669,8 +1699,8 @@ Pressure (hPa) and density altitude are computed in `fn_environment.sqf` but not
 
 | Variable | Type / units | Net | Meaning |
 |---|---|---|---|
-| `bmkhs_gwt` | Number, kg | net | Gross mass: empty mass (or matching `EmptyMassVariants` entry), occupied seats, fitted equipment, internal fuel, internal magazine rounds, and wing-station stores and external fuel. Written only by the owner. When the CBA test-GWT option is on, replaced by that weight clamped between empty and `maxGrossMass`. All contributors come from config. (set in `mass/fn_massUpdate.sqf`) |
-| `bmkhs_cg` | Number, metres, longitudinal only | net | Longitudinal CG: total forward moment / mass, in the same frame as the config arms (H-60 config: arm = {right, forward, up} m; larger = further forward). Compare directly with `bmkhs_fwdCgLimit` / `bmkhs_aftCgLimit`. Not a fuselage station; convert with `bmkhs_fsDatum` if needed. In test-GWT mode it is real moments divided by the test mass. Lateral CG is not published. (set in `mass/fn_massUpdate.sqf`) |
+| `bmkhs_gwt` | Number, kg | 10 Hz | Gross mass: empty mass (or matching `EmptyMassVariants` entry), occupied seats, fitted equipment, internal fuel, internal magazine rounds, and wing-station stores and external fuel. Written only by the owner. When the CBA test-GWT option is on, replaced by that weight clamped between empty and `maxGrossMass`. All contributors come from config. (set in `mass/fn_massUpdate.sqf`) |
+| `bmkhs_cg` | Number, metres, longitudinal only | 10 Hz | Longitudinal CG: total forward moment / mass, in the same frame as the config arms (H-60 config: arm = {right, forward, up} m; larger = further forward). Compare directly with `bmkhs_fwdCgLimit` / `bmkhs_aftCgLimit`. Not a fuselage station; convert with `bmkhs_fsDatum` if needed. In test-GWT mode it is real moments divided by the test mass. Lateral CG is not published. (set in `mass/fn_massUpdate.sqf`) |
 | `bmkhs_fwdCgLimit` | Number, metres, same frame as `bmkhs_cg` | local (owner only) | Forward CG limit, read from config `fwdCgLimit`. Static. (set in `mass/fn_massVariables.sqf`) |
 | `bmkhs_aftCgLimit` | Number, metres, same frame as `bmkhs_cg` | local (owner only) | Aft CG limit, read from config `aftCgLimit`. Static. (set in `mass/fn_massVariables.sqf`) |
 | `bmkhs_fsDatum` | Number, metres | local (owner only) | Fuselage-station 0 reference, config `fsDatum`. Empty-airframe arm = fsDatum − emptyMom/emptyMass. Static. (set in `mass/fn_massVariables.sqf`) |
@@ -1732,9 +1762,9 @@ Fuselage and airfoil folders publish no designer-facing values.
 | `bmkhs_cyclicLeftRight` | Number -1..1, + = LEFT | local (pilot's machine) | Pilot cyclic roll, worked out the same way as pitch. Calculated as left minus right. (set in `input/fn_inputUpdate.sqf`) |
 | `bmkhs_pedalLeftRight` | Number -1..1, + = right pedal | local (pilot's machine) | Pilot pedal after actuator lag. It holds its last value when the tail rotor is unpowered or undriven (`bmkhs_tailRtrSupplied` / `bmkhs_tailRtrDriven` false). It is 0 when flight-control hydraulics are lost. (set in `input/fn_inputUpdate.sqf`) |
 | `bmkhs_collectiveOutput` | Number 0..1, 0 = full down | local (pilot's machine) | Pilot collective position after actuator lag. It holds its last value while flight-control hydraulics are lost, unless emergency hydraulics are on, and while the game is not focused or a dialog is open. (set in `input/fn_inputUpdate.sqf`) |
-| `bmkhs_forceTrimPosPitch` | Number -1..1, + = forward | net (owner), sometimes local only | Cyclic pitch trim position: where the stick rests. Set on force-trim release. Zeroed by force-trim reset. The auto attitude assist writes it every frame. In springless/sticky-keyboard mode it is set to 0 without being sent over the network. (set in `fmc/fn_fmcForceTrimSet.sqf`, `fmc/fn_fmcForceTrimReset.sqf`, `input/fn_inputAutoAttitude.sqf`) |
-| `bmkhs_forceTrimPosRoll` | Number -1..1, + = left | net (owner), sometimes local only | Cyclic roll trim position. Same rules as pitch. (set in `fmc/fn_fmcForceTrimSet.sqf`, `fmc/fn_fmcForceTrimReset.sqf`) |
-| `bmkhs_forceTrimPosYaw` | Number -1..1, + = right | net (owner), sometimes local only | Pedal trim position. When auto pedal is on, auto pedal writes it every frame. (set in `fmc/fn_fmcForceTrimSet.sqf`, `fmc/fn_fmcForceTrimReset.sqf`, `input/fn_inputAutoPedal.sqf`) |
+| `bmkhs_forceTrimPosPitch` | Number -1..1, + = forward | 10 Hz | Cyclic pitch trim position: where the stick rests. Set on force-trim release. Zeroed by force-trim reset. The auto attitude assist writes it every frame. In springless/sticky-keyboard mode it is held at 0. (set in `fmc/fn_fmcForceTrimSet.sqf`, `fmc/fn_fmcForceTrimReset.sqf`, `input/fn_inputAutoAttitude.sqf`) |
+| `bmkhs_forceTrimPosRoll` | Number -1..1, + = left | 10 Hz | Cyclic roll trim position. Same rules as pitch. (set in `fmc/fn_fmcForceTrimSet.sqf`, `fmc/fn_fmcForceTrimReset.sqf`) |
+| `bmkhs_forceTrimPosYaw` | Number -1..1, + = right | 10 Hz | Pedal trim position. When auto pedal is on, auto pedal writes it every frame. (set in `fmc/fn_fmcForceTrimSet.sqf`, `fmc/fn_fmcForceTrimReset.sqf`, `input/fn_inputAutoPedal.sqf`) |
 | `bmkhs_autoAttCycRollOut` | Number, ±0.8 cyclic fraction | net | Roll command from the casual-mode auto attitude assist, added to cyclic roll at the rotor. It is 0 unless the auto-roll setting is on and realism is not REALISTIC. (set in `input/fn_inputAutoAttitude.sqf`) |
 | `bmkhs_flightControlLockOut` | Bool | local (pilot's machine) | Only used with the center-trim mode settings. It is true after a force-trim release while the controls are off centre, and pilot cyclic/pedal input is ignored until they come back within ±0.05. A pack could show a "centre controls" cue from it. (set in `input/fn_inputCenterTrimMode.sqf`, `input/fn_inputUpdate.sqf`) |
 
@@ -1840,7 +1870,8 @@ Working state, solver bookkeeping, filters and debug. These change without notic
 - `bmkhs_engSlipDepth` - clutch slip depth (systems).
 - `bmkhs_engTimer_<np|ng|tgt><engIdx>_<band>` - per-band exceedance accumulators.
 - `bmkhs_shiftLocked` - stops shift spinning rotor.
-- `bmkhs_lastTimePropagated` - 10 Hz broadcast timer.
+- `bmkhs_lastTimePropagated` - when the packed running state was last sent (`core/fn_coreNetSend.sqf`).
+- `bmkhs_netState` - the packed running state itself; `bmkhs_netStateApplied` - the last packet unpacked.
 - `bmkhs_gtDiagLast<idx>`, `bmkhs_gtDiagSw<idx>` - debug logging only.
 - `bmkhs_govDiagLast<idx>` - debug logging only.
 - `bmkhs_hotDiagLast_<name>` (missionNamespace) - debug logging only.

@@ -69,6 +69,7 @@ for "_i" from 1 to _numSimpleRotors do {
     //the main one or that every main turns the same way.
     _rotor set ["type", [MAIN, TAIL] select (toLower getText (_r >> "type")      == "tail")];
     _rotor set ["dir",  [CCW,  CW  ] select (toLower getText (_r >> "direction") == "cw")];
+    _rotor set ["damageRole", getText (_r >> "damageRole")];
 
     { _rotor set [_x, getNumber (_r >> _x)]; } forEach _numFields;
     { _rotor set [_x, getArray  (_r >> _x)]; } forEach _arrFields;

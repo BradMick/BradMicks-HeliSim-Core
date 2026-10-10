@@ -21,7 +21,7 @@ Author:
 #include "\bmkhs_helisim\functions\core\core.hpp"
 #include "\bmkhs_helisim\functions\rotor\rotor.hpp"
 
-params ["_heli", "_rotorIndex", "_rotor"];
+params ["_heli", "_rotorIndex", "_rotor", "_destroyed"];
 
 if (!local _heli) exitWith {};
 
@@ -55,7 +55,6 @@ private _gndEffValue      = _rotor get "gndEffValue";
 private _rollLiftCoef     = _rotor get "rollLiftCoef";
 private _pitchLiftCoef    = _rotor get "pitchLiftCoef";
 private _coneAngle        = _rotor get "coneAngle";
-private _autoTorque       = _rotor get "autoTorque";
 private _controlMap       = _rotor get "controlMap";
 
 //Delta time
@@ -99,8 +98,15 @@ if ([_velXY] call bmkhs_fnc_mathIsNan || [_velXY] call bmkhs_fnc_mathIsInf) then
 if ([_velZ]  call bmkhs_fnc_mathIsNan || [_velZ]  call bmkhs_fnc_mathIsInf) then { _velZ  = 0.0; };
 
 //Rpm, and blade geometry/velocity
+private _autoTorque     = _rotor get "autoTorque";
 private _xmsnRpm        = _heli getVariable "bmkhs_xmsnOutputRpm";
 private _rpm            = _xmsnRpm / _gearRatio;
+//A destroyed rotor produces nothing
+if (_destroyed) then {
+    _autoTorque = 0.0;
+    _xmsnRpm    = 0.0;
+    _rpm        = 0.0;
+};
 private _omega          = if (_rpm == 0.0) then { 0.0 } else { (2.0 * pi) * (_rpm / 60.0) };
 private _bladeArea      = _bladeRadius * _bladeChord;
 private _rotorArea      = pi * (_bladeRadius * _bladeRadius);
@@ -217,7 +223,7 @@ for "_i" from 0 to 3 do {
 	};
 };
 
-[_heli, _rotorIndex, _rotorTorque, _gearRatio, _numBlades, _bladeMass, _bladeRadius, _rotor get "torqueTau", _deltaTime] call bmkhs_fnc_simpleRotorTorque;
+[_heli, _rotorIndex, _rotorTorque, _gearRatio, _numBlades, _bladeMass, _bladeRadius, _rotor get "torqueTau", _deltaTime, _destroyed] call bmkhs_fnc_simpleRotorTorque;
 
 if (BMKHS_FM_DEBUG) then {
 	[_heli, _pos, _pos vectorAdd _rVec, "red"]     call bmkhs_fnc_debugDrawLine;

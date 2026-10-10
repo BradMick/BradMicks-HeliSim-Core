@@ -426,8 +426,8 @@ if (_active) then {
 
     _heli setVariable ["bmkhs_prestonPrevPitch", _pitchTrim];
     _heli setVariable ["bmkhs_prestonPrevRoll",  _rollTrim];
-    _heli setVariable ["bmkhs_forceTrimPosPitch",   _pitchTrim, true];
-    _heli setVariable ["bmkhs_forceTrimPosRoll",    _rollTrim,  true];
+    _heli setVariable ["bmkhs_forceTrimPosPitch",   _pitchTrim];
+    _heli setVariable ["bmkhs_forceTrimPosRoll",    _rollTrim];
 
     _heli setVariable ["bmkhs_prestonPitchActive", true];
     _heli setVariable ["bmkhs_prestonRollActive",  true];
