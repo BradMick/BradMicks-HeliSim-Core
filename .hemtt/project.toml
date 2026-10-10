@@ -7,13 +7,14 @@ author = "BradMick"
 
 [version]
 major = 1
-minor = 2
-patch = 1
+minor = 3
+patch = 0
 build = 0
 git_hash = 0
 
 [files]
 include = [
+    "CHANGELOG.md",
     "LICENSE",
     "README.md",
     "mod.cpp",
