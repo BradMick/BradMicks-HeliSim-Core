@@ -19,11 +19,15 @@ include = [
     "README.md",
     "mod.cpp",
     "logo.paa",
+    "python/dev/airflow_trim.py",
     "python/dev/airframe.py",
     "python/dev/engine.py",
     "python/dev/forces.py",
     "python/tools/compressor_map.py",
     "python/tools/fm_generateAeroSurfacePoints.py",
+    "tools/dump.sqf",
+    "tools/fm_nudge.sqf",
+    "tools/seats.sqf",
 ]
 # DEV-ONLY: keeps precompiled SQF bytecode out of the packed PBO so -filePatching works.
 # Arma prefers a .sqfc over its matching .sqf at the same path, so a PBO carrying bytecode

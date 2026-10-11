@@ -18,7 +18,8 @@
 - **New `python/dev/airflow_trim.py`**: trims an engine's `airflowTable` per FAT
   against an OGE hover chart, through the rig.
 
-All of these were the Bo 105's own tools, now Core's for every aircraft.
+All of these were the Bo 105's own tools, now Core's for every aircraft. They ship
+with the release.
 
 ## 1.3.0.0
 
