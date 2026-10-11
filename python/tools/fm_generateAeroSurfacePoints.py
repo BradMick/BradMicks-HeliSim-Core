@@ -1,9 +1,16 @@
 """Aerosurface generator - writes an aircraft's fuselage and wing config from its fm.p3d.
 
 Run it:  python python/tools/fm_generateAeroSurfacePoints.py <fm.p3d> <bmkhs_config folder>
+             [--turn] [--forward M] [--down M] [--right M] [--add]
+
+An fm.p3d not built over the aircraft's model is placed onto it as it is read: --turn turns it
+180 deg about vertical, then --forward / --down / --right shift it, metres. The placement is
+recorded on line 2 of both files; --add adds the shift to the recorded one and keeps its turn -
+tools/fm_nudge.sqf prints that command.
 
 Model every aerosurface as quads in the fm.p3d's first LOD (0.000), one named selection per
 quad: the surface's name, optionally numbered - fuselageTop01, fuselageTop02, verticalFin.
+A triangle is taken as a quad with one corner repeated.
 Each quad's face points the way its force acts; flip the face to flip the force.
 
     Fuselage:  fuselageTop  fuselageSide  fuselageFront
@@ -14,6 +21,7 @@ A stabilator moves on Core's schedule; a horizontalStabilizer is fixed. The tool
 helisim_fuselage.hpp and helisim_wings.hpp in full, every value other than the geometry and
 facing at its default. The .p3d is only read.
 """
+import argparse
 import math
 import os
 import re
@@ -51,6 +59,9 @@ FUSELAGE_AXES = {'fuselageTop': ('up', 'down'), 'fuselageSide': ('left', 'right'
                  'fuselageFront': ('forward', 'backward')}
 OPPOSITE = {'right': 'left', 'left': 'right', 'forward': 'backward', 'backward': 'forward',
             'up': 'down', 'down': 'up'}
+
+PLACEMENT    = '//Placement: turn %d forward %.3f down %.3f right %.3f'
+PLACEMENT_RE = r'//Placement: turn (\d) forward (\S+) down (\S+) right (\S+)'
 
 
 class BuildError(Exception):
@@ -132,8 +143,11 @@ def ordered(quad, facing):
     return quad[first:] + quad[:first]
 
 
-def build(path):
+def build(path, turn=False, forward=0.0, down=0.0, right=0.0):
     pts, faces, sels = read_lod0(path)
+    #MLOD points are (right, up, forward): turn 180 deg about vertical, then shift.
+    sign = -1.0 if turn else 1.0
+    pts  = [(sign * x + right, y - down, sign * z + forward) for x, y, z in pts]
     npts = len(pts)
     surfaces = {}
     for name, data in sels:
@@ -144,10 +158,13 @@ def build(path):
                              % (name, ', '.join(FUSELAGE + WINGS)))
         sel_pts = {i for i, w in enumerate(data[:npts]) if w}
         sel_faces = [i for i, w in enumerate(data[npts:]) if w]
-        if len(sel_faces) != 1 or len(faces[sel_faces[0]]) != 4 or sel_pts != set(faces[sel_faces[0]]):
-            raise BuildError('%s must be exactly one 4-sided face' % name)
+        if len(sel_faces) != 1 or len(faces[sel_faces[0]]) not in (3, 4) or sel_pts != set(faces[sel_faces[0]]):
+            raise BuildError('%s must be exactly one 4-sided face, or a triangle' % name)
         #MLOD points are (right, up, forward).
         quad = [[pts[i][0], pts[i][2], pts[i][1]] for i in faces[sel_faces[0]]]
+        #A triangle is a quad with one corner repeated.
+        if len(quad) == 3:
+            quad.append(list(quad[2]))
         surfaces.setdefault(surface, []).append((m.group(2), name, quad))
 
     missing = [s for s in FUSELAGE if s not in surfaces]
@@ -241,12 +258,29 @@ def wings_hpp(built):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) < 3:
-        print(__doc__)
-        sys.exit(1)
-    p3d, config = sys.argv[1], sys.argv[2]
+    args = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    args.add_argument('p3d')
+    args.add_argument('config')
+    args.add_argument('--turn', action='store_true')
+    args.add_argument('--forward', type=float, default=0.0)
+    args.add_argument('--down', type=float, default=0.0)
+    args.add_argument('--right', type=float, default=0.0)
+    args.add_argument('--add', action='store_true')
+    args = args.parse_args()
+
+    if args.add:
+        fuselage = os.path.join(args.config, 'helisim_fuselage.hpp')
+        m = re.search(PLACEMENT_RE, open(fuselage).read()) if os.path.isfile(fuselage) else None
+        if not m:
+            print('Nothing written: %s has no recorded placement to add to' % fuselage)
+            sys.exit(1)
+        args.turn     = args.turn or m.group(1) == '1'
+        args.forward += float(m.group(2))
+        args.down    += float(m.group(3))
+        args.right   += float(m.group(4))
+
     try:
-        built, report = build(p3d)
+        built, report = build(args.p3d, args.turn, args.forward, args.down, args.right)
     except BuildError as e:
         print('Nothing written: %s' % e)
         sys.exit(1)
@@ -255,10 +289,13 @@ if __name__ == '__main__':
     for s in FUSELAGE + WINGS:
         if s in built:
             print('  %-22s %-8s %d quad%s' % (s, built[s][0], len(built[s][1]), '' if len(built[s][1]) == 1 else 's'))
+    placement = PLACEMENT % (args.turn, args.forward, args.down, args.right)
+    print('  ' + placement[2:])
     if input('\nAll data will be reset to default. Continue? (y/n) ').strip().strip('﻿').lower() != 'y':
         print('Nothing written.')
         sys.exit(0)
     for name, text in (('helisim_fuselage.hpp', fuselage_hpp(built)), ('helisim_wings.hpp', wings_hpp(built))):
-        with open(os.path.join(config, name), 'w', newline='\n') as f:
-            f.write(text)
-        print('wrote %s' % os.path.join(config, name))
+        first, rest = text.split('\n', 1)
+        with open(os.path.join(args.config, name), 'w', newline='\n') as f:
+            f.write(first + '\n' + placement + '\n' + rest)
+        print('wrote %s' % os.path.join(args.config, name))

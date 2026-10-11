@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.4.0.0
+
+### Tools
+- **The aerosurface generator places the model.** `fm_generateAeroSurfacePoints.py`
+  takes `--turn` (180 deg about vertical) and `--forward` / `--down` / `--right`
+  for an fm.p3d not built over the aircraft. The placement is written on line 2
+  of both files, and `--add` adds a shift to it.
+- **A triangle is a quad.** The generator takes a three-sided face as a quad with
+  one corner repeated.
+- **New in-game tools, in `tools/`** - paste into the debug console, LOCAL EXEC:
+  - `fm_nudge.sqf` moves the aerosurfaces, each rotor hub and the centre of mass
+    live, and copies the config line or generator command for each.
+  - `seats.sqf` measures every seat's and pylon's arm in the model frame.
+  - `dump.sqf` lists every variant of the aircraft's base class: turrets,
+    weapons, pylons and animation sources.
+- **New `python/dev/airflow_trim.py`**: trims an engine's `airflowTable` per FAT
+  against an OGE hover chart, through the rig.
+
+All of these were the Bo 105's own tools, now Core's for every aircraft.
+
 ## 1.3.0.0
 
 ### Multiplayer

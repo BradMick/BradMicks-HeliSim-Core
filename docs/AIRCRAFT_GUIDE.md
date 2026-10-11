@@ -348,7 +348,9 @@ Set it up in this order:
    Torque Available chart and set that row of `airflowTable` - below 1.0 where
    the engine makes too much, above where too little. Leave the 15 C row at 1.0:
    a standard day is the untrimmed engine. The Ng and TGT limiters then decide
-   which limit holds, as on the real engine.
+   which limit holds, as on the real engine. From an OGE hover chart instead,
+   `python/dev/airflow_trim.py` works the multiplier per FAT through the rig -
+   its docstring gives the chart file and options.
 
 **An engine that is not a T700 - build its compressor map.** If you have the
 engine's limitations table (N1, T45 and torque for each rating, at sea level and
@@ -432,8 +434,8 @@ It is never loaded or referenced in game - it is only read by the tool.
 
 #### 2. Model each surface as quads
 
-Every face must be a **quad** - exactly four vertices. Triangles and faces with
-more corners are rejected.
+Every face must be a **quad** - exactly four vertices. A triangle is taken as a
+quad with one corner repeated. Faces with more corners are rejected.
 
 **A quad is the surface's outline, not its shape.** Do not model an airfoil
 section, camber or thickness - the section comes from the `airfoil` the surface
@@ -530,8 +532,24 @@ first, then lists what it found:
       fuselageFront          forward  18 quads
       leftWing               up       2 quads
       ...
+      Placement: turn 0 forward 0.000 down 0.000 right 0.000
 
     All data will be reset to default. Continue? (y/n)
+
+**Placing a model that was not built over the aircraft.** If your fm.p3d was built
+in another frame - from blueprints, or facing the other way - the tool places it as
+it reads it:
+
+| Option | Effect |
+|---|---|
+| `--turn` | Turn it 180 deg about vertical - for a model built facing aft |
+| `--forward M` `--down M` `--right M` | Then shift it, metres |
+| `--add` | Add the shift to the placement recorded in the current files, keeping its turn |
+
+The placement is written on line 2 of both files, so `--add` always has the last
+one to add to. Find the shift in game with `tools/fm_nudge.sqf` (section 7), which
+prints the `--add` command. A file with no recorded placement refuses `--add`:
+regenerate it once with the full placement first.
 
 Answer `y` to write both files. Anything else writes nothing. **Both files are
 rewritten in full every time** - geometry, facing, and every other value back
@@ -543,7 +561,7 @@ If the model has a problem, the tool writes nothing and says what:
 | Message | Fix |
 |---|---|
 | `you didn't name X correctly - it must be one of: ...` | Rename the selection to a name from the table, with or without a number |
-| `X must be exactly one 4-sided face` | The selection holds a triangle, more than one face, or stray vertices - reselect just the quad |
+| `X must be exactly one 4-sided face, or a triangle` | The selection holds more than one face, a face with more than four corners, or stray vertices - reselect just the quad |
 | `quad facing mismatch, please ensure all quads are facing the same direction on surface X` | The surface's quads split evenly between two directions, or one faces along a different axis - reverse the wrong ones |
 | `X faces Y - it must face ...` | A fuselage surface faces the wrong axis - reverse or remodel it |
 | `the fuselage needs all three surfaces - X missing` | Model the missing fuselage surface |
@@ -596,7 +614,31 @@ and look at the aircraft. Every quad is drawn where Core has it:
 
 The quads should lie on the airframe. If they sit off it, the faces in fm.p3d
 do not overlay your aircraft's model in Object Builder - paste the model in and
-compare.
+compare, or move them in game with the nudge.
+
+**The nudge - `tools/fm_nudge.sqf`.** It moves the aerosurfaces, each rotor hub and
+the centre of mass live, because Core reads all of them from the vehicle every
+frame. With FM debugging on, sit in the aircraft, paste it into the debug console
+and LOCAL EXEC:
+
+| Key | Does |
+|---|---|
+| Numpad 0 | Next target: fuselage + wings, each simple rotor, centre of mass |
+| Numpad 8 / 2 | Forward / aft |
+| Numpad 6 / 4 | Right / left |
+| Numpad 9 / 3 | Up / down |
+| Numpad + / - | Double / halve the step (starts at 0.05 m) |
+| Numpad 5 | Copy the result for the current target |
+
+What Numpad 5 copies, each labelled with where it goes:
+
+- **Fuselage + wings** - the generator's `--add` command (section 5). Fill in your
+  two paths and run it from `@bmkhs/python/`.
+- **A rotor** - its `pivot[]` line for `helisim_simpleRotor.hpp`.
+- **Centre of mass** - `comCorrection[]` (REALISTIC) or `casualModeCom[]` (other
+  modes) for `helisim_mass.hpp`.
+
+It counts from what is loaded. Re-enter the aircraft before pasting it again.
 
 ### Rotor control map
 
@@ -1096,6 +1138,17 @@ the empty CG's model y. The same applies to every `EmptyMassVariants` `mass` and
 **5. Item arms.** Seats, tanks, wing stations, magazines and equipment are model
 positions `{x, y, z}`. Read them in Object Builder, or convert a manual station
 with step 2 for y.
+
+When the aircraft's config or model cannot be read on disk, measure it in game.
+Sit in it, paste into the debug console and LOCAL EXEC:
+
+- `tools/seats.sqf` - every seat's arm (at the occupant's pelvis) and every pylon's,
+  in the model frame. It fills empty seats with temporary soldiers, so close the
+  pause menu after running it.
+- `tools/dump.sqf` - every variant of your pack's base class: turrets, weapons,
+  magazines, pylons and animation sources (for `Equipment`).
+
+Both write to the RPT and the clipboard.
 
 **Fitted equipment.** Parts the aircraft fits and removes by showing and hiding
 them - a probe, a hoist, pylon wings, doors, seats - are declared in
