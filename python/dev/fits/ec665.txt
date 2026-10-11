@@ -1,0 +1,170 @@
+EC665 Tiger main rotor tables - rotortables.py fit record
+
+Pack:     E:\bmkhs_ec665
+Config:   addons\helisim\config\bmkhs_config
+Fitted:   2026-10-11, with the collective-0 drag shape (guide step 6.6)
+
+Run it (from Core):
+    set BMKHS_CONFIG=E:\bmkhs_ec665\addons\helisim\config\bmkhs_config
+    python python/dev/rotortables.py --cg 0 1.625 0.224 --hover 4923:66.9 6000:86.6 6650:99.2 --me 70:43.3 --mr 129 --cruise-pitch -5
+
+Fitted with the horizontal stabilizer facing down (inverted camber). Writes the front fuselage
+drag too: 0.360, flat.
+
+The output this run printed, tables and check sweep included:
+
+------------------------------------------------------------------------------
+Max range 129.0 kt
+Hover column (sea level, 15 C, OGE), peak 0.850:
+     4923 kg ( 10853 lb)  67% at collective 0.597
+     6000 kg ( 13228 lb)  87% at collective 0.753
+     6650 kg ( 14661 lb)  99% at collective 0.850
+  column  10.3 kt: target  62.4%,  62.4%  (0.2 s)
+  column  20.6 kt: target  55.4%,  55.4%  (0.2 s)
+  column  30.9 kt: target  49.7%,  49.7%  (0.2 s)
+  column  41.2 kt: target  45.9%,  45.9%  (0.2 s)
+  column  51.5 kt: target  44.6%,  44.6%  (0.2 s)
+  column  61.8 kt: target  43.3%,  43.3%  (0.2 s)
+  column  70.0 kt: target  43.3%,  43.3%  (0.2 s)
+  column  71.6 kt: target  43.3%,  43.3%  (0.2 s)
+  column  79.8 kt: target  43.3%,  43.3%  (0.2 s)
+  column  88.0 kt: target  44.6%,  44.6%  (0.3 s)
+  column  96.2 kt: target  47.1%,  47.1%  (0.2 s)
+  column 104.4 kt: target  50.3%,  50.3%  (0.2 s)
+  column 112.6 kt: target  54.8%,  54.8%  (0.2 s)
+  column 120.8 kt: target  59.9%,  59.9%  (0.2 s)
+  column 129.0 kt: target  66.9%,  66.9%  (0.2 s)
+  column 138.2 kt: target  80.9%,  80.9%  (0.2 s)
+  column 147.4 kt: target  94.2%,  94.2%  (2.4 s)
+columns, pass 0: largest change 0.000024
+columns, pass 1: largest change 0.000001
+front drag 0.2730: 129.0 kt trims at -3.71 deg
+  column  10.3 kt: target  62.4%,  62.4%  (0.2 s)
+  column  20.6 kt: target  55.4%,  55.4%  (0.2 s)
+  column  30.9 kt: target  49.7%,  49.7%  (0.2 s)
+  column  41.2 kt: target  45.9%,  45.9%  (0.2 s)
+  column  51.5 kt: target  44.6%,  44.6%  (0.2 s)
+  column  61.8 kt: target  43.3%,  43.3%  (0.2 s)
+  column  70.0 kt: target  43.3%,  43.3%  (0.2 s)
+  column  71.6 kt: target  43.3%,  43.3%  (0.2 s)
+  column  79.8 kt: target  43.3%,  43.3%  (0.2 s)
+  column  88.0 kt: target  44.6%,  44.6%  (0.2 s)
+  column  96.2 kt: target  47.1%,  47.1%  (0.2 s)
+  column 104.4 kt: target  50.3%,  50.3%  (0.2 s)
+  column 112.6 kt: target  54.8%,  54.8%  (0.2 s)
+  column 120.8 kt: target  59.9%,  59.9%  (0.2 s)
+  column 129.0 kt: target  66.9%,  66.9%  (0.2 s)
+  column 138.2 kt: target  80.9%,  80.9%  (0.3 s)
+  column 147.4 kt: target  94.2%,  94.2%  (2.6 s)
+columns, pass 0: largest change 0.000024
+columns, pass 1: largest change 0.000001
+front drag 0.3003: 129.0 kt trims at -4.13 deg
+  column  10.3 kt: target  62.4%,  62.4%  (0.2 s)
+  column  20.6 kt: target  55.4%,  55.4%  (0.2 s)
+  column  30.9 kt: target  49.7%,  49.7%  (0.2 s)
+  column  41.2 kt: target  45.9%,  45.9%  (0.2 s)
+  column  51.5 kt: target  44.6%,  44.6%  (0.2 s)
+  column  61.8 kt: target  43.3%,  43.3%  (0.2 s)
+  column  70.0 kt: target  43.3%,  43.3%  (0.2 s)
+  column  71.6 kt: target  43.3%,  43.3%  (0.2 s)
+  column  79.8 kt: target  43.3%,  43.3%  (0.2 s)
+  column  88.0 kt: target  44.6%,  44.6%  (0.2 s)
+  column  96.2 kt: target  47.1%,  47.1%  (0.2 s)
+  column 104.4 kt: target  50.3%,  50.3%  (0.2 s)
+  column 112.6 kt: target  54.8%,  54.8%  (0.2 s)
+  column 120.8 kt: target  59.9%,  59.9%  (0.2 s)
+  column 129.0 kt: target  66.9%,  66.9%  (0.2 s)
+  column 138.2 kt: target  80.9%,  80.9%  (0.2 s)
+  column 147.4 kt: target  94.2%,  94.2%  (2.3 s)
+columns, pass 0: largest change 0.000022
+columns, pass 1: largest change 0.000001
+front drag 0.3572: 129.0 kt trims at -4.97 deg
+  column  10.3 kt: target  62.4%,  62.4%  (0.2 s)
+  column  20.6 kt: target  55.4%,  55.4%  (0.2 s)
+  column  30.9 kt: target  49.7%,  49.7%  (0.2 s)
+  column  41.2 kt: target  45.9%,  45.9%  (0.2 s)
+  column  51.5 kt: target  44.6%,  44.6%  (0.2 s)
+  column  61.8 kt: target  43.3%,  43.3%  (0.2 s)
+  column  70.0 kt: target  43.3%,  43.3%  (0.2 s)
+  column  71.6 kt: target  43.3%,  43.3%  (0.2 s)
+  column  79.8 kt: target  43.3%,  43.3%  (0.2 s)
+  column  88.0 kt: target  44.6%,  44.6%  (0.2 s)
+  column  96.2 kt: target  47.1%,  47.1%  (0.2 s)
+  column 104.4 kt: target  50.3%,  50.3%  (0.2 s)
+  column 112.6 kt: target  54.8%,  54.8%  (0.2 s)
+  column 120.8 kt: target  59.9%,  59.9%  (0.2 s)
+  column 129.0 kt: target  66.9%,  66.9%  (0.2 s)
+  column 138.2 kt: target  80.9%,  80.9%  (0.2 s)
+  column 147.4 kt: target  94.2%,  94.2%  (2.3 s)
+columns, pass 0: largest change 0.000024
+columns, pass 1: largest change 0.000001
+front drag 0.3595: 129.0 kt trims at -5.00 deg
+  column  10.3 kt: target  62.4%,  62.4%  (0.2 s)
+  column  20.6 kt: target  55.4%,  55.4%  (0.2 s)
+  column  30.9 kt: target  49.7%,  49.7%  (0.2 s)
+  column  41.2 kt: target  45.9%,  45.9%  (0.2 s)
+  column  51.5 kt: target  44.6%,  44.6%  (0.2 s)
+  column  61.8 kt: target  43.3%,  43.3%  (0.2 s)
+  column  70.0 kt: target  43.3%,  43.3%  (0.2 s)
+  column  71.6 kt: target  43.3%,  43.3%  (0.2 s)
+  column  79.8 kt: target  43.3%,  43.3%  (0.2 s)
+  column  88.0 kt: target  44.6%,  44.6%  (0.2 s)
+  column  96.2 kt: target  47.1%,  47.1%  (0.2 s)
+  column 104.4 kt: target  50.3%,  50.3%  (0.3 s)
+  column 112.6 kt: target  54.8%,  54.8%  (0.2 s)
+  column 120.8 kt: target  59.9%,  59.9%  (0.2 s)
+  column 129.0 kt: target  66.9%,  66.9%  (0.2 s)
+  column 138.2 kt: target  80.9%,  80.9%  (0.2 s)
+  column 147.4 kt: target  94.2%,  94.2%  (2.4 s)
+columns, pass 0: largest change 0.000025
+columns, pass 1: largest change 0.000001
+
+            liftCoefTable[] = {
+                        {"A/S", 0.00, 5.30, 10.59, 15.89, 21.18, 26.48, 31.77, 36.01, 36.85, 41.07, 45.29, 49.50, 53.72, 57.93, 62.15, 66.36, 71.10, 75.84, 92.60}
+                        ,{0.000, 0.0379, 0.0401, 0.0437, 0.0472, 0.0499, 0.0509, 0.0521, 0.0524, 0.0525, 0.0531, 0.0527, 0.0515, 0.0502, 0.0484, 0.0469, 0.0450, 0.0420, 0.0407, 0.0362}
+                        ,{0.850, 0.3579, 0.3781, 0.4122, 0.4453, 0.4709, 0.4801, 0.4919, 0.4946, 0.4954, 0.5013, 0.4976, 0.4859, 0.4737, 0.4570, 0.4423, 0.4245, 0.3962, 0.3842, 0.3419}
+                        ,{0.900, 0.3425, 0.3618, 0.3945, 0.4261, 0.4506, 0.4595, 0.4707, 0.4733, 0.4741, 0.4798, 0.4762, 0.4650, 0.4534, 0.4374, 0.4232, 0.4062, 0.3792, 0.3677, 0.3272}
+                        ,{0.950, 0.3160, 0.3339, 0.3640, 0.3932, 0.4158, 0.4240, 0.4343, 0.4367, 0.4375, 0.4427, 0.4393, 0.4290, 0.4183, 0.4036, 0.3905, 0.3748, 0.3498, 0.3393, 0.3019}
+                        ,{1.000, 0.2742, 0.2896, 0.3158, 0.3411, 0.3607, 0.3678, 0.3768, 0.3789, 0.3795, 0.3840, 0.3811, 0.3722, 0.3629, 0.3501, 0.3388, 0.3251, 0.3035, 0.2943, 0.2619}
+                        };
+
+            dragCoefTable[] = {
+                        {"A/S", 0.00, 5.30, 10.59, 15.89, 21.18, 26.48, 31.77, 36.01, 36.85, 41.07, 45.29, 49.50, 53.72, 57.93, 62.15, 66.36, 71.10, 75.84, 92.60}
+                        ,{0.000, 0.0078, 0.0038, 0.0019, 0.0012, 0.0006, 0.0004, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002}
+                        ,{0.597, 0.0413, 0.0408, 0.0401, 0.0395, 0.0392, 0.0392, 0.0392, 0.0392, 0.0392, 0.0392, 0.0392, 0.0392, 0.0392, 0.0392, 0.0392, 0.0392, 0.0403, 0.0413, 0.0413}
+                        ,{0.753, 0.0539, 0.0533, 0.0523, 0.0515, 0.0512, 0.0512, 0.0512, 0.0512, 0.0512, 0.0512, 0.0512, 0.0512, 0.0512, 0.0512, 0.0512, 0.0512, 0.0526, 0.0539, 0.0539}
+                        ,{0.850, 0.0616, 0.0609, 0.0598, 0.0589, 0.0585, 0.0585, 0.0585, 0.0585, 0.0585, 0.0585, 0.0585, 0.0585, 0.0585, 0.0585, 0.0585, 0.0585, 0.0601, 0.0616, 0.0616}
+                        ,{0.900, 0.0801, 0.0792, 0.0777, 0.0765, 0.0761, 0.0761, 0.0761, 0.0761, 0.0761, 0.0761, 0.0761, 0.0761, 0.0761, 0.0761, 0.0761, 0.0761, 0.0781, 0.0801, 0.0801}
+                        ,{0.950, 0.1109, 0.1096, 0.1076, 0.1060, 0.1053, 0.1053, 0.1053, 0.1053, 0.1053, 0.1053, 0.1053, 0.1053, 0.1053, 0.1053, 0.1053, 0.1053, 0.1081, 0.1109, 0.1109}
+                        ,{1.000, 0.1602, 0.1583, 0.1554, 0.1531, 0.1522, 0.1522, 0.1522, 0.1522, 0.1522, 0.1522, 0.1522, 0.1522, 0.1522, 0.1522, 0.1522, 0.1522, 0.1562, 0.1602, 0.1602}
+                        };
+
+Front fuselage drag (helisim_fuselage.hpp, fuselageFront dragCoefTable): 0.360, flat
+
+Written tables, 4923 kg (10853 lb), sea level, 15 C, cyclic solved:
+    kt   target   rig   coll   pitch
+    0.0   66.9%   66.9%  0.597   -0.1 
+   10.3   62.4%   62.4%  0.558   -0.1 
+   20.6   55.4%   55.5%  0.500   -0.1 
+   30.9   49.7%   49.7%  0.452   -0.2 
+   41.2   45.9%   45.8%  0.420   -0.4 
+   51.5   44.6%   44.6%  0.408   -0.7 
+   61.8   43.3%   43.3%  0.396   -1.2 
+   70.0   43.3%   43.3%  0.396   -1.6 
+   71.6   43.3%   43.3%  0.396   -1.6 
+   79.8   43.3%   43.3%  0.396   -2.1 
+   88.0   44.6%   44.5%  0.409   -2.6 
+   96.2   47.1%   47.1%  0.434   -3.1 
+  104.4   50.3%   50.3%  0.465   -3.6 
+  112.6   54.8%   54.8%  0.509   -4.1 
+  120.8   59.9%   59.8%  0.559   -4.6 
+  129.0   66.9%   66.9%  0.624   -5.0 
+  138.2   80.9%   81.0%  0.725   -5.4 
+  147.4   94.2%   94.2%  0.816   -5.8 
+  180.0  (extr)  252.1%  1.000  -16.7 NO
+Hovers:
+     4923 kg ( 10853 lb)  target  66.9%  rig  66.9% at 0.597 
+     6000 kg ( 13228 lb)  target  86.6%  rig  86.6% at 0.753 
+     6650 kg ( 14661 lb)  target  99.2%  rig  99.3% at 0.851 
+
+Fit OK: every point within 0.5%.

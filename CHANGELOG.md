@@ -35,6 +35,13 @@
   curve, max range, the cruise pitch attitude and hover collective. Reports a
   failure at once and exits with an error code. The guide's "Fitting the main
   rotor tables" section is rewritten around it.
+- `rotortables.py` shapes the main rotor's drag at collective 0: idle torque in
+  the hover, falling to 1/36 of it by 60 kt. Full-down collective now unloads
+  the engines in forward flight, so a power-on autorotation overruns them and
+  the needles split. Tail rotors keep their own rows.
+- `python/dev/fits/` keeps every aircraft's rotor table fit - the AH-64D, UH-60,
+  EC665 Tiger and Bo 105 - with its command and full output, so a fit can be
+  rerun and its targets are never lost.
 - The rig flies the stabilator, and its replay measures the stick from the
   force trim, as the rotor sees it.
 - `airframe.py`, `forces.py` and `engine.py` ship with the release.

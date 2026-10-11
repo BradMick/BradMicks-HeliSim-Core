@@ -32,8 +32,9 @@ cost of a good one: a plain fit takes seconds, and one that takes minutes has a 
 reach.
 
 Everything is flown at sea level, 15 C, out of ground effect, cyclic solved, through airframe.py
-exactly as it is. The pack's own config supplies everything else, including the drag at
-collective 0, which is kept so the idle torque does not move.
+exactly as it is. The pack's own config supplies everything else, including the hover's drag at
+collective 0, which is kept so the idle torque does not move; across the airspeeds it falls in
+CD_ZERO_SHAPE.
 
 Prints both tables as helisim_simpleRotor.hpp blocks for the main rotor, then a sweep of the
 written (rounded) tables against the power curve. It does not edit the pack.
@@ -66,6 +67,10 @@ PEAK_MARGIN = 1.001         #thrust at the peak over the heaviest hover weight, 
 CL_ZERO = 0.106
 CL_FALL = (0.957, 0.883, 0.766)
 CD_STALL = (1.3, 1.8, 2.6)
+#Full-down collective (guide step 6.6): CD at collective 0 against airspeed, kt and a fraction of
+#the hover's - flat pitch's idle torque in the hover, unloaded to almost nothing once air moves
+#through the disc, so a power-on autorotation overruns the engines. Flat past the last point.
+CD_ZERO_SHAPE = [[0, 1.0], [10, 1 / 2], [20, 1 / 4], [30, 1 / 6], [40, 1 / 12], [50, 1 / 18], [60, 1 / 36]]
 EXTRA_COL = 92.60           #m/s, the column past the end (180 kt); --extra-cols replaces it
 
 TQ_TOL = 0.005              #a fitted point further than this from its torque has failed
@@ -217,14 +222,17 @@ class Fit:
         """Every airspeed column is the hover column, lift times sl, drag times sd. sd is fixed
         by drag_scales (a collective is a torque, bar ETL); sl is what the column solve finds.
         The columns past the curve (self.extra, m/s) continue sl along its last two columns'
-        line and repeat the last sd - extrapolated, not fitted."""
+        line and repeat the last sd - extrapolated, not fitted. The collective 0 drag row takes
+        CD_ZERO_SHAPE instead of sd: torque is the coefficient times a speed-free constant, so
+        the shape is the torque's."""
         rd = (lambda a: round(a, nd)) if nd else (lambda a: a)
         allc = cols + self.extra
         slope = (sl[-1] - sl[-2]) / (cols[-1] - cols[-2])
         sl = list(sl) + [sl[-1] + slope * (c - cols[-1]) for c in self.extra]
         sd = list(sd) + [sd[-1]] * len(self.extra)
+        sz = [E.math_linear_interp(CD_ZERO_SHAPE, min(c / KT_TO_MPS, CD_ZERO_SHAPE[-1][0]))[1] for c in allc]
         lt = [['A/S'] + allc] + [[r] + [rd(v * s) for s in sl] for r, v in zip(lrows, lift)]
-        dt = [['A/S'] + allc] + [[r] + [rd(v * s) for s in sd] for r, v in zip(drows, drag)]
+        dt = [['A/S'] + allc] + [[r] + [rd(v * s) for s in (sz if r == 0.0 else sd)] for r, v in zip(drows, drag)]
         self.main['liftCoefTable'], self.main['dragCoefTable'] = lt, dt
         return lt, dt
 

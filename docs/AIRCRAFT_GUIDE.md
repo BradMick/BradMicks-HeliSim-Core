@@ -832,7 +832,8 @@ fitted to it as written. It must start at 0 kt on the first `--hover` point's to
    92.60 (180 kt). Core reads any column set. UH-60: 0, 5.14, 10.29, 15.43, 20.58, 25.72, 30.87,
    34.98, 36.01, 41.16, 46.30, 51.44, 56.59, 61.73, 66.88, 72.02, 77.17, 82.31, 92.60.
 2. Each column `k` is the hover column times two numbers: `CL(row, k) = sL[k] * CL(row, 0)` and
-   `CD(row, k) = sD[k] * CD(row, 0)`, every row. The hover column has `sL = sD = 1`.
+   `CD(row, k) = sD[k] * CD(row, 0)`, every row but drag at collective 0 (step 6.6). The hover
+   column has `sL = sD = 1`.
 3. `sD` is set, not solved - a collective is a torque, so a pilot holding collective holds
    torque through an acceleration. With `xe = 40/140` of max range (translational lift in):
    - through ETL, `V <= xe * Vmr`: `sD = 1 - drop * (TQh - TQ(V)) / (TQh - TQ(xe * Vmr))` -
@@ -854,7 +855,18 @@ fitted to it as written. It must start at 0 kt on the first `--hover` point's to
    hover, 0.267 in the bucket, 0.845 at 160 kt.
 5. The extra columns (`--extra-cols`, default 180 kt alone): `sL` continues the line through
    the last two fitted columns; `sD` repeats the last.
-6. Round to four places and write both tables: CL rows from step 4.1, CD rows from step 4.5, the
+6. Drag at collective 0 is not scaled by `sD`. Full-down collective is flat pitch's idle torque
+   in the hover and next to nothing once air moves through the disc - if it stays at the idle
+   torque, a power-on autorotation never lets the rotor overrun the engines and the needles
+   never split. Torque is the coefficient times a constant that airspeed does not enter, so
+   `CD(0, k) = CD(0, 0) * z(V)`, with `z` from the table below, flat past 60 kt. Tail rotors do
+   not autorotate and keep their own rows.
+
+   | kt | 0 | 10 | 20 | 30 | 40 | 50 | 60+ |
+   |---|---|---|---|---|---|---|---|
+   | `z` | 1 | 1/2 | 1/4 | 1/6 | 1/12 | 1/18 | 1/36 |
+   | AH-64D, % per engine | 18 | 9 | 4.5 | 3 | 1.5 | 1 | 0.5 |
+7. Round to four places and write both tables: CL rows from step 4.1, CD rows from step 4.5, the
    columns above.
 
 The UH-60 lands every power-curve point within 0.2%, and holding 0.58 collective gives 73.3%
@@ -869,6 +881,10 @@ the rig, with the pack's own config:
 set BMKHS_CONFIG=<pack>\config\bmkhs_config
 python python/dev/rotortables.py --bc <boundingCenter> --cg <CoM> --hover <points> <curve> [options]
 ```
+
+Every aircraft's fit is kept in `python/dev/fits/<aircraft>.txt`: where its pack lives, the exact
+command, and everything the run printed. When you fit or refit an aircraft, write its record there
+in the same commit as the pack's tables, so a fit can always be rerun and its targets are never lost.
 
 | Option | What it takes | Default |
 |---|---|---|
