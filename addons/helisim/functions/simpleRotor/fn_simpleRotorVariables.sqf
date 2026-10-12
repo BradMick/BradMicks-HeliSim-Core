@@ -51,6 +51,9 @@ private _numFields = [
    , "gndEffValue"
    , "reacTqScalar"
    , "autoTorque"
+   , "tandemPitchLiftCoef"
+   , "tandemYawLiftCoef"
+   , "lctTime"
 ];
 private _arrFields   = ["pivot", "rotation", "controlMap"];
 private _gridFields  = ["liftCoefTable", "dragCoefTable"];
@@ -70,6 +73,8 @@ for "_i" from 1 to _numSimpleRotors do {
     _rotor set ["type", [MAIN, TAIL] select (toLower getText (_r >> "type")      == "tail")];
     _rotor set ["dir",  [CCW,  CW  ] select (toLower getText (_r >> "direction") == "cw")];
     _rotor set ["damageRole", getText (_r >> "damageRole")];
+    //Where the rotor sits in the control scheme - declared, not inferred. -1 when not declared.
+    _rotor set ["position", ["front", "rear", "left", "right", "top", "bottom"] find (toLower getText (_r >> "position"))];
 
     { _rotor set [_x, getNumber (_r >> _x)]; } forEach _numFields;
     { _rotor set [_x, getArray  (_r >> _x)]; } forEach _arrFields;
@@ -82,11 +87,25 @@ for "_i" from 1 to _numSimpleRotors do {
         _rotor set [_x, [getArray (_r >> _x), format ["simple rotor %1 %2", _i - 1, _x]] call bmkhs_fnc_mathBuildInterpGrid];
     } forEach _gridFields;
 
+    //LCT schedule - tandem only, optional: built only where a rotor declares one. lctStroke is
+    //the actuator's full travel, so lctTime sets its rate.
+    private _lct = getArray (_r >> "lctSchedule");
+    _rotor set ["lctSchedule", []];
+    _rotor set ["lctStroke", 0.0];
+    if (_lct isNotEqualTo []) then {
+        _rotor set ["lctSchedule", [_lct, format ["simple rotor %1 lctSchedule", _i - 1]] call bmkhs_fnc_mathBuildInterpGrid];
+        private _vals = [];
+        { _vals append (_x select [1]) } forEach (_lct select [1]);
+        _rotor set ["lctStroke", (selectMax _vals) - (selectMin _vals)];
+    };
+
     _rotors pushBack _rotor;
 };
 
 _heli setVariable ["bmkhs_numSimpleRotors", _numSimpleRotors];
 _heli setVariable ["bmkhs_simpleRotors",    _rotors];
+//How the controls reach the rotors - conventional when not declared
+_heli setVariable ["bmkhs_controlScheme",   (["conventional", "tandem", "coaxial", "tiltrotor", "compound"] find (toLower getText (_config >> "controlScheme"))) max CONVENTIONAL];
 //{normal low, normal high, high rotor, maximum}
 _heli setVariable ["bmkhs_nrLimits",        getArray (_config >> "nrLimits")];
 

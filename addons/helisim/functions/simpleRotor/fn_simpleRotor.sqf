@@ -52,8 +52,6 @@ private _reacTqScalar     = _rotor get "reacTqScalar";
 private _flapBackRollMax  = _rotor get "flapBackRollMax";
 private _flapBackPitchMax = _rotor get "flapBackPitchMax";
 private _gndEffValue      = _rotor get "gndEffValue";
-private _rollLiftCoef     = _rotor get "rollLiftCoef";
-private _pitchLiftCoef    = _rotor get "pitchLiftCoef";
 private _coneAngle        = _rotor get "coneAngle";
 private _controlMap       = _rotor get "controlMap";
 
@@ -61,16 +59,22 @@ private _controlMap       = _rotor get "controlMap";
 private _deltaTime          = _heli getVariable "bmkhs_deltaTime";
 
 //Control outputs
-([_heli, _type] call bmkhs_fnc_simpleRotorControl)
+private _controls = [_heli, _rotor] call bmkhs_fnc_simpleRotorControl;
+_controls
 	params [ "_pitchOutput"
 		   , "_rollOutput"
-		   , "_collOutput"];
+		   , "_collOutput"
+		   , "_tandemPitchOutput"
+		   , "_tandemYawOutput"
+		   , "_mastPitchOutput"];
 
 //Disc tilt
 private _flapLon = [-1, 1, _pitchOutput, _flapLonMin, _flapLonMid, _flapLonMax] call bmkhs_fnc_mathLinearInterpFromCenter;
 private _flapLat = [-1, 1, _rollOutput,  _flapLatMin, _flapLatMid, _flapLatMax] call bmkhs_fnc_mathLinearInterpFromCenter;
+//Tandem yaw is lateral cyclic too - it tilts the disc through the same range, on top of roll's
+_flapLat         = _flapLat + ([-1, 1, _tandemYawOutput, _flapLatMin, _flapLatMid, _flapLatMax] call bmkhs_fnc_mathLinearInterpFromCenter);
 //Rotor orientation
-private _p              = _rot select 0;
+private _p              = (_rot select 0) + _mastPitchOutput;
 private _r              = _rot select 1;
 private _y              = _rot select 2;
 //Mast frame
@@ -168,15 +172,19 @@ for "_i" from 0 to 3 do {
     //Blade lift
     private _bladeLift      = _liftCoef * 0.5 * _dryAirDensity * _bladeArea * (_bladeVel_75 * _bladeVel_75);
     _bladeLift              = _bladeLift * _bladeScalar;
-    //Differential lift from cyclic application
-    private _liftCoefDelta  = (_rollOutput  * (cos _psi) * _rollLiftCoef)
-                            + (_pitchOutput * (sin _psi) * _pitchLiftCoef);
+
+    //Differential lift from the controls, mixed for the control scheme
+    ([_heli, _rotor, _psi, _controls, _liftCoef] call bmkhs_fnc_simpleRotorGetLiftCoefDelta)
+        params ["_rollLiftCoef", "_pitchLiftCoef"];
+    private _liftCoefDelta  = _rollLiftCoef + _pitchLiftCoef;
     private _bladeLiftDelta = _liftCoefDelta * 0.5 * _dryAirDensity * _bladeArea * (_bladeVel_75 * _bladeVel_75);
     _bladeLiftDelta         = _bladeLiftDelta * _bladeScalar;
+
     //Blade drag
     private _dragCoef       = [_dragCoefTable, _tableKey, _velXY] call bmkhs_fnc_mathLinearInterp2D;
     private _bladeDrag      = _dragCoef * 0.5 * _dryAirDensity * _bladeArea * (_bladeVel_75 * _bladeVel_75);
     _bladeDrag              = _bladeDrag * _bladeScalar;
+    
     //Total rotor torque - drag brakes the rotor, upflow in a descent drives it
     _rotorTorque            = _rotorTorque + (_bladeDrag * _bladeRad_75);
     if (_type == MAIN) then {

@@ -1,17 +1,22 @@
 """Aerosurface generator - writes an aircraft's fuselage and wing config from its fm.p3d.
 
 Run it:  python python/tools/fm_generateAeroSurfacePoints.py <fm.p3d> <bmkhs_config folder>
-             [--turn] [--forward M] [--down M] [--right M] [--add]
+             [--turn] [--pitch DEG] [--roll DEG] [--yaw DEG]
+             [--forward M] [--down M] [--right M] [--add]
 
 An fm.p3d not built over the aircraft's model is placed onto it as it is read: --turn turns it
-180 deg about vertical, then --forward / --down / --right shift it, metres. The placement is
-recorded on line 2 of both files; --add adds the shift to the recorded one and keeps its turn -
-tools/fm_nudge.sqf prints that command.
+180 deg about vertical, --pitch / --roll / --yaw rotate it about its own origin (degrees, as
+Core's rotation[] - fn_mathVectorRotate), then --forward / --down / --right shift it, metres.
+The placement is recorded on line 2 of both files and as fmPlacement[] in helisim_fuselage.hpp,
+where tools/fm_nudge.sqf reads it to rotate about the placed origin. --add adds the angles and
+the shift to the recorded ones and keeps the turn - tools/fm_nudge.sqf prints that command.
 
 Model every aerosurface as quads in the fm.p3d's first LOD (0.000), one named selection per
 quad: the surface's name, optionally numbered - fuselageTop01, fuselageTop02, verticalFin.
 A triangle is taken as a quad with one corner repeated.
 Each quad's face points the way its force acts; flip the face to flip the force.
+A selection with no face - a point such as referenceDatum or a rotor pivot - is not an
+aerosurface and is passed over.
 
     Fuselage:  fuselageTop  fuselageSide  fuselageFront
     Wings:     leftWing  rightWing  horizontalStabilizer  stabilator
@@ -60,8 +65,9 @@ FUSELAGE_AXES = {'fuselageTop': ('up', 'down'), 'fuselageSide': ('left', 'right'
 OPPOSITE = {'right': 'left', 'left': 'right', 'forward': 'backward', 'backward': 'forward',
             'up': 'down', 'down': 'up'}
 
-PLACEMENT    = '//Placement: turn %d forward %.3f down %.3f right %.3f'
-PLACEMENT_RE = r'//Placement: turn (\d) forward (\S+) down (\S+) right (\S+)'
+PLACEMENT    = '//Placement: turn %d pitch %.3f roll %.3f yaw %.3f forward %.3f down %.3f right %.3f'
+#The angles are optional, so a file placed before they existed still adds.
+PLACEMENT_RE = r'//Placement: turn (\d)(?: pitch (\S+) roll (\S+) yaw (\S+))? forward (\S+) down (\S+) right (\S+)'
 
 
 class BuildError(Exception):
@@ -111,6 +117,16 @@ def read_lod0(path):
     raise BuildError('%s has no 0.000 LOD' % path)
 
 
+def vector_rotate(v, p, r, y):
+    """fn_mathVectorRotate - {right, forward, up}, degrees."""
+    sp, sy, sr = (math.sin(math.radians(a)) for a in (p, y, r))
+    cp, cy, cr = (math.cos(math.radians(a)) for a in (p, y, r))
+    m = [[cr * cy + sr * sp * sy, -cr * sy + sr * sp * cy, sr * cp],
+         [cp * sy, cp * cy, -sp],
+         [-sr * cy + cr * sp * sy, sr * sy + cr * sp * cy, cr * cp]]
+    return [sum(m[i][j] * v[j] for j in range(3)) for i in range(3)]
+
+
 def sub(a, b):   return [p - q for p, q in zip(a, b)]
 def dot(a, b):   return sum(p * q for p, q in zip(a, b))
 def cross(a, b): return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
@@ -143,14 +159,19 @@ def ordered(quad, facing):
     return quad[first:] + quad[:first]
 
 
-def build(path, turn=False, forward=0.0, down=0.0, right=0.0):
+def build(path, turn=False, forward=0.0, down=0.0, right=0.0, pitch=0.0, roll=0.0, yaw=0.0):
     pts, faces, sels = read_lod0(path)
-    #MLOD points are (right, up, forward): turn 180 deg about vertical, then shift.
+    #MLOD points are (right, up, forward). Into {right, forward, up}: turn 180 deg about vertical,
+    #rotate about the fm.p3d's origin, then shift.
     sign = -1.0 if turn else 1.0
-    pts  = [(sign * x + right, y - down, sign * z + forward) for x, y, z in pts]
+    pts  = [vector_rotate([sign * x, sign * z, y], pitch, roll, yaw) for x, y, z in pts]
+    pts  = [(a + right, b + forward, c - down) for a, b, c in pts]
     npts = len(pts)
     surfaces = {}
     for name, data in sels:
+        #Points only (a datum, a pivot, a tank) - a reference, not an aerosurface.
+        if not any(data[npts:]):
+            continue
         m = re.fullmatch(r'([A-Za-z]+?)(\d*)', name)
         surface = m.group(1) if m else None
         if surface not in FUSELAGE + WINGS:
@@ -160,8 +181,7 @@ def build(path, turn=False, forward=0.0, down=0.0, right=0.0):
         sel_faces = [i for i, w in enumerate(data[npts:]) if w]
         if len(sel_faces) != 1 or len(faces[sel_faces[0]]) not in (3, 4) or sel_pts != set(faces[sel_faces[0]]):
             raise BuildError('%s must be exactly one 4-sided face, or a triangle' % name)
-        #MLOD points are (right, up, forward).
-        quad = [[pts[i][0], pts[i][2], pts[i][1]] for i in faces[sel_faces[0]]]
+        quad = [list(pts[i]) for i in faces[sel_faces[0]]]
         #A triangle is a quad with one corner repeated.
         if len(quad) == 3:
             quad.append(list(quad[2]))
@@ -202,8 +222,11 @@ def fmt_rows(rows, indent):
     return '\n'.join(indent + (' ' if i == 0 else ',') + r for i, r in enumerate(rows))
 
 
-def fuselage_hpp(built):
+def fuselage_hpp(built, placement):
     out = ['//Generated by fm_generateAeroSurfacePoints.py from fm.p3d. Re-running resets every value.',
+           '',
+           '    //Line 2 as values, {turn, pitch, roll, yaw, forward, down, right} - tools/fm_nudge.sqf reads it.',
+           '    fmPlacement[]       = {%d, %.3f, %.3f, %.3f, %.3f, %.3f, %.3f};' % placement,
            '',
            '    fuselageAirfoil     = "%s";' % FUSELAGE_AIRFOIL,
            '']
@@ -262,6 +285,9 @@ if __name__ == '__main__':
     args.add_argument('p3d')
     args.add_argument('config')
     args.add_argument('--turn', action='store_true')
+    args.add_argument('--pitch', type=float, default=0.0)
+    args.add_argument('--roll', type=float, default=0.0)
+    args.add_argument('--yaw', type=float, default=0.0)
     args.add_argument('--forward', type=float, default=0.0)
     args.add_argument('--down', type=float, default=0.0)
     args.add_argument('--right', type=float, default=0.0)
@@ -275,12 +301,16 @@ if __name__ == '__main__':
             print('Nothing written: %s has no recorded placement to add to' % fuselage)
             sys.exit(1)
         args.turn     = args.turn or m.group(1) == '1'
-        args.forward += float(m.group(2))
-        args.down    += float(m.group(3))
-        args.right   += float(m.group(4))
+        args.pitch   += float(m.group(2) or 0.0)
+        args.roll    += float(m.group(3) or 0.0)
+        args.yaw     += float(m.group(4) or 0.0)
+        args.forward += float(m.group(5))
+        args.down    += float(m.group(6))
+        args.right   += float(m.group(7))
 
     try:
-        built, report = build(args.p3d, args.turn, args.forward, args.down, args.right)
+        built, report = build(args.p3d, args.turn, args.forward, args.down, args.right,
+                              args.pitch, args.roll, args.yaw)
     except BuildError as e:
         print('Nothing written: %s' % e)
         sys.exit(1)
@@ -289,12 +319,13 @@ if __name__ == '__main__':
     for s in FUSELAGE + WINGS:
         if s in built:
             print('  %-22s %-8s %d quad%s' % (s, built[s][0], len(built[s][1]), '' if len(built[s][1]) == 1 else 's'))
-    placement = PLACEMENT % (args.turn, args.forward, args.down, args.right)
+    values    = (args.turn, args.pitch, args.roll, args.yaw, args.forward, args.down, args.right)
+    placement = PLACEMENT % values
     print('  ' + placement[2:])
     if input('\nAll data will be reset to default. Continue? (y/n) ').strip().strip('﻿').lower() != 'y':
         print('Nothing written.')
         sys.exit(0)
-    for name, text in (('helisim_fuselage.hpp', fuselage_hpp(built)), ('helisim_wings.hpp', wings_hpp(built))):
+    for name, text in (('helisim_fuselage.hpp', fuselage_hpp(built, values)), ('helisim_wings.hpp', wings_hpp(built))):
         first, rest = text.split('\n', 1)
         with open(os.path.join(args.config, name), 'w', newline='\n') as f:
             f.write(first + '\n' + placement + '\n' + rest)

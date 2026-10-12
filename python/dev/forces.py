@@ -25,6 +25,14 @@ sys.path.insert(0, os.path.dirname(__file__))
 import engine as E  # noqa: E402 - reads BMKHS_CONFIG at import
 
 MAIN, TAIL = E.MAIN, E.TAIL
+SCHEMES = ['conventional', 'tandem', 'coaxial', 'tiltrotor', 'compound']
+CONVENTIONAL, TANDEM, COAXIAL, TILTROTOR, COMPOUND = range(5)
+
+
+def control_scheme():
+    """fn_simpleRotorVariables - conventional when not declared."""
+    s = str(E.CFG.get('controlScheme', '')).lower()
+    return SCHEMES.index(s) if s in SCHEMES else CONVENTIONAL
 
 
 # ---------------------------------------------------------------------------------------------
@@ -68,27 +76,56 @@ def _cross(a, b): return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], 
 # fn_simpleRotorControl, fn_simpleRotor (force path)
 # ---------------------------------------------------------------------------------------------
 
-def simple_rotor_control(rotorType, pitch, roll, yaw, coll):
-    """Control outputs for one rotor, from the summed inputs (pilot + trims + FMC + mixing)."""
+def simple_rotor_control(r, pitch, roll, yaw, coll, kts=0.0, paFt=0.0):
+    """Control outputs for one rotor, from the summed inputs (pilot + trims + FMC + mixing). The
+    LCT is taken at its schedule - the rig has no clock for the actuator's travel."""
+    rotorType = TAIL if r['type'].lower() == 'tail' else MAIN
     pitch = E.clamp(pitch, -1.0, 1.0)
     roll = E.clamp(roll, -1.0, 1.0)
     yaw = E.clamp(yaw, -1.0, 1.0)
-    if rotorType == MAIN:
-        return E.clamp(pitch, -1.0, 1.0), E.clamp(roll, -1.0, 1.0), E.clamp(coll, 0.0, 1.0)
-    return 0.0, 0.0, E.clamp(yaw, -1.0, 1.0)
+    scheme = control_scheme()
+    if scheme == CONVENTIONAL:
+        if rotorType == MAIN:
+            return E.clamp(pitch, -1.0, 1.0), E.clamp(roll, -1.0, 1.0), E.clamp(coll, 0.0, 1.0), 0.0, 0.0, 0.0
+        return 0.0, 0.0, E.clamp(yaw, -1.0, 1.0), 0.0, 0.0, 0.0
+    if scheme == TANDEM:
+        #Stick moves lift between the rotors; pedal is lateral cyclic on each rotor, opposite ways
+        pos = str(r.get('position', '')).lower()
+        sign = -1.0 if pos == 'front' else (1.0 if pos == 'rear' else 0.0)
+        lct = r.get('lctSchedule')
+        mast = -E.math_linear_interp_2d(E.math_build_interp_grid(lct), kts, paFt) if lct else 0.0
+        return 0.0, roll, E.clamp(coll, 0.0, 1.0), sign * pitch, sign * yaw, mast
+    return 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+
+
+def simple_rotor_get_lift_coef_delta(r, psi, ctl, liftCoef):
+    """fn_simpleRotorGetLiftCoefDelta - one blade's lift coefficient change, mixed for the control
+    scheme into a roll and a pitch part."""
+    pitchOutput, rollOutput, collOutput, tandemPitch, tandemYaw, mastPitch = ctl
+    scheme = control_scheme()
+    if scheme == CONVENTIONAL:
+        return rollOutput * _cos(psi) * r['rollLiftCoef'], pitchOutput * _sin(psi) * r['pitchLiftCoef']
+    if scheme == TANDEM:
+        roll = rollOutput * _cos(psi) * r['rollLiftCoef']
+        pitch = (pitchOutput * _sin(psi) * r['pitchLiftCoef']) + (tandemPitch * r.get('tandemPitchLiftCoef', 0.0))
+        yaw = tandemYaw * _cos(psi) * r.get('tandemYawLiftCoef', 0.0)
+        return roll + yaw, pitch
+    return 0.0, 0.0
 
 
 def simple_rotor_forces(r, ctl, rho, xmsnRpm, com):
     """One rotor's total force and moment about com, model space, N and Nm - the sum of the
     four blades' lift and drag vectors fn_simpleRotor hands to addForce, without the frame's dt.
     Hover: zero velocity, out of ground effect."""
-    pitchOutput, rollOutput, collOutput = ctl
+    pitchOutput, rollOutput, collOutput, tandemPitch, tandemYaw, mastPitch = ctl
     rotorType = TAIL if r['type'].lower() == 'tail' else MAIN
     torqueSign = -1.0 if r['direction'].lower() == 'cw' else 1.0
 
     flapLon = math_linear_interp_from_center(-1, 1, pitchOutput, r['pitchFlapMin'], r['pitchFlapMid'], r['pitchFlapMax'])
     flapLat = math_linear_interp_from_center(-1, 1, rollOutput, r['rollFlapMin'], r['rollFlapMid'], r['rollFlapMax'])
+    flapLat += math_linear_interp_from_center(-1, 1, tandemYaw, r['rollFlapMin'], r['rollFlapMid'], r['rollFlapMax'])
     p, rr, y = r['rotation']
+    p += mastPitch
     fVec = math_vector_rotate([0.0, 1.0, 0.0], p, rr, y)
     rVec = math_vector_rotate([1.0, 0.0, 0.0], p, rr, y)
     uVec = math_vector_rotate([0.0, 0.0, 1.0], p, rr, y)
@@ -120,7 +157,7 @@ def simple_rotor_forces(r, ctl, rho, xmsnRpm, com):
 
         liftCoef = E.math_linear_interp_2d(liftGrid, tableKey, 0.0)
         bladeLift = liftCoef * q * bladeScalar
-        liftCoefDelta = (rollOutput * _cos(psi) * r['rollLiftCoef']) + (pitchOutput * _sin(psi) * r['pitchLiftCoef'])
+        liftCoefDelta = sum(simple_rotor_get_lift_coef_delta(r, psi, ctl, liftCoef))
         bladeLiftDelta = liftCoefDelta * q * bladeScalar
         dragCoef = E.math_linear_interp_2d(dragGrid, tableKey, 0.0)
         bladeDrag = dragCoef * q * bladeScalar
@@ -157,8 +194,7 @@ def hover_rpm():
 def totals(pitch, roll, yaw, coll, com, rho, rpm):
     F, M = [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]
     for r in rotors():
-        rType = TAIL if r['type'].lower() == 'tail' else MAIN
-        f, m = simple_rotor_forces(r, simple_rotor_control(rType, pitch, roll, yaw, coll), rho, rpm, com)
+        f, m = simple_rotor_forces(r, simple_rotor_control(r, pitch, roll, yaw, coll), rho, rpm, com)
         F, M = _add(F, f), _add(M, m)
     return F, M
 

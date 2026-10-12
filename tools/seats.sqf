@@ -4,7 +4,7 @@
     if (_veh == player) exitWith { hint "Get in the aircraft first" };
     private _out = [];
     private _log = { _out pushBack _this; diag_log text ("BMKHSSEATS| " + _this) };
-    private _bc  = boundingCenter _veh;   //Arma's model frame + boundingCenter = Object Builder frame
+    private _bc  = boundingCenter _veh;
     private _fmt = { format ["{%1, %2, %3}", (_this select 0) toFixed 3, (_this select 1) toFixed 3, (_this select 2) toFixed 3] };
 
     private _grp  = createGroup [side group player, true];

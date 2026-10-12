@@ -532,7 +532,7 @@ first, then lists what it found:
       fuselageFront          forward  18 quads
       leftWing               up       2 quads
       ...
-      Placement: turn 0 forward 0.000 down 0.000 right 0.000
+      Placement: turn 0 pitch 0.000 roll 0.000 yaw 0.000 forward 0.000 down 0.000 right 0.000
 
     All data will be reset to default. Continue? (y/n)
 
@@ -543,13 +543,17 @@ it reads it:
 | Option | Effect |
 |---|---|
 | `--turn` | Turn it 180 deg about vertical - for a model built facing aft |
+| `--pitch DEG` `--roll DEG` `--yaw DEG` | Then rotate it about the fm.p3d's own origin, degrees, as a rotor's `rotation[]` |
 | `--forward M` `--down M` `--right M` | Then shift it, metres |
-| `--add` | Add the shift to the placement recorded in the current files, keeping its turn |
+| `--add` | Add the angles and the shift to the placement recorded in the current files, keeping its turn |
 
 The placement is written on line 2 of both files, so `--add` always has the last
-one to add to. Find the shift in game with `tools/fm_nudge.sqf` (section 7), which
-prints the `--add` command. A file with no recorded placement refuses `--add`:
-regenerate it once with the full placement first.
+one to add to, and as `fmPlacement[]` in `helisim_fuselage.hpp`, where the nudge
+reads it - it rotates about the fm.p3d's origin where the placement put it. Find the
+placement in game with `tools/fm_nudge.sqf` (section 7), which prints the `--add`
+command. A file with no recorded placement refuses `--add`: regenerate it once with
+the full placement first. A file placed before the angles existed still adds; run
+`--add` with nothing else once to write `fmPlacement[]` before rotating it in game.
 
 Answer `y` to write both files. Anything else writes nothing. **Both files are
 rewritten in full every time** - geometry, facing, and every other value back
@@ -624,21 +628,28 @@ and LOCAL EXEC:
 | Key | Does |
 |---|---|
 | Numpad 0 | Next target: fuselage + wings, each simple rotor, centre of mass |
-| Numpad 8 / 2 | Forward / aft |
-| Numpad 6 / 4 | Right / left |
-| Numpad 9 / 3 | Up / down |
-| Numpad + / - | Double / halve the step (starts at 0.05 m) |
-| Numpad 5 | Copy the result for the current target |
+| Numpad 7 | Mode. Fuselage + wings: move, rotate (about the fm.p3d's origin). A rotor: move (`pivot[]`), rotate (`rotation[]`), mast (`mastLength`) |
+| Numpad 8 / 2 | Forward / aft - rotate mode: pitch |
+| Numpad 6 / 4 | Right / left - rotate mode: roll |
+| Numpad 9 / 3 | Up / down - rotate mode: yaw; mast mode: longer / shorter |
+| Numpad + / - | Double / halve the current mode's step (0.05 m, 0.5 deg, 0.05 m to start) |
+| Numpad 5 | Copy every value that changed, one line each |
 
-What Numpad 5 copies, each labelled with where it goes:
+Numpad 5 copies every change since the tool was pasted, each line labelled with where
+it goes, and prints them to the chat. The hint marks the current target's changed lines
+with `*`.
 
-- **Fuselage + wings** - the generator's `--add` command (section 5). Fill in your
-  two paths and run it from `@bmkhs/python/`.
-- **A rotor** - its `pivot[]` line for `helisim_simpleRotor.hpp`.
+- **Fuselage + wings** - the generator's `--add` command, shift and angles (section 5). Put your two paths
+  in place of `FM_P3D` and `BMKHS_CONFIG` and run it from `@bmkhs/python/`.
+- **A rotor** - its `pivot[]`, `rotation[]` and `mastLength` lines for
+  `helisim_simpleRotor.hpp`.
 - **Centre of mass** - `comCorrection[]` (REALISTIC) or `casualModeCom[]` (other
   modes) for `helisim_mass.hpp`.
 
 It counts from what is loaded. Re-enter the aircraft before pasting it again.
+
+The tool carries no comments: a debug console that does not strip them fails on the
+first one past the start of the code ("Invalid number in expression").
 
 ### Rotor control map
 
@@ -1055,7 +1066,7 @@ Each mix adds control travel to one rotor axis from one control's position:
 class ControlMixing {
     class YawToPitch {
         source  = "pedal";       //"collective" (0..1) or "pedal" (-1..1, + right)
-        target  = "pitch";       //"pitch" (+ fwd), "roll" (+ left) or "yaw" (+ right pedal)
+        target  = "pitch";       //"pitch" (+ fwd), "roll" (+ left), "yaw" (+ right pedal) or "collective" (+ up)
         table[] = {              //{source position, added travel}
             {-1.0, -0.060},
             { 1.0,  0.060}
@@ -1768,7 +1779,7 @@ Pressure (hPa) and density altitude are computed in `fn_environment.sqf` but not
 
 | Variable | Type / units | Net | Meaning |
 |---|---|---|---|
-| `bmkhs_gwt` | Number, kg | 10 Hz | Gross mass: empty mass (or matching `EmptyMassVariants` entry), occupied seats, fitted equipment, internal fuel, internal magazine rounds, and wing-station stores and external fuel. Written only by the owner. When the CBA test-GWT option is on, replaced by that weight clamped between empty and `maxGrossMass`. All contributors come from config. (set in `mass/fn_massUpdate.sqf`) |
+| `bmkhs_gwt` | Number, kg | 10 Hz | Gross mass: empty mass (or matching `EmptyMassVariants` entry), occupied seats, fitted equipment, internal fuel, internal magazine rounds (every turret's, the driver's included), and wing-station stores and external fuel. Written only by the owner. When the CBA test-GWT option is on, replaced by that weight clamped between empty and `maxGrossMass`. All contributors come from config. (set in `mass/fn_massUpdate.sqf`) |
 | `bmkhs_cg` | Number, metres, longitudinal only | 10 Hz | Longitudinal CG: total forward moment / mass, in the same frame as the config arms (H-60 config: arm = {right, forward, up} m; larger = further forward). Compare directly with `bmkhs_fwdCgLimit` / `bmkhs_aftCgLimit`. Not a fuselage station; convert with `bmkhs_fsDatum` if needed. In test-GWT mode it is real moments divided by the test mass. Lateral CG is not published. (set in `mass/fn_massUpdate.sqf`) |
 | `bmkhs_fwdCgLimit` | Number, metres, same frame as `bmkhs_cg` | local (owner only) | Forward CG limit, read from config `fwdCgLimit`. Static. (set in `mass/fn_massVariables.sqf`) |
 | `bmkhs_aftCgLimit` | Number, metres, same frame as `bmkhs_cg` | local (owner only) | Aft CG limit, read from config `aftCgLimit`. Static. (set in `mass/fn_massVariables.sqf`) |
@@ -1815,6 +1826,7 @@ Fuselage and airfoil folders publish no designer-facing values.
 | `bmkhs_mixPitchOut` | Number, cyclic fraction, + = forward | local (owner only) | Sum of the aircraft's `ControlMixing` mixes targeting pitch, added to the cyclic pitch at the rotor. 0 with no mixes, while a mix's gate is shut, or outside REALISTIC. (set in `fmc/fn_fmc.sqf`, from `fmc/fn_fmcControlMixing.sqf`) |
 | `bmkhs_mixRollOut` | Number, cyclic fraction, + = left | local (owner only) | As above, for roll. |
 | `bmkhs_mixYawOut` | Number, pedal fraction, + = right | local (owner only) | As above, for the pedals. |
+| `bmkhs_mixCollOut` | Number, collective fraction, + = up | local (owner only) | As above, for the collective - added to the collective the rotor gets. |
 | `bmkhs_fmcSasPitchOut` | Number, ±0.2 cyclic fraction | local (owner only) | Pitch SAS rate-damping command added to the cyclic pitch. Same sign as `cyclicFwdAft`. Zero if the channel is off or the SAS `gate[]` is shut. (set in `fmc/fn_fmc.sqf`) |
 | `bmkhs_fmcSasRollOut` | Number, ±0.1 cyclic fraction | local (owner only) | Roll SAS command added to the cyclic roll. Same sign as `cyclicLeftRight`. (set in `fmc/fn_fmc.sqf`) |
 | `bmkhs_fmcSasYawOut` | Number, ±0.1 pedal fraction | local (owner only) | Yaw SAS command added to the pedals. Same sign as `pedalLeftRight`. (set in `fmc/fn_fmc.sqf`) |
@@ -1841,7 +1853,7 @@ The control position the rotor actually usesis not stored anywhere. `rotor/fn_ro
   - pitch = `inputGetInterp(cyclicFwdAft, forceTrimPosPitch) + fmcSasPitchOut + fmcAttHoldCycPitchOut + mixPitchOut`, clamped to -1..1
   - roll = `inputGetInterp(cyclicLeftRight, forceTrimPosRoll) + fmcSasRollOut + fmcAttHoldCycRollOut + autoAttCycRollOut + mixRollOut`, clamped to -1..1
   - yaw = `inputGetInterp(pedalLeftRight, forceTrimPosYaw) + fmcSasYawOut + fmcHdgHoldPedalYawOut + mixYawOut`, clamped to -1..1
-  - collective = `collectiveOutput + fmcAltHoldCollOut`
+  - collective = `collectiveOutput + fmcAltHoldCollOut + mixCollOut`
   
   `inputGetInterp(stick, trim)` = `trim + (±1 - trim) * |stick|`. With the stick centred, the result is the trim position. To drive a control position indicator, a pack has to repeat this sum, and it can only do so on the owner/pilot machine. `ctrlVis/fn_ctrlVisUpdate.sqf` is a working example of reading these values.
 

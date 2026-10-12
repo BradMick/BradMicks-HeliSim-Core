@@ -248,6 +248,7 @@ class CfgFunctions
             file = "\bmkhs_helisim\functions\simpleRotor";
             class simpleRotor {R;};
             class simpleRotorControl {R;};
+            class simpleRotorGetLiftCoefDelta {R;};
             class simpleRotorTorque {R;};
             class simpleRotorUpdate {R;};
             class simpleRotorVariables {R;};

@@ -28,7 +28,7 @@ _yawInput                       = [_yawInput, -1.0, 1.0] call BIS_fnc_clamp;
 
 private _collectiveOut          = _heli getVariable "bmkhs_collectiveOutput";
 private _altHoldCollOut         = _heli getVariable "bmkhs_fmcAltHoldCollOut";
-private _collInput              = _collectiveOut + _altHoldCollOut;
+private _collInput              = _collectiveOut + _altHoldCollOut + (_heli getVariable "bmkhs_mixCollOut");
 private _collFeather            = 0.0;
 
 switch (_type) do {

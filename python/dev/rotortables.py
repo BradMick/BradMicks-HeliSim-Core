@@ -17,6 +17,9 @@ Run it:  set BMKHS_CONFIG=<pack>\\config\\bmkhs_config
          the standard's definition and not the aircraft's (AH-64D: 135.6 kt read, 120 kt real).
          A chart that stops short of 160 kt is extended along its last slope.
 --peak   the collective at which the blade's lift peaks (default 0.85).
+--peak-margin  thrust at the peak over the heaviest hover weight (default 1.001). Above 1.0 the
+         heaviest hover sits below the peak - a tandem needs that room to trim pitch with
+         differential collective.
 --hover-coll  the collective the mid gross weight should hover at: the peak is solved to land
          it, and --peak is only the first guess.
 --cruise-pitch  deg, nose up positive: the front fuselage drag is solved so level flight at
@@ -153,9 +156,12 @@ def max_range(curve):
 
 
 class Fit:
-    def __init__(self, af, hover, peak):
+    def __init__(self, af, hover, peak, margin=PEAK_MARGIN):
         self.af = af
-        self.main = next(r for r in af.rotors if r['type'].lower() == 'main')
+        self.margin = margin
+        #Every main rotor takes the same tables - one for most aircraft, two for a tandem.
+        self.mains = [r for r in af.rotors if r['type'].lower() == 'main']
+        self.main = self.mains[0]
         self.hover = hover
         self.peak = peak
         d = self.main['dragCoefTable']
@@ -170,8 +176,9 @@ class Fit:
 
     def set_hover_column(self, lrows, lift, drows, drag):
         #Two identical columns: the rig reads only 0 m/s in a hover.
-        self.main['liftCoefTable'] = [['A/S', 0.0, 10.29]] + [[r, v, v] for r, v in zip(lrows, lift)]
-        self.main['dragCoefTable'] = [['A/S', 0.0, 10.29]] + [[r, v, v] for r, v in zip(drows, drag)]
+        for m in self.mains:
+            m['liftCoefTable'] = [['A/S', 0.0, 10.29]] + [[r, v, v] for r, v in zip(lrows, lift)]
+            m['dragCoefTable'] = [['A/S', 0.0, 10.29]] + [[r, v, v] for r, v in zip(drows, drag)]
 
     def solve_hover_column(self):
         """Guide step 4: CL by the heaviest hover at the peak, then CD by every hover's torque."""
@@ -184,8 +191,8 @@ class Fit:
             self.set_hover_column(lrows, lift_of(clp), drows, drag)
             #(drag here is a placeholder - thrust does not read it)
             _, _, _, parts = self.af.forces(self.vel0, 0.0, 0.0, 0.0, self.peak, RHO, 0.0, parts=True)
-            thrust = parts['main rotor'][0][2]
-            new = clp * wmax * E.GRAVITY * PEAK_MARGIN / thrust
+            thrust = sum(f[2] for k, (f, _) in parts.items() if k.startswith('main rotor'))
+            new = clp * wmax * E.GRAVITY * self.margin / thrust
             if abs(new - clp) < 1e-9:
                 break
             clp = new
@@ -233,7 +240,8 @@ class Fit:
         sz = [E.math_linear_interp(CD_ZERO_SHAPE, min(c / KT_TO_MPS, CD_ZERO_SHAPE[-1][0]))[1] for c in allc]
         lt = [['A/S'] + allc] + [[r] + [rd(v * s) for s in sl] for r, v in zip(lrows, lift)]
         dt = [['A/S'] + allc] + [[r] + [rd(v * s) for s in (sz if r == 0.0 else sd)] for r, v in zip(drows, drag)]
-        self.main['liftCoefTable'], self.main['dragCoefTable'] = lt, dt
+        for m in self.mains:
+            m['liftCoefTable'], m['dragCoefTable'] = lt, dt
         return lt, dt
 
     def level(self, kt, w, guess):
@@ -255,6 +263,7 @@ def main():
     ap.add_argument('--mr', type=float)
     ap.add_argument('--curve', nargs='+', help='kt:torque%% from 0 kt up, in place of --me and --mr')
     ap.add_argument('--peak', type=float, default=0.85)
+    ap.add_argument('--peak-margin', type=float, default=PEAK_MARGIN)
     ap.add_argument('--hover-coll', type=float, default=None,
                     help='solve the peak so the mid gross weight hovers at this collective')
     ap.add_argument('--etl-drop', type=float, default=0.05)
@@ -283,13 +292,13 @@ def main():
 
     af = A.Airframe(a.bc, a.cg)
     if a.hover_coll is None:
-        fit = Fit(af, hover, a.peak)
+        fit = Fit(af, hover, a.peak, a.peak_margin)
         lrows, lift, drows, drag, colls = fit.solve_hover_column()
     else:
         #The peak sets the slope of the lift line, so it decides where the mid gross weight lands:
         #a secant on the peak until it lands on --hover-coll.
         def landing(peak):
-            f = Fit(af, hover, peak)
+            f = Fit(af, hover, peak, a.peak_margin)
             r = f.solve_hover_column()
             print('  peak %.4f: mid gross weight hovers at %.4f' % (peak, r[4][0]), flush=True)
             return f, r

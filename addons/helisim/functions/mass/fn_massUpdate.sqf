@@ -98,8 +98,10 @@ private _crew = fullCrew _heli;
     };
 } forEach (_heli getVariable ["bmkhs_fuelTanks", []]);
 
-//Internal magazines - rounds carried in the airframe rather than on a pylon.
-private _magsAmmo = magazinesAmmo _heli;
+//Internal magazines - rounds carried in the airframe rather than on a pylon. Every turret's,
+//the driver's ([-1]) included - magazinesAmmo returns only the driver's, so a door gun's belts
+//were never counted.
+private _magsAmmo = (magazinesAllTurrets _heli) apply { [_x select 0, _x select 2] };
 {
     private _match        = _x get "match";
     private _arm          = _x get "arm";

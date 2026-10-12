@@ -83,12 +83,13 @@ if ("coll" in _fdOut && {_heli getVariable "bmkhs_fmcCollOn"}) then {
 //Control mixing - mechanical mixes always apply; electronic ones carry their own gates. It
 //sees the collective the rotor gets, the pilot's and the coupler's.
 ([_heli, (((_heli getVariable "bmkhs_collectiveOutput") + _altHoldCollOut) max 0) min 1] call bmkhs_fnc_fmcControlMixing)
-    params ["_mixPitchOut", "_mixRollOut", "_mixYawOut"];
+    params ["_mixPitchOut", "_mixRollOut", "_mixYawOut", "_mixCollOut"];
 
 //Control mixing outputs
 _heli setVariable ["bmkhs_mixPitchOut",                  _mixPitchOut];
 _heli setVariable ["bmkhs_mixRollOut",                   _mixRollOut];
 _heli setVariable ["bmkhs_mixYawOut",                    _mixYawOut];
+_heli setVariable ["bmkhs_mixCollOut",                   _mixCollOut];
 //Flight Management Computer (FMC) outputs
 _heli setVariable ["bmkhs_fmcAttHoldCycPitchOut",        _attHoldCycPitchOut];
 _heli setVariable ["bmkhs_fmcAttHoldCycRollOut",         _attHoldCycRollOut];

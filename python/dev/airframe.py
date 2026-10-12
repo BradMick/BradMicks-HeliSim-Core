@@ -115,13 +115,15 @@ def density(paFt, fat):
 def simple_rotor(r, ctl, vel, rho, xmsnRpm, com):
     """One rotor: total force and moment about com (model space, N and Nm, no dt) and its shaft
     torque (Nm at the rotor, as fn_simpleRotor sums it). vel is bmkhs_velModelSpace."""
-    pitchOutput, rollOutput, collOutput = ctl
+    pitchOutput, rollOutput, collOutput, tandemPitch, tandemYaw, mastPitch = ctl
     isTail = r['type'].lower() == 'tail'
     isCw = r['direction'].lower() == 'cw'
 
     flapLon = FO.math_linear_interp_from_center(-1, 1, pitchOutput, r['pitchFlapMin'], r['pitchFlapMid'], r['pitchFlapMax'])
     flapLat = FO.math_linear_interp_from_center(-1, 1, rollOutput, r['rollFlapMin'], r['rollFlapMid'], r['rollFlapMax'])
+    flapLat += FO.math_linear_interp_from_center(-1, 1, tandemYaw, r['rollFlapMin'], r['rollFlapMid'], r['rollFlapMax'])
     p, rr, y = r['rotation']
+    p += mastPitch
     fVec = FO.math_vector_rotate([0.0, 1.0, 0.0], p, rr, y)
     rVec = FO.math_vector_rotate([1.0, 0.0, 0.0], p, rr, y)
     uVec = FO.math_vector_rotate([0.0, 0.0, 1.0], p, rr, y)
@@ -166,7 +168,7 @@ def simple_rotor(r, ctl, vel, rho, xmsnRpm, com):
         bladeThrustPos = _add(pos, _mul(bladeOffset, 0.75))
 
         bladeLift = liftCoef * q * bladeScalar
-        liftCoefDelta = (rollOutput * _cos(psi) * r['rollLiftCoef']) + (pitchOutput * _sin(psi) * r['pitchLiftCoef'])
+        liftCoefDelta = sum(FO.simple_rotor_get_lift_coef_delta(r, psi, ctl, liftCoef))
         bladeLiftDelta = liftCoefDelta * q * bladeScalar
         bladeDrag = dragCoef * q * bladeScalar
         rotorTorque += bladeDrag * bladeRad75
@@ -338,9 +340,10 @@ class Airframe:
         out = {}
         tq = 0.0
         for r in self.rotors:
-            t = FO.TAIL if r['type'].lower() == 'tail' else FO.MAIN
-            f, m, rt = simple_rotor(r, FO.simple_rotor_control(t, pitch, roll, yaw, coll), vel, rho, self.rpm, self.cg)
-            out[r['type'] + ' rotor'] = (f, m)
+            ctl = FO.simple_rotor_control(r, pitch, roll, yaw, coll, math.hypot(vel[0], vel[1]) * MPS_TO_KNOTS, paFt)
+            f, m, rt = simple_rotor(r, ctl, vel, rho, self.rpm, self.cg)
+            #A tandem has two main rotors - the position keeps their keys apart.
+            out[r['type'] + ' rotor' + (' ' + r['position'] if r.get('position') else '')] = (f, m)
             tq += rt / r['gearRatio']
         out['fuse front'] = fuselage_front(self.fus['fuselageFront'], vel, rho, paFt, self.cg)
         out['fuse top'] = _lifting_panels(self.fus['fuselageTop'], vel, rho, self.cg, False)

@@ -20,7 +20,7 @@ Parameters:
     _coll - The collective the rotor gets, pilot's and holds', 0..1 [Number]
 
 Returns:
-    Added travel, [pitch (+ fwd), roll (+ left), yaw (+ right pedal)] [Array]
+    Added travel, [pitch (+ fwd), roll (+ left), yaw (+ right pedal), collective (+ up)] [Array]
 
 Author:
     BradMick
@@ -29,7 +29,7 @@ Author:
 
 params ["_heli", "_coll"];
 
-private _out = [0.0, 0.0, 0.0];
+private _out = [0.0, 0.0, 0.0, 0.0];
 if (bmkhs_helisimRealismSetting != REALISTIC) exitWith {_out};
 
 private _pedal = [_heli getVariable "bmkhs_pedalLeftRight", _heli getVariable "bmkhs_forceTrimPosYaw"] call bmkhs_fnc_inputGetInterp;

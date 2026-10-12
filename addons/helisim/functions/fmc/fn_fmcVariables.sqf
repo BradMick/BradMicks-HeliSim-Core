@@ -97,12 +97,13 @@ _heli setVariable ["bmkhs_fmcAttHoldCycRollOut",  0.0];
 _heli setVariable ["bmkhs_mixPitchOut",           0.0];
 _heli setVariable ["bmkhs_mixRollOut",            0.0];
 _heli setVariable ["bmkhs_mixYawOut",             0.0];
+_heli setVariable ["bmkhs_mixCollOut",            0.0];
 
 //Control mixing - the aircraft's declared mixes, read once. A mix with no table or an
 //unknown source or target is skipped.
 private _mixes = [];
 {
-    private _target = ["pitch", "roll", "yaw"] find toLower getText (_x >> "target");
+    private _target = ["pitch", "roll", "yaw", "collective"] find toLower getText (_x >> "target");
     private _source = toLower getText (_x >> "source");
     private _table  = getArray (_x >> "table");
     if (_target >= 0 && {_source in ["collective", "pedal"]} && {_table isNotEqualTo []}) then {
