@@ -339,7 +339,7 @@ that is not a T700 can declare its own `Compressor >> compressorMap[]`; see
 Set it up in this order:
 
 1. **Spec numbers.** `pressureRatio`, `massFlow`, `powerKw`, `designRpm`,
-   `npFly`, `maxNg`, `maxNp`, and the book limits.
+   `npFly`, `maxNg`, `ngOvrspdProt` (if the engine has Ng fly weights), `npOvrspdProt`, and the book limits.
 2. **Idle.** Adjust `fuelIdle` until the engine, lever at IDLE, settles at
    `idleNg`.
 3. **Start.** `startFuelBase` sets the peak TGT, `Starter >> torque` how quickly
@@ -1592,7 +1592,7 @@ machines, and what it means. Inputs are the config field references
 | `bmkhs_engClutch` | array of booleans, per engine | local | True while the freewheel is engaged and the turbine is driving the rotor (set in `engine/turboShaftEngine/fn_turboShaftEngine.sqf`). |
 | `bmkhs_isSingleEng` | boolean | local | True when any engine's torque is below 51% of the highest. Switches the TGT limiter to `maxTgtSe` and the TGT book limits to `tgtLimitsSe` (set in `engine/fn_engineGovernor.sqf`). |
 | `bmkhs_engFuelAvail` | array of booleans, per engine | net on change | Engine has fuel. False once its selected tank (via crossfeed) has been empty for 2 s, or the engine's fire handle (`eng<N>FireHandle`) is armed with DC on. Always true if the aircraft has no fuel tanks. False forces the engine OFF (set in `engine/fn_engineFuelAvail.sqf`). |
-| `bmkhs_engineOverspeed` | array of booleans, per engine | net on change | Latched. Set when Ng >= `maxNg` (fly-weight trip) or Np >= `maxNp` (electrical trip). Cuts fuel and locks out the starter. Cleared only by repair (set in `engine/turboShaftEngine/fn_turboShaftEngine.sqf`). |
+| `bmkhs_engineOverspeed` | array of booleans, per engine | net on change | Latched. Set when Ng >= `ngOvrspdProt` (fly-weight trip - `maxNg` unless declared, none when 0) or Np >= `npOvrspdProt` (electrical trip - the older `maxNp` when not declared, none when 0). Cuts fuel and locks out the starter. Cleared only by repair (set in `engine/turboShaftEngine/fn_turboShaftEngine.sqf`). |
 | `bmkhs_engChips` | array of booleans, per engine | net on change | Latched chip detector. useSystems = 1: engine hitpoint damage >= 0.50. useSystems = 0: a random engine at shared damage >= 0.25 (50% chance, else oil failure), and any healthy engine at >= 0.75. Cleared by repair (set in `engine/fn_engineDamage.sqf`). |
 | `bmkhs_engFailed` | array of booleans, per engine | net on change | Latched engine failure. useSystems = 1: engine hitpoint damage reaches 1.0. useSystems = 0: one engine at shared damage >= 0.50, all at 1.0. Forces the engine OFF and blocks restarts. Cleared by repair (set in `engine/fn_engineDamage.sqf`). |
 | `bmkhs_lowOilPsiFailure` | array of booleans, per engine | net on change | Latched oil system failure. useSystems = 1: oil health reaches 0 while the engine is STARTING/ON. useSystems = 0: the oil branch of the random fault. Cleared by repair (set in `engine/fn_engineDamage.sqf`). |

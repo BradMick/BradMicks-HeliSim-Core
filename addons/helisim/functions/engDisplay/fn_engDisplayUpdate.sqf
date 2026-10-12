@@ -120,7 +120,7 @@ private _colour = {
 
 //Full scales from engine 1, so the tapes line up.
 private _tgtRed = ([_engines # 0, _tgtKey] call _band) # 1;
-private _npOvsp = (_engines # 0) get "maxNp";
+private _npOvsp = (_engines # 0) get "npOvrspdProt";
 
 //Full scale sits above the top limit so the red band has somewhere to be drawn.
 private _tqFs  = ED_TQ_FULL_SCALE;

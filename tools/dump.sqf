@@ -34,7 +34,7 @@ format ["%1 - %2 variants", _base, count _variants] call _log;
             private _p = _path + [_forEachIndex];
             _turrets pushBack [_p, _x];
             [_x >> "Turrets", _p] call _walk;
-        } forEach ("true" configClasses _cfg);
+        } forEach configProperties [_cfg, "isClass _x", true];
     };
     [_v >> "Turrets", []] call _walk;
     {
@@ -52,14 +52,14 @@ format ["%1 - %2 variants", _base, count _variants] call _log;
             _forEachIndex + 1, configName _x, getText (_x >> "attachment"), getArray (_x >> "turret"),
             getNumber (_x >> "maxweight"), getArray (_x >> "hardpoints")] call _log;
         if (getText (_x >> "attachment") != "") then { ("    default: " + (getText (_x >> "attachment") call _magInfo)) call _log };
-    } forEach ("true" configClasses (_pyl >> "Pylons"));
+    } forEach configProperties [_pyl >> "Pylons", "isClass _x", true];
     {
         format ["  pylon preset %1: %2", configName _x, getArray (_x >> "attachment")] call _log;
-    } forEach ("true" configClasses (_pyl >> "Presets"));
+    } forEach configProperties [_pyl >> "Presets", "isClass _x", true];
 
     {
         format ["  anim source %1: source '%2', initPhase %3", configName _x, getText (_x >> "source"), getNumber (_x >> "initPhase")] call _log;
-    } forEach ("true" configClasses (_v >> "AnimationSources"));
+    } forEach configProperties [_v >> "AnimationSources", "isClass _x", true];
 } forEach _variants;
 
 "" call _log;

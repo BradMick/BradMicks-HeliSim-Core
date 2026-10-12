@@ -115,9 +115,12 @@
 //                      The torque the engine actually MAKES comes from the physics.
 //  maxFuelFlow         kg/s per fuel unit. The combustor burns fuel units * maxFuelFlow kg/s,
 //                      so this is physical, not just the gauge's scale.
-//  maxNg               Fly-weight trip - shuts the engine down. ALSO the compressor map's
-//                      100% point: the map's Ng axis runs 0 to 1 as a fraction of maxNg.
-//  maxNp               Electrical overspeed trip - shuts the engine down.
+//  maxNg               The compressor map's 100% point - the map's Ng axis runs 0 to 1 as a
+//                      fraction of maxNg - and the highest Ng the spool can reach.
+//  ngOvrspdProt        OPTIONAL. Ng fly-weight trip - shuts the engine down. maxNg when not
+//                      declared; 0 for an engine without fly weights (T55, Bo 105's, Tiger's).
+//  npOvrspdProt        Np electrical overspeed trip - shuts the engine down. 0 for none. The older
+//                      name maxNp is still read when npOvrspdProt is not declared.
 //  fuelSelector        OPTIONAL. The control whose position picks this engine's fuel source -
 //                      a FUEL SYS lever, say. Declare none and the engine draws through the
 //                      fuel config's CrossfeedModes.
