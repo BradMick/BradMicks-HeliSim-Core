@@ -353,7 +353,8 @@ class Airframe:
         F, M = [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]
         for f, m in out.values():
             F, M = _add(F, f), _add(M, m)
-        gauge = tq / (self.numEngines * self.refTq)
+        #The drivetrain's constant drag rides on the rotors' at the gauge.
+        gauge = tq / (self.numEngines * self.refTq) + float(E.CFG.get('drivetrainDrag', 0.0))
         return (F, M, gauge, out) if parts else (F, M, gauge)
 
 

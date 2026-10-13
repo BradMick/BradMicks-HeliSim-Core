@@ -9,6 +9,10 @@ class CfgDefaultKeysPresets {
             bmkhs_holdModeAltitude[] = {};
             bmkhs_holdModeAttitude[] = {};
             bmkhs_holdModesOff[] = {};
+            bmkhs_beepTrimForward[] = {};
+            bmkhs_beepTrimBackward[] = {};
+            bmkhs_beepTrimLeft[] = {};
+            bmkhs_beepTrimRight[] = {};
             bmkhs_cyclicForward[] = {0x11};
             bmkhs_cyclicBackward[] = {0x1F};
             bmkhs_cyclicLeft[] = {0x1E};

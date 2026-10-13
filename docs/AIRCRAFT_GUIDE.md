@@ -547,7 +547,7 @@ it reads it:
 | `--forward M` `--down M` `--right M` | Then shift it, metres |
 | `--add` | Add the angles and the shift to the placement recorded in the current files, keeping its turn |
 
-The placement is written on line 2 of both files, so `--add` always has the last
+The placement is written in the header of both files, so `--add` always has the last
 one to add to, and as `fmPlacement[]` in `helisim_fuselage.hpp`, where the nudge
 reads it - it rotates about the fm.p3d's origin where the placement put it. Find the
 placement in game with `tools/fm_nudge.sqf` (section 7), which prints the `--add`
@@ -1620,6 +1620,7 @@ machines, and what it means. Inputs are the config field references
 | `bmkhs_numSimpleRotors` | number | local | Rotor count, from config `numSimpleRotors` (set in `simpleRotor/fn_simpleRotorVariables.sqf`). |
 | `bmkhs_simpleRotors` | array of hashmaps, per rotor | local | Each simple rotor's config, keyed by config property name (`type`, `dir`, `gearRatio`, `numBlades`, `bladeRadius`, ...). `gearRatio` converts `bmkhs_xmsnOutputRpm` to rotor rpm (set in `simpleRotor/fn_simpleRotorVariables.sqf`). |
 | `bmkhs_nrLimits` | array of 4 numbers, fraction | local | From config `nrLimits[]`: {normal low, normal high, high rotor, maximum} (e.g. {0.96, 1.05, 1.06, 1.10}). Core only stores it (set in `simpleRotor/fn_simpleRotorVariables.sqf`). |
+| `bmkhs_drivetrainDrag` | number, fraction | local | From config `drivetrainDrag` (aircraft level, beside `nrLimits[]`; 0 when not declared): constant drivetrain drag torque - gearboxes, shafting, accessories - as a fraction of each engine's 100% torque. Added to the rotor load in `transmission/fn_transmissionUpdate.sqf`; it only resists, so a stopped drivetrain stays stopped. |
 | `bmkhs_reqEngTorque` | array of numbers, per rotor, Nm at the engine shaft | 10 Hz | Rotor torque demand referred to the engine shaft, filtered. Sum it for total load. Seeded as 2 slots (set in `simpleRotor/fn_simpleRotorTorque.sqf`, or `rotor/fn_rotor.sqf` with the BET model). |
 | `bmkhs_rtrThrust` | array of numbers, per rotor, N | net on change | Rotor thrust. Only written by the BET rotor model (`bmkhs_rotorModel` = 1). With the Simple model (default) it stays 0 (set in `rotor/fn_rotor.sqf`). |
 
@@ -1819,6 +1820,9 @@ Fuselage and airfoil folders publish no designer-facing values.
 | `bmkhs_altHoldSubMode` | String `"rad"` / `"bar"` | net | Radar or barometric altitude hold. While engaged it is `rad` below `radBelowFt` AGL and under `radBelowKts` GS, and `bar` otherwise. It is only re-evaluated while the hold is engaged. (set in `fmc/fn_fmcAltitudeHold.sqf`, `fmc/fn_fmcAltitudeHoldEnable.sqf`) |
 | `bmkhs_altHoldDesiredAlt` | Number, m (AGL in `rad`, ASL in `bar`) | net | Altitude hold reference, rounded to the metre on engage. It is 0 when the hold is off. Engage chooses AGL or ASL once. The sub-mode can switch later without the reference being re-captured. (set in `fmc/fn_fmcAltitudeHoldEnable.sqf`, `fmc/fn_fmcHoldModesDisable.sqf`) |
 | `bmkhs_altHoldCollRef` | Number 0..1 (collective) | net | Collective position captured when altitude hold engaged. Used for the `collBand` disengage band. (set in `fmc/fn_fmcAltitudeHoldEnable.sqf`) |
+| `bmkhs_hydBoost`, `bmkhs_hydBoostGate` | Bool, array | local | `class HydraulicBoost` declared in the flight controls config, and its `gate[]`. For aircraft without an FMC: while boost is on (`bmkhs_hydBoostOn`) and the gate holds, every axis skips the `inputLagValue` lag, as SAS does. (set in `actuator/fn_actuatorVariables.sqf`, read in `actuator/fn_actuator.sqf`) |
+| `bmkhs_hydBoostOn` | Bool, default true | net | The hydraulic boost switch. Off, a boosted aircraft's controls take the `inputLagValue` lag. |
+| `bmkhs_beepTrimStep` | Number, default 0.01 | local | From config `beepTrimStep` (flight controls). Each beep trim press (`bmkhs_beepTrimForward` / `Backward` / `Left` / `Right`) moves the cyclic force trim position by this much. (set in `fmc/fn_fmcVariables.sqf`, used in `fmc/fn_fmcBeepTrim.sqf`) |
 | `bmkhs_hdgHoldActive` | Bool | net | Heading hold engaged. There is no button for it. It is true whenever the aircraft is off the ground, force trim is not held, and pedal input is inside the breakout (`class FMC >> HeadingHold >> breakout[]`, by the attitude hold sub-mode, `pos` / `vel` / `att`). The heading is re-captured each time it re-engages. (set in `fmc/fn_fmcHeadingHold.sqf`) |
 | `bmkhs_hdgHoldSubMode` | String `"hdg"` / `"trn"` / `"yaw"` / `"aut"` | net | Heading hold law, only updated while engaged. `hdg` = hold heading, below `hdgBelowKts` GS. `trn` = turn coordination: attitude hold on and bank over 7° (drops at under 3°). `yaw` = ball-centring yaw damping. `aut` = the auto-pedal assist owns the yaw axis. (set in `fmc/fn_fmcHeadingHold.sqf`) |
 | `bmkhs_hdgHoldDesiredHdg` | Number, deg 0..360 (`getDir`) | net | Heading hold reference. Captured when the hold engages, when it re-enters `hdg`, and on force-trim release. (set in `fmc/fn_fmcHeadingHold.sqf`, `fmc/fn_fmcForceTrimRelease.sqf`) |

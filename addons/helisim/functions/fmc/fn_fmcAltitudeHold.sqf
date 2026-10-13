@@ -22,6 +22,20 @@ if (_tq >= (_alt get "dropAboveTq")) then {
     [_pidBarAlt] call bmkhs_fnc_pidReset;
 };
 
+//Always on - engaged whenever it can be, released by the collective, the torque limit, the ground
+//or its gate, and re-engaged near level flight on the new reference. Not under a flight director
+//altitude mode, which flies the collective itself.
+if ((_alt get "alwaysOn") == 1) then {
+    private _fdAlt = ["ralt", "alt", "altp"] findIf { _heli getVariable ["bmkhs_fd_" + _x, false] } >= 0;
+    private _can   = _on && {!([_heli] call bmkhs_fnc_stateOnGround)} && {!_fdAlt};
+    if (!_can && {_heli getVariable "bmkhs_altHoldActive"}) then {
+        [_heli, "bmkhs_altHoldActive", false] call bmkhs_fnc_utilUpdateNetworkGlobal;
+    };
+    if (_can && {_tq < (_alt get "dropAboveTq")} && {!(_heli getVariable "bmkhs_altHoldActive")}) then {
+        [_heli] call bmkhs_fnc_fmcAltitudeHoldEnable;
+    };
+};
+
 if (_on && {_heli getVariable "bmkhs_altHoldActive"}) then {
     //If the pilot is intentionally trying to change altitude, de-activate altitude
     //hold and allow them to do so
@@ -29,7 +43,7 @@ if (_on && {_heli getVariable "bmkhs_altHoldActive"}) then {
     private _collRef_hi  = _collRef * (1 + (_alt get "collBand"));
     if ((_heli getVariable "bmkhs_collectiveOutput") >= _collRef_hi || (_heli getVariable "bmkhs_collectiveOutput") <= _collRef_low) then {
         [_heli, "bmkhs_altHoldActive", false] call bmkhs_fnc_utilUpdateNetworkGlobal;
-        [_heli, "holdModeDisengaged"] call bmkhs_fnc_utilNotify;
+        if ((_alt get "alwaysOn") != 1) then { [_heli, "holdModeDisengaged"] call bmkhs_fnc_utilNotify };
     };
 
     //Radar below its height and speed, barometric otherwise

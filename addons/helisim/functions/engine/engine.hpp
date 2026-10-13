@@ -43,6 +43,10 @@
 #define GT_TGT_STILL_AIR    0.0012
 #define GT_TGT_RAM_AIR      0.00065
 
+//Free turbine stall torque, as a multiple of 100% torque - power over shaft speed runs to
+//infinity as Np falls to zero, and a real turbine's does not.
+#define GT_PT_STALL_TQ      2.5
+
 //Compressor power at Ng 1.0, ISA, in spool units - the spool's torque scale.
 #define GT_SPOOL_UNIT_LOAD  2.91244
 

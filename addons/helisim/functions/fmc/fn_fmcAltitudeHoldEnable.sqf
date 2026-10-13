@@ -1,8 +1,10 @@
-params ["_heli"];
+params ["_heli", ["_byPilot", false]];
 #include "\bmkhs_helisim\functions\core\core.hpp"
 
 private _alt = (_heli getVariable "bmkhs_fmc") getOrDefault ["AltitudeHold", createHashMap];
 if (count _alt == 0) exitWith {};
+//Always on - the pilot's keys neither engage nor release it
+if (_byPilot && {(_alt get "alwaysOn") == 1}) exitWith {};
 
 private _gndSpeed  = _heli getVariable "bmkhs_gndSpeed";
 private _velClimb  = _heli getVariable "bmkhs_velClimb";

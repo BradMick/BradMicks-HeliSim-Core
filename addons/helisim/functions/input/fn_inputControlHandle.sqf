@@ -41,9 +41,13 @@ if (_state && {_name in _fdSync}) exitWith { [_heli, _fdSync get _name] call bmk
 if (_state) then {
     switch (_name) do {
         case "bmkhs_forceTrim":          { [_heli] call bmkhs_fnc_fmcForceTrimHold; };
-        case "bmkhs_holdModeAltitude":   { [_heli] call bmkhs_fnc_fmcAltitudeHoldEnable; };
-        case "bmkhs_holdModeAttitude":   { [_heli] call bmkhs_fnc_fmcAttitudeHoldEnable; };
+        case "bmkhs_holdModeAltitude":   { [_heli, true] call bmkhs_fnc_fmcAltitudeHoldEnable; };
+        case "bmkhs_holdModeAttitude":   { [_heli, true] call bmkhs_fnc_fmcAttitudeHoldEnable; };
         case "bmkhs_holdModesOff":       { [_heli] call bmkhs_fnc_fmcHoldModesDisable; };
+        case "bmkhs_beepTrimForward":    { [_heli, "bmkhs_forceTrimPosPitch",  1] call bmkhs_fnc_fmcBeepTrim; };
+        case "bmkhs_beepTrimBackward":   { [_heli, "bmkhs_forceTrimPosPitch", -1] call bmkhs_fnc_fmcBeepTrim; };
+        case "bmkhs_beepTrimLeft":       { [_heli, "bmkhs_forceTrimPosRoll",  -1] call bmkhs_fnc_fmcBeepTrim; };
+        case "bmkhs_beepTrimRight":      { [_heli, "bmkhs_forceTrimPosRoll",   1] call bmkhs_fnc_fmcBeepTrim; };
         case "bmkhs_stickyInterrupt":    { [_heli, true] call bmkhs_fnc_stickyInterrupt; };
         case "bmkhs_ctrlVisToggle":      { [_heli] call bmkhs_fnc_ctrlVisToggle; };
     };

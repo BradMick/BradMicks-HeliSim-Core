@@ -1,5 +1,8 @@
-#define MAIN   0
-#define TAIL   1
+//Rotor types - what a rotor is
+#define MAIN      0
+#define TAIL      1
+#define PROPELLER 2
+#define PROPROTOR 3
 
 #define CCW    0
 #define CW     1

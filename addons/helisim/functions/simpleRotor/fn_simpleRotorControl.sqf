@@ -50,6 +50,10 @@ switch (_heli getVariable "bmkhs_controlScheme") do {
 			case TAIL: {
 				_collOutput  = [_yawInput, -1.0, 1.0] call BIS_fnc_clamp;
 			};
+			case PROPELLER: {
+			};
+			case PROPROTOR: {
+			};
 		};
 	};
 	case TANDEM: {

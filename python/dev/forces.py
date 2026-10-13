@@ -24,7 +24,7 @@ import sys
 sys.path.insert(0, os.path.dirname(__file__))
 import engine as E  # noqa: E402 - reads BMKHS_CONFIG at import
 
-MAIN, TAIL = E.MAIN, E.TAIL
+MAIN, TAIL, PROPELLER, PROPROTOR = E.MAIN, E.TAIL, E.PROPELLER, E.PROPROTOR
 SCHEMES = ['conventional', 'tandem', 'coaxial', 'tiltrotor', 'compound']
 CONVENTIONAL, TANDEM, COAXIAL, TILTROTOR, COMPOUND = range(5)
 
@@ -79,7 +79,7 @@ def _cross(a, b): return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], 
 def simple_rotor_control(r, pitch, roll, yaw, coll, kts=0.0, paFt=0.0):
     """Control outputs for one rotor, from the summed inputs (pilot + trims + FMC + mixing). The
     LCT is taken at its schedule - the rig has no clock for the actuator's travel."""
-    rotorType = TAIL if r['type'].lower() == 'tail' else MAIN
+    rotorType = E.rotor_type(r['type'])
     pitch = E.clamp(pitch, -1.0, 1.0)
     roll = E.clamp(roll, -1.0, 1.0)
     yaw = E.clamp(yaw, -1.0, 1.0)
@@ -118,7 +118,7 @@ def simple_rotor_forces(r, ctl, rho, xmsnRpm, com):
     four blades' lift and drag vectors fn_simpleRotor hands to addForce, without the frame's dt.
     Hover: zero velocity, out of ground effect."""
     pitchOutput, rollOutput, collOutput, tandemPitch, tandemYaw, mastPitch = ctl
-    rotorType = TAIL if r['type'].lower() == 'tail' else MAIN
+    rotorType = E.rotor_type(r['type'])
     torqueSign = -1.0 if r['direction'].lower() == 'cw' else 1.0
 
     flapLon = math_linear_interp_from_center(-1, 1, pitchOutput, r['pitchFlapMin'], r['pitchFlapMid'], r['pitchFlapMax'])

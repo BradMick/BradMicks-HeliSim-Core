@@ -54,6 +54,18 @@ private _attHoldCycRollOut  = 0.0;
     default                                                  { "vel" };
 }] call bmkhs_fnc_utilUpdateNetworkGlobal;
 
+//Always on - engaged whenever it can be, released by force trim, the ground or its gate, and
+//re-engaged on the new reference once they clear. The flight director's hover owns it while active.
+if ((_att get "alwaysOn") == 1) then {
+    private _can = _on && {!(_heli getVariable "bmkhs_forceTrimInterupted")} && {!([_heli] call bmkhs_fnc_stateOnGround)};
+    if (!_can && {_heli getVariable "bmkhs_attHoldActive"}) then {
+        _heli setVariable ["bmkhs_attHoldActive", false, true];
+    };
+    if (_can && {!(_heli getVariable "bmkhs_attHoldActive")} && {!(_heli getVariable ["bmkhs_fd_hvr", false])}) then {
+        [_heli] call bmkhs_fnc_fmcAttitudeHoldEnable;
+    };
+};
+
 if (_on && {_heli getVariable "bmkhs_attHoldActive"} && {!(_heli getVariable "bmkhs_forceTrimInterupted")}) then {
     //Position hold = velocity-null loop + a SLOW, TIGHTLY-CLAMPED position-error integral that biases
     //the velocity SETPOINT (not the output) to trim out the standing drift a pure velocity-null loop

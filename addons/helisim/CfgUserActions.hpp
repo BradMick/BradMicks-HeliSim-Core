@@ -42,6 +42,10 @@ class CfgUserActions {
     BMKHS_ACTION(bmkhs_holdModeAltitude,"Altitude Hold","Toggle altitude hold");
     BMKHS_ACTION(bmkhs_holdModeAttitude,"Attitude Hold","Toggle attitude hold");
     BMKHS_ACTION(bmkhs_holdModesOff,"Hold Modes Off","Disengage all hold modes");
+    BMKHS_ACTION(bmkhs_beepTrimForward,"Beep Trim Forward","Bump the cyclic trim forward");
+    BMKHS_ACTION(bmkhs_beepTrimBackward,"Beep Trim Backward","Bump the cyclic trim backward");
+    BMKHS_ACTION(bmkhs_beepTrimLeft,"Beep Trim Left","Bump the cyclic trim left");
+    BMKHS_ACTION(bmkhs_beepTrimRight,"Beep Trim Right","Bump the cyclic trim right");
     BMKHS_ACTION(bmkhs_stickyInterrupt,"Sticky Control Interrupt","Hold to stop keyboard cyclic/pedal accumulating");
 
     //The control input visualiser is Core's display of Core's own inputs, so its bind is too

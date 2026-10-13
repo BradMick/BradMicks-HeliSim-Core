@@ -42,8 +42,9 @@ if (_p45 > _p2) then {
     _ptPower = (_mDot max 0.0) * GT_CP_HOT * (_t45 - _t5);
 };
 
-//Gas power expressed as torque at design Np - the torque gauge's own reference.
-private _shaftTq = _ptPower / (_engine get "powerKw") * _refTq;
+//Torque is power over shaft speed - at design Np, the torque gauge's own reference; slower, more.
+private _shaftTq = ((_ptPower / (_engine get "powerKw")) / (_np max (1.0 / GT_PT_STALL_TQ))) * _refTq;
+_shaftTq = _shaftTq min (GT_PT_STALL_TQ * _refTq);
 
 //Windmilling only - gas flowing over the turbine drives it, so the floor applies just when
 //there is none behind it. It finishes the stop, since np^2 alone only asymptotes.

@@ -40,6 +40,8 @@
 //  velBelowKts  accelerating, velocity hold up to this, attitude hold above. 40
 //  attBelowKts  decelerating, attitude hold down to this, velocity hold below. 30
 //  authority    output limit, cyclic fraction. 0.1
+//  alwaysOn     1 = engaged whenever it can be, re-engaged after force trim; the keys do not
+//               engage or release it. 0
 //  posPitch[] posRoll[]   gains, position and velocity hold
 //  attPitch[] attRoll[]   gains, attitude hold
 //
@@ -53,6 +55,8 @@
 //  engageFpm    engages only within this vertical speed. 200
 //  collBand     drops out when the collective moves this fraction from where it engaged. 0.05
 //  dropAboveTq  drops out at this engine torque fraction. 0.98
+//  alwaysOn     1 = engaged whenever it can be, re-engaged near level flight after the collective
+//               or the torque limit drops it; the keys do not engage or release it. 0
 //  rad[] bar[]  gains
 //
 /////////////////////////////////////////////////////////////////////////////////////////////
@@ -65,6 +69,7 @@
 //  breakout[]   pedal that drops the hold, by the attitude hold's sub-mode - {pos, vel, att},
 //               so it changes band on the attitude hold's speeds and hysteresis. {0.05, 0.10, 0.20}
 //  authority    output limit, pedal fraction. 0.1
+//  alwaysOn     always on - heading hold has no key. 1
 //  hdg[]        gains, heading
 //  trn[]        gains, yaw damping and turn coordination (on lateral g)
 //

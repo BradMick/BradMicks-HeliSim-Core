@@ -111,6 +111,7 @@ class CfgFunctions
             class fmcAltitudeHold {R;};
             class fmcAltitudeHoldEnable {R;};
             class fmcAttitudeHoldEnable {R;};
+            class fmcBeepTrim {R;};
             class fmcControlMixing {R;};
             class fmcFdMode {R;};
             class fmcFdStep {R;};

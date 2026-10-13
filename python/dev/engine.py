@@ -54,9 +54,18 @@ GT_TGT_HEAT_RATE = 0.30
 GT_TGT_COOL_RATE = 0.70
 GT_TGT_STILL_AIR = 0.0012
 GT_TGT_RAM_AIR = 0.00065
+GT_PT_STALL_TQ = 2.5
 GT_SPOOL_UNIT_LOAD = 2.91244
 #rotor.hpp
-MAIN, TAIL = 0, 1
+MAIN, TAIL, PROPELLER, PROPROTOR = 0, 1, 2, 3
+
+
+def rotor_type(name):
+    """fn_simpleRotorVariables - the type by name, main when not one of them."""
+    names = ['main', 'tail', 'propeller', 'proprotor']
+    return names.index(name.lower()) if name.lower() in names else MAIN
+
+
 CCW, CW = 0, 1
 
 
@@ -297,13 +306,14 @@ def simple_rotor_variables(H, cfg):
     for i in range(1, int(cfg['numSimpleRotors']) + 1):
         r = cfg['SimpleRotors']['SimpleRotor%02d' % i]
         rot = {k: r[k] for k in ROTOR_NUM_FIELDS}
-        rot['type'] = TAIL if r['type'].lower() == 'tail' else MAIN
+        rot['type'] = rotor_type(r['type'])
         rot['dir'] = CW if r['direction'].lower() == 'cw' else CCW
         rot['dragCoefTable'] = math_build_interp_grid(r['dragCoefTable'])
         rot['liftCoefTable'] = math_build_interp_grid(r['liftCoefTable'])
         rot['controlMap'] = r.get('controlMap', [])
         rotors.append(rot)
     H['bmkhs_simpleRotors'] = rotors
+    H['bmkhs_drivetrainDrag'] = float(CFG.get('drivetrainDrag', 0.0))
     H['bmkhs_reqEngTorque'] = [0.0, 0.0]
     H['bmkhs_rtrMoi'] = [0.0, 0.0]
 
@@ -486,7 +496,7 @@ def turbo_shaft_power_turbine(eng, t45, p45, p2, mDot, running, np_, nrFrac, dt)
         xh = (GT_GAMMA_HOT - 1) / GT_GAMMA_HOT
         t5 = t45 * (1 - eng['ptEfficiency'] * (1 - (p2 / p45) ** xh))
         ptPower = max(mDot, 0.0) * GT_CP_HOT * (t45 - t5)
-    shaftTq = ptPower / eng['powerKw'] * refTq
+    shaftTq = min((ptPower / eng['powerKw']) / max(np_, 1.0 / GT_PT_STALL_TQ), GT_PT_STALL_TQ) * refTq
     npDrag = eng['ptDrag'] * np_ * np_ + (eng['ptDragFloor'] if shaftTq <= 0.0 else 0.0)
     npDot = ((shaftTq / refTq) - npDrag) / eng['ptInertia']
     npFree = max(np_ + npDot * dt, 0.0)
@@ -604,6 +614,10 @@ def transmission_update(H):
     outputRpm = H['bmkhs_xmsnOutputRpm']
     totTq = sum(H['bmkhs_reqEngTorque'])
     engInputTq = sum(tq for k, tq in enumerate(H['bmkhs_engOutputTq']) if H['bmkhs_engClutch'][k])
+    dragTq = sum(e['refTq'] for e in H['bmkhs_engines']) * H.get('bmkhs_drivetrainDrag', 0.0)
+    if outputRpm <= 0.0:
+        dragTq = min(dragTq, max(engInputTq - totTq, 0.0))
+    totTq += dragTq
     dt = H['bmkhs_deltaTime']
     alpha = 0.0 if jEng == 0.0 else (engInputTq - totTq) / jEng
     deltaRpm = alpha * dt * (60.0 / (2.0 * math.pi))

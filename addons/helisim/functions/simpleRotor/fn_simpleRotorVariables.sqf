@@ -70,7 +70,7 @@ for "_i" from 1 to _numSimpleRotors do {
 
     //type and direction are named in the config, so nothing downstream assumes rotor 0 is
     //the main one or that every main turns the same way.
-    _rotor set ["type", [MAIN, TAIL] select (toLower getText (_r >> "type")      == "tail")];
+    _rotor set ["type", (["main", "tail", "propeller", "proprotor"] find (toLower getText (_r >> "type"))) max MAIN];
     _rotor set ["dir",  [CCW,  CW  ] select (toLower getText (_r >> "direction") == "cw")];
     _rotor set ["damageRole", getText (_r >> "damageRole")];
     //Where the rotor sits in the control scheme - declared, not inferred. -1 when not declared.
@@ -108,6 +108,8 @@ _heli setVariable ["bmkhs_simpleRotors",    _rotors];
 _heli setVariable ["bmkhs_controlScheme",   (["conventional", "tandem", "coaxial", "tiltrotor", "compound"] find (toLower getText (_config >> "controlScheme"))) max CONVENTIONAL];
 //{normal low, normal high, high rotor, maximum}
 _heli setVariable ["bmkhs_nrLimits",        getArray (_config >> "nrLimits")];
+//Drivetrain drag - constant torque, as a fraction of each engine's 100% torque. 0 when not declared
+_heli setVariable ["bmkhs_drivetrainDrag",  getNumber (_config >> "drivetrainDrag")];
 
 //Live state - seeded because the torque filter and the transmission read these before
 //anything has written them.

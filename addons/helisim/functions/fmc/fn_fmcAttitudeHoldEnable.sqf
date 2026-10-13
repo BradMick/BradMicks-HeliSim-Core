@@ -1,8 +1,10 @@
-params ["_heli"];
+params ["_heli", ["_byPilot", false]];
 #include "\bmkhs_helisim\functions\core\core.hpp"
 
 private _att = (_heli getVariable "bmkhs_fmc") getOrDefault ["AttitudeHold", createHashMap];
 if (count _att == 0) exitWith {};
+//Always on - the pilot's keys neither engage nor release it
+if (_byPilot && {(_att get "alwaysOn") == 1}) exitWith {};
 
 if (_heli getVariable "bmkhs_attHoldActive" == false) then {
     //References for the sub-mode fn_fmcAttitudeHold has already chosen - one rule for both

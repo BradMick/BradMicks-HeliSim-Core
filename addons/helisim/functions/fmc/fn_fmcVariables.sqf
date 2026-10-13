@@ -41,13 +41,13 @@ private _fmc = createHashMap;
                      [],
                      [["authority", [0.2, 0.1, 0.1]]]],
     ["AttitudeHold", ["posPitch", "posRoll", "attPitch", "attRoll"],
-                     [["posBelowKts", 5], ["velBelowKts", 40], ["attBelowKts", 30], ["authority", 0.1]],
+                     [["posBelowKts", 5], ["velBelowKts", 40], ["attBelowKts", 30], ["authority", 0.1], ["alwaysOn", 0]],
                      []],
     ["AltitudeHold", ["rad", "bar"],
-                     [["radBelowFt", 1428], ["radBelowKts", 40], ["engageFpm", 200], ["collBand", 0.05], ["dropAboveTq", 0.98]],
+                     [["radBelowFt", 1428], ["radBelowKts", 40], ["engageFpm", 200], ["collBand", 0.05], ["dropAboveTq", 0.98], ["alwaysOn", 0]],
                      []],
     ["HeadingHold",  ["hdg", "trn"],
-                     [["hdgBelowKts", 5], ["blendToKts", 40], ["authority", 0.1]],
+                     [["hdgBelowKts", 5], ["blendToKts", 40], ["authority", 0.1], ["alwaysOn", 1]],
                      [["breakout", [0.05, 0.10, 0.20]]]],
     ["FlightDirector", ["vs", "ias", "pitch", "roll", "yaw", "hvrPitch", "hvrRoll"],
                      [["altGain", 10], ["vsMaxFpm", 1000], ["vsAccelFpm", 200], ["tqBand", 0.1], ["tqFpmGain", 1000], ["captureFt", 50],
@@ -77,6 +77,8 @@ if (isNil {_heli getVariable "bmkhs_fdWaypoint"}) then { _heli setVariable ["bmk
 
 _heli setVariable ["bmkhs_autoAttLevelPitch", getNumber (_config >> "autoAttLevelPitch")];
 _heli setVariable ["bmkhs_autoAttRollLimit", getNumber (_config >> "autoAttRollLimit")];
+//Beep trim - force trim position moved per press
+_heli setVariable ["bmkhs_beepTrimStep", [0.01, getNumber (_config >> "beepTrimStep")] select (isNumber (_config >> "beepTrimStep"))];
 _heli setVariable ["bmkhs_pid_autoAttPitch", (getArray (_config >> "pidAutoAttPitch")) call bmkhs_fnc_pidCreate];
 _heli setVariable ["bmkhs_pid_autoAttRoll", (getArray (_config >> "pidAutoAttRoll")) call bmkhs_fnc_pidCreate];
 _heli setVariable ["bmkhs_pid_autoPedalHdg", (getArray (_config >> "pidAutoPedalHdg")) call bmkhs_fnc_pidCreate];
