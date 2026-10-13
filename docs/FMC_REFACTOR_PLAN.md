@@ -1,6 +1,6 @@
 # Flight controls refactor - plan
 
-Status: PROPOSED. Nothing below is built except where marked "built (1.4.0, uncommitted)".
+Status: IN PROGRESS. Step 1 built and tested on the MH-47G (2026-10-12); AH-64D force trim off not yet tested.
 
 ## 1. What the aircraft need
 
@@ -124,7 +124,7 @@ Each step is built, tested in game on the aircraft named, and committed before t
 
 | # | Step | Files | Test aircraft |
 |---|---|---|---|
-| 1 | Trim layer: `class Trim`, beep as rate while held (key down/up), lag, gate, `moves[]`; Core honours `bmkhs_fmcTrimOn` (force trim off). Remove `beepTrimStep`. | new `trim/fn_trimVariables`, `fn_trimBeep` (per frame), `fn_trimForceHold/Release/Set/Reset` (moved from fmc), `fn_inputControlHandle`, `CfgUserActions` (beep keys stay), `fn_coreUpdate` | MH-47G (beep), AH-64D (no beep; A/C UTIL force trim off now takes effect) |
+| 1 | **Built.** Trim layer: `class Trim`, beep as rate while held (key down/up), lag, gate, `moves[]`; Core honours `bmkhs_fmcTrimOn` (force trim off). Remove `beepTrimStep`. | new `trim/fn_trimVariables`, `fn_trimBeep` (per frame), `fn_trimForceHold/Release/Set/Reset` (moved from fmc), `fn_inputControlHandle`, `CfgUserActions` (beep keys stay), `fn_coreUpdate` | MH-47G (beep), AH-64D (no beep; A/C UTIL force trim off now takes effect) |
 | 2 | Reference source `capture` + beep moving the reference (`trimGain`) | `fmc/fn_fmcAttitudeHold`, `fmc/fn_fmcVariables` | UH-60M |
 | 3 | Reference source `trim` for pitch | `fmc/fn_fmcAttitudeHold` | MH-47G |
 | 4 | Airspeed sub-mode | `fmc/fn_fmcAttitudeHold`, `fmc/fn_fmcVariables` | MH-47G |

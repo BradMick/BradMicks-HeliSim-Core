@@ -111,22 +111,27 @@ class CfgFunctions
             class fmcAltitudeHold {R;};
             class fmcAltitudeHoldEnable {R;};
             class fmcAttitudeHoldEnable {R;};
-            class fmcBeepTrim {R;};
             class fmcControlMixing {R;};
             class fmcFdMode {R;};
             class fmcFdStep {R;};
             class fmcFdSync {R;};
             class fmcFdTarget {R;};
             class fmcFlightDirector {R;};
-            class fmcForceTrimHold {R;};
-            class fmcForceTrimRelease {R;};
-            class fmcForceTrimReset {R;};
-            class fmcForceTrimSet {R;};
             class fmcSetChannel {R;};
             class fmcHeadingHold {R;};
             class fmcHoldModesDisable {R;};
             class fmcSas {R;};
             class fmcVariables {R;};
+        };
+        class trim  {
+            file = "\bmkhs_helisim\functions\trim";
+            class trimBeepKey {R;};
+            class trimForceHold {R;};
+            class trimForceRelease {R;};
+            class trimForceReset {R;};
+            class trimForceSet {R;};
+            class trimUpdate {R;};
+            class trimVariables {R;};
         };
         class prestonAi {
             file = "\bmkhs_helisim\functions\prestonAi";
@@ -206,6 +211,7 @@ class CfgFunctions
             class utilSmoothAverage {R;};
             class utilNotify {R;};
             class utilNotifyRegister {R;};
+            class utilGateOpen {R;};
             class utilSeed {R;};
             class utilSetArrayVariable {R;};
             class utilSetMultiArrayVariable {R;};

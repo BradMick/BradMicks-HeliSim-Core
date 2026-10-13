@@ -1,5 +1,5 @@
 /* ----------------------------------------------------------------------------
-Function: bmkhs_fnc_fmcForceTrimRelease
+Function: bmkhs_fnc_trimForceRelease
 
 Description:
     Force trim switch released. Captures the current attitude, velocity and
@@ -14,6 +14,8 @@ Returns:
 params ["_heli"];
 
 if (currentPilot _heli != player || !local _heli) exitWith {};
+//Force trim off - the switch is unpowered
+if !(_heli getVariable "bmkhs_trimOn") exitWith {};
 
 //Velocity Hold Velocities
 private _curVel   = velocityModelSpace _heli;
@@ -34,5 +36,5 @@ _heli setVariable ["bmkhs_hdgHoldDesiredHdg",      getDir _heli,          true];
 //clamped deflection, not lateral g, so it would not be comparable with the measurement.
 _heli setVariable ["bmkhs_hdgHoldDesiredSideslip", 0.0,                   true];
 
-[_heli] call bmkhs_fnc_fmcForceTrimSet;
+[_heli] call bmkhs_fnc_trimForceSet;
 [_heli] call bmkhs_fnc_inputCenterTrimMode;

@@ -58,6 +58,7 @@ if (isAutoHoverOn _heli) then {
 [_heli] call bmkhs_fnc_stateAltitude;
 
 //Input
+[_heli] call bmkhs_fnc_trimUpdate;
 [_heli] call bmkhs_fnc_fmc;
 [_heli] call bmkhs_fnc_inputUpdate;
 

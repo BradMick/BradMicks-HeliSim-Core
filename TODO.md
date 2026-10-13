@@ -25,7 +25,7 @@ the config says so.
   `tandemYawLiftCoef`, `lctSchedule[]`, `lctTime`.
 - `ControlMixing`: the `collective` target.
 - Flight controls: `alwaysOn` in each FMC hold class; `class HydraulicBoost` on aircraft with no FMC;
-  `beepTrimStep`.
+  `class Trim` (`forceTrim`, `Beep`).
 - Engine: `ngOvrspdProt`, `npOvrspdProt`; `maxNg` is now the spool's real ceiling (no fixed 1.1).
 - Torque is power over shaft speed: idle Np/Nr rises on every pack (Bo 105 37.8 -> 52.5%,
   EC665 48.8 -> 62.1%, AH-64D 54.9 -> 67.1%, H-60 52.7 -> 65.4%). Fit `drivetrainDrag` and the

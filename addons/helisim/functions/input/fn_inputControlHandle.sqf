@@ -2,8 +2,8 @@
 Function: bmkhs_fnc_inputControlHandle
 
 Description:
-    Dispatches HeliSim's discrete flight-control actions - force trim, hold
-    modes, the flight director and the sticky-input interrupt. Bound from Core's
+    Dispatches HeliSim's discrete flight-control actions - force trim, beep
+    trim, hold modes, the flight director and the sticky-input interrupt. Bound from Core's
     CfgUserActions; a cockpit control calls it with the same action name.
 
 Parameters:
@@ -38,23 +38,26 @@ if (_state && {_name in _fdMode}) exitWith { [_heli, _fdMode get _name] call bmk
 if (_state && {_name in _fdStep}) exitWith { ([_heli] + (_fdStep get _name)) call bmkhs_fnc_fmcFdStep };
 if (_state && {_name in _fdSync}) exitWith { [_heli, _fdSync get _name] call bmkhs_fnc_fmcFdSync };
 
+//Beep trim - held, both edges; {axis, sign}, roll + = left
+private _beep = createHashMapFromArray [
+    ["bmkhs_beepTrimForward", [0, 1]], ["bmkhs_beepTrimBackward", [0, -1]],
+    ["bmkhs_beepTrimLeft",    [1, 1]], ["bmkhs_beepTrimRight",    [1, -1]]
+];
+if (_name in _beep) exitWith { ([_heli, _name] + (_beep get _name) + [_state]) call bmkhs_fnc_trimBeepKey };
+
 if (_state) then {
     switch (_name) do {
-        case "bmkhs_forceTrim":          { [_heli] call bmkhs_fnc_fmcForceTrimHold; };
+        case "bmkhs_forceTrim":          { [_heli] call bmkhs_fnc_trimForceHold; };
         case "bmkhs_holdModeAltitude":   { [_heli, true] call bmkhs_fnc_fmcAltitudeHoldEnable; };
         case "bmkhs_holdModeAttitude":   { [_heli, true] call bmkhs_fnc_fmcAttitudeHoldEnable; };
         case "bmkhs_holdModesOff":       { [_heli] call bmkhs_fnc_fmcHoldModesDisable; };
-        case "bmkhs_beepTrimForward":    { [_heli, "bmkhs_forceTrimPosPitch",  1] call bmkhs_fnc_fmcBeepTrim; };
-        case "bmkhs_beepTrimBackward":   { [_heli, "bmkhs_forceTrimPosPitch", -1] call bmkhs_fnc_fmcBeepTrim; };
-        case "bmkhs_beepTrimLeft":       { [_heli, "bmkhs_forceTrimPosRoll",  -1] call bmkhs_fnc_fmcBeepTrim; };
-        case "bmkhs_beepTrimRight":      { [_heli, "bmkhs_forceTrimPosRoll",   1] call bmkhs_fnc_fmcBeepTrim; };
         case "bmkhs_stickyInterrupt":    { [_heli, true] call bmkhs_fnc_stickyInterrupt; };
         case "bmkhs_ctrlVisToggle":      { [_heli] call bmkhs_fnc_ctrlVisToggle; };
     };
 } else {
     switch (_name) do {
-        case "bmkhs_forceTrim":          { [_heli] call bmkhs_fnc_fmcForceTrimRelease; };
-        case "bmkhs_forceTrimPanic":     { [_heli] call bmkhs_fnc_fmcForceTrimReset; };
+        case "bmkhs_forceTrim":          { [_heli] call bmkhs_fnc_trimForceRelease; };
+        case "bmkhs_forceTrimPanic":     { [_heli] call bmkhs_fnc_trimForceReset; };
         case "bmkhs_stickyInterrupt":    { [_heli, false] call bmkhs_fnc_stickyInterrupt; };
     };
 };

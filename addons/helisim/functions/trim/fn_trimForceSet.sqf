@@ -1,3 +1,16 @@
+/* ----------------------------------------------------------------------------
+Function: bmkhs_fnc_trimForceSet
+
+Description:
+    Sets the trim position to where the controls are - force trim release, and
+    force trim switched back on.
+
+Parameters:
+    _heli - The helicopter [Object]
+
+Returns:
+    Nothing
+---------------------------------------------------------------------------- */
 params ["_heli"];
 #include "\bmkhs_helisim\functions\core\core.hpp"
 

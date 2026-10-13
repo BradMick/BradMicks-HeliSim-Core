@@ -77,8 +77,6 @@ if (isNil {_heli getVariable "bmkhs_fdWaypoint"}) then { _heli setVariable ["bmk
 
 _heli setVariable ["bmkhs_autoAttLevelPitch", getNumber (_config >> "autoAttLevelPitch")];
 _heli setVariable ["bmkhs_autoAttRollLimit", getNumber (_config >> "autoAttRollLimit")];
-//Beep trim - force trim position moved per press
-_heli setVariable ["bmkhs_beepTrimStep", [0.01, getNumber (_config >> "beepTrimStep")] select (isNumber (_config >> "beepTrimStep"))];
 _heli setVariable ["bmkhs_pid_autoAttPitch", (getArray (_config >> "pidAutoAttPitch")) call bmkhs_fnc_pidCreate];
 _heli setVariable ["bmkhs_pid_autoAttRoll", (getArray (_config >> "pidAutoAttRoll")) call bmkhs_fnc_pidCreate];
 _heli setVariable ["bmkhs_pid_autoPedalHdg", (getArray (_config >> "pidAutoPedalHdg")) call bmkhs_fnc_pidCreate];

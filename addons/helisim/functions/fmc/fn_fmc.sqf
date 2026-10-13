@@ -7,13 +7,7 @@ private _fmc = _heli getVariable "bmkhs_fmc";
 //closed gate is the feature switched off; an undeclared one does not exist.
 private _open = {
     private _f = _fmc getOrDefault [_this, createHashMap];
-    (count _f > 0) && {((_f get "gate") findIf {
-        !(if (_x isEqualType []) then {
-            ([_heli, _x select 0] call bmkhs_fnc_systemCircuit) >= (_x select 1)
-        } else {
-            _heli getVariable [_x, false]
-        })
-    }) < 0}
+    (count _f > 0) && {[_heli, _f get "gate"] call bmkhs_fnc_utilGateOpen}
 };
 private _sasOn = "Sas"          call _open;
 private _attOn = "AttitudeHold" call _open;
