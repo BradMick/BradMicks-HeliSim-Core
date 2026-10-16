@@ -35,17 +35,38 @@ off until republished (the local builds are fine).
 UH-60M/MH-47G pedal breakout is picked by attitude hold sub-mode, so always 0.20 (att) - may be stiff
 in the hover. Heading hold "gets confused" (2026-10-12) not seen since.
 
-**Next:**
-1. Fly the MH-47G (alwaysOn, att only, hdg/trn) and the AH-64D (must be unchanged).
-2. Collective beep on ALT/RALT - two new input commands, 4 fps then 16 fps. Agreed, not built.
-3. Commit when the user validates; then step 3.
+**Save point committed 2026-10-15, not pushed:** Core fbcd7f8 (release/1.4.0), MH-47G 6d6497a,
+Bo105 0ccd631, EC665 1e1543e, H-60 5fcdf2f and AH-64D a58b5baf7 (both on local branch
+helisim-fmc-subModes off main/master). MH-47G and AH-64D not flown on this build yet.
+
+**CH-47F DAFCS review (TM 1-1520-271-10, 2-22 to 2-30), 2026-10-16.** Already covered: SAS (rate
+damping, quickening), att (pitch/bank stabilization), force trim = CD REL, beep moves the hold
+reference, vel = TRC (beep 1 kt/s = trimGainKts 10), pos = PH, hdg = heading stabilization, trn =
+turn coordination above 40 kt, rad/bar = ALT-RAD/ALT-INRT, LCT, FD beep and speed floors.
+
+**Next, in the user's order** - each a config field, Apache unchanged when not set:
+1. Airspeed hold - attitude hold sub-mode `spd`: above a set speed the pitch axis holds an airspeed
+   reference (KTAS) instead of an attitude; fore/aft beep changes it. 47 above 40 kt, 60 above
+   50 kt (60 TM 2.33.5c). See 3.3.
+3. Heading hold `trn` engage/exit as fields. 47/60: steps aside on pilot action (lateral beep, force
+   trim, stick or pedal displaced), resumes on bank and yaw rate below threshold (47 1.5 deg,
+   1.5 deg/s; 60 2 deg, 2 deg/s for 2 s). Apache declares today's 7 deg engage / 3 deg exit.
+4. Collective beep on ALT/RALT - two new input commands; fields for step per press, held rate, and
+   a faster rate after a time (47 1 ft, 3 ft/s; 60 4 then 16 fps).
+2. `armed[]` - sub-modes that run only once the pilot arms them with a key, inside their speed
+   bands (47 TRC = vel below 9 kt, PH = pos below 1 kt). Apache doesn't list it - automatic.
+5. FD coupled / command-cue switch (CPLR button, FD CPLR REL): uncoupled still computes commands
+   and cues but doesn't move the controls.
+6. Altitude hold source chosen by the pilot (47 IN/RA) - the armed[] idea on AltitudeHold.
+Then fly the MH-47G and AH-64D, commit when the user validates.
 
 **Agreed, not built:** UH-60M trimGain {50, 60} (TM 5 deg/s pitch, 6 deg/s roll; MH-47G numbers
 open). 1 deg/s coordinated turn from lateral beep - user said useful, no design yet.
 
 **Future:** IAS (EAS = TAS x sqrt(bmkhs_rho / ISA sea level), CAS ~ EAS, optional per-aircraft
-position error table, own variable; everything else stays KTAS). Stabilator manual mode. FD VS and
-GO AROUND. SAS channels.
+position error table, own variable; everything else stays KTAS). Stabilator manual mode. FD VS,
+GO AROUND, HOV/THOV. SAS channels (47 SYSTEM SEL). LCT manual mode. Torque limiting by backdrive
+(47: 96% or 10-min limit, 14% floor, no downward backdrive below 100 ft AGL).
 
 ## 1. What the aircraft need
 
