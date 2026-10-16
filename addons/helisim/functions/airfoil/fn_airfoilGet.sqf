@@ -26,8 +26,8 @@ private _airfoils = _heli getVariable ["bmkhs_airfoils", createHashMap];
 
 if (_name in _airfoils) exitWith { _airfoils get _name };
 
-diag_log text format [
+(format [
     "[BMKHS] AIRFOIL CONFIG ERROR: %1 asks for airfoil '%2', which is not declared. Known: %3.",
     _for, _name, keys _airfoils
-];
+]) call bmkhs_fnc_utilConfigError;
 []

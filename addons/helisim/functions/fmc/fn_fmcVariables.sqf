@@ -33,7 +33,7 @@ private _fmc = createHashMap;
         if (_ok) then {
             _fmc set [_name, _f];
         } else {
-            diag_log format ["[BMKHS] FMC CONFIG ERROR: %1 needs every gain array {kp, ki, kd, ki_clamp}: %2. Skipped.", _name, _pids];
+            (format ["[BMKHS] FMC CONFIG ERROR: %1 needs every gain array {kp, ki, kd, ki_clamp}: %2. Skipped.", _name, _pids]) call bmkhs_fnc_utilConfigError;
         };
     };
 } forEach [
@@ -42,13 +42,13 @@ private _fmc = createHashMap;
                      [["authority", [0.2, 0.1, 0.1]]]],
     ["AttitudeHold", ["posPitch", "posRoll", "attPitch", "attRoll"],
                      [["posBelowKts", 5], ["velBelowKts", 40], ["attBelowKts", 30], ["authority", 0.1], ["alwaysOn", 0]],
-                     []],
+                     [["subModes", []], ["trimGain", [0, 0]], ["trimGainKts", [0, 0]]]],
     ["AltitudeHold", ["rad", "bar"],
                      [["radBelowFt", 1428], ["radBelowKts", 40], ["engageFpm", 200], ["collBand", 0.05], ["dropAboveTq", 0.98], ["alwaysOn", 0]],
                      []],
     ["HeadingHold",  ["hdg", "trn"],
                      [["hdgBelowKts", 5], ["blendToKts", 40], ["authority", 0.1], ["alwaysOn", 1]],
-                     [["breakout", [0.05, 0.10, 0.20]]]],
+                     [["subModes", []], ["breakout", [0.05, 0.10, 0.20]]]],
     ["FlightDirector", ["vs", "ias", "pitch", "roll", "yaw", "hvrPitch", "hvrRoll"],
                      [["altGain", 10], ["vsMaxFpm", 1000], ["vsAccelFpm", 200], ["tqBand", 0.1], ["tqFpmGain", 1000], ["captureFt", 50],
                       ["iasAccelKts", 2], ["maxPitchDeg", 15], ["pitchRateDps", 3],
@@ -57,6 +57,18 @@ private _fmc = createHashMap;
                       ["collAuthority", 1.0], ["cycAuthority", 0.1], ["pedAuthority", 0.1]],
                      [["modes", []]]]
 ];
+
+{
+    _x params ["_name", "_known"];
+    private _h = _fmc getOrDefault [_name, createHashMap];
+    if (count _h > 0) then {
+        _h set ["subModes", (_h get "subModes") select {_x in _known}];
+        if (count (_h get "subModes") == 0) then {
+            (format ["[BMKHS] FMC CONFIG ERROR: %1 needs subModes[] - any of %2. Skipped.", _name, _known]) call bmkhs_fnc_utilConfigError;
+            _fmc deleteAt _name;
+        };
+    };
+} forEach [["AttitudeHold", ["pos", "vel", "att"]], ["HeadingHold", ["hdg", "yaw", "trn"]]];
 
 //The flight director's targets - {min, max, step, wraps} each, and only the modes Core knows.
 //Declared in ft, kt and deg; held in m, m/s and deg.
@@ -70,6 +82,13 @@ if (count _fd > 0) then {
         if (count _t >= 3) then { _targets set [_name, [(_t select 0) * _si, (_t select 1) * _si, (_t select 2) * _si, (_t param [3, 0]) > 0]] };
     } forEach [["ralt", FEET_TO_METERS], ["alt", FEET_TO_METERS], ["altp", FEET_TO_METERS], ["ias", KNOTS_TO_MPS], ["hdg", 1]];
     _fd set ["targets", _targets];
+    //{engage, drop} KTAS, in m/s
+    private _floors = createHashMap;
+    {
+        private _f = getArray (_config >> "FMC" >> "FlightDirector" >> "Floors" >> _x);
+        if (count _f >= 2) then { _floors set [_x, [(_f select 0) * KNOTS_TO_MPS, (_f select 1) * KNOTS_TO_MPS]] };
+    } forEach (_fd get "modes");
+    _fd set ["floors", _floors];
 };
 _heli setVariable ["bmkhs_fmc", _fmc];
 //The aircraft's active waypoint, posASL or [] - an input the aircraft writes
@@ -116,7 +135,7 @@ private _mixes = [];
             ["gate",     getArray (_x >> "gate")]
         ]);
     } else {
-        diag_log format ["[BMKHS] MIXING CONFIG ERROR: %1 needs source, target and table[]. Skipped.", configName _x];
+        (format ["[BMKHS] MIXING CONFIG ERROR: %1 needs source, target and table[]. Skipped.", configName _x]) call bmkhs_fnc_utilConfigError;
     };
 } forEach ("true" configClasses (_config >> "ControlMixing"));
 _heli setVariable ["bmkhs_mixes", _mixes];

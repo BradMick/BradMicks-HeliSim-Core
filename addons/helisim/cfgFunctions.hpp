@@ -208,6 +208,7 @@ class CfgFunctions
         };
         class util {
             file = "\bmkhs_helisim\functions\util";
+            class utilConfigError {R;};
             class utilSmoothAverage {R;};
             class utilNotify {R;};
             class utilNotifyRegister {R;};

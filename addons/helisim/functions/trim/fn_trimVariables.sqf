@@ -32,3 +32,5 @@ _heli setVariable ["bmkhs_trim", _trim];
 _heli setVariable ["bmkhs_trimOn",       true];
 //Beep switches held: action name -> [axis, sign, time pressed]
 _heli setVariable ["bmkhs_trimBeepHeld", createHashMap];
+//The beep's trim travel this frame, {pitch, roll} - fn_trimUpdate
+_heli setVariable ["bmkhs_trimBeepDelta", [0.0, 0.0]];

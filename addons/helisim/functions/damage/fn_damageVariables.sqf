@@ -72,10 +72,10 @@ if ((_damage getOrDefault ["engines", []]) isEqualTo []) then {
 
 {
     if ((_damage getOrDefault [_x, []]) isEqualTo []) then {
-        diag_log text format [
+        (format [
             "[BMKHS] DAMAGE CONFIG ERROR: no hitpoint declares role '%1'. That component cannot be damaged. Add bmkhsRole = ""%1"" to the hitpoint that represents it.",
             _x
-        ];
+        ]) call bmkhs_fnc_utilConfigError;
     };
 } forEach _required;
 

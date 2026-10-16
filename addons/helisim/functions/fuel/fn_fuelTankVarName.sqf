@@ -37,20 +37,20 @@ if (_raw select [0, 6] == "bmkhs_") then { _raw = _raw select [6] };
 private _fallback = format ["bmkhs_%1%2", toLower _kind, _index];
 
 if (_raw == "") exitWith {
-    diag_log text format [
+    (format [
         "[BMKHS] FUEL CONFIG ERROR: %1%2 has no variableName. Falling back to %3 - the aircraft's displays will not find this tank.",
         _kind, _index, _fallback
-    ];
+    ]) call bmkhs_fnc_utilConfigError;
     _fallback
 };
 
 private _name = "bmkhs_" + _raw;
 
 if (_name in _seenNames) exitWith {
-    diag_log text format [
+    (format [
         "[BMKHS] FUEL CONFIG ERROR: %1%2 reuses variableName '%3', already taken by an earlier tank. Falling back to %4 - fix the config, two tanks cannot share one variable.",
         _kind, _index, _raw, _fallback
-    ];
+    ]) call bmkhs_fnc_utilConfigError;
     _fallback
 };
 

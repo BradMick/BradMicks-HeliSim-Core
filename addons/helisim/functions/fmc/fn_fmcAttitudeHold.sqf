@@ -45,14 +45,72 @@ private _curRoll  = _curAtt # 1;
 private _attHoldCycPitchOut = 0.0;
 private _attHoldCycRollOut  = 0.0;
 
+//Beep
+private _beepDelta  = +(_heli getVariable ["bmkhs_trimBeepDelta", [0.0, 0.0]]);
+//Not on the FD's axes
+if ((["ias", "hvr"] findIf {_heli getVariable ["bmkhs_fd_" + _x, false]}) >= 0) then { _beepDelta set [0, 0.0] };
+if ((["hdg", "nav", "hvr"] findIf {_heli getVariable ["bmkhs_fd_" + _x, false]}) >= 0) then { _beepDelta set [1, 0.0] };
+private _gainDeg    = _att get "trimGain";
+private _gainKts    = _att get "trimGainKts";
+private _beeping    = ((_gainDeg + _gainKts) findIf {_x != 0}) >= 0
+    && {(_beepDelta findIf {_x != 0}) >= 0}
+    && {_heli getVariable "bmkhs_attHoldActive"};
+private _wasBeeping = _heli getVariable ["bmkhs_attHoldBeeping", false];
+
 //Submode selection, by ground speed: position hold below posBelowKts; velocity hold up to
 //velBelowKts accelerating, and attitude hold above it until back below attBelowKts.
-[_heli, "bmkhs_attHoldSubMode", switch (true) do {
+private _subModes = _att get "subModes";
+//FD HVR is position hold
+if (_heli getVariable ["bmkhs_fd_hvr", false]) then { _subModes = _subModes + ["pos"] };
+private _want = switch (true) do {
+    case (_beeping && {_gndSpeed <= _posBelow}):             { "vel" };
     case (_gndSpeed <= _posBelow):                           { "pos" };
     case (_subMode == "att" && {_gndSpeed >= _attBelow}):    { "att" };
     case (_gndSpeed > _velBelow):                            { "att" };
     default                                                  { "vel" };
-}] call bmkhs_fnc_utilUpdateNetworkGlobal;
+};
+if !(_want in _subModes) then {
+    //Nearest declared
+    _want = (([["vel", "att"], ["att", "pos"], ["vel", "pos"]] select (["pos", "vel", "att"] find _want)) select {_x in _subModes}) select 0;
+};
+[_heli, "bmkhs_attHoldSubMode", _want] call bmkhs_fnc_utilUpdateNetworkGlobal;
+
+private _newSubMode = _heli getVariable "bmkhs_attHoldSubMode";
+if (_newSubMode != _subMode) then {
+    //Capture
+    if (_heli getVariable "bmkhs_attHoldActive") then {
+        switch (_newSubMode) do {
+            case "pos": {
+                _heli setVariable ["bmkhs_attHoldDesiredPos", getPos _heli, true];
+                _heli setVariable ["bmkhs_posIntX", 0.0];
+                _heli setVariable ["bmkhs_posIntY", 0.0];
+            };
+            case "vel": { _heli setVariable ["bmkhs_attHoldDesiredVel", [-_velX, _velY], true] };
+            case "att": { _heli setVariable ["bmkhs_attHoldDesiredAtt", [_curPitch, _curRoll], true] };
+        };
+    };
+    //Clear derivative
+    {
+        _x deleteAt "prevError";
+        _x set ["derivFilt", 0];
+    } forEach [_pidRoll, _pidPitch, _pidRoll_att, _pidPitch_att];
+};
+if (_beeping) then {
+    //Published on release
+    _beepDelta params ["_dPitch", "_dRoll"];
+    if (_newSubMode == "att") then {
+        (_heli getVariable "bmkhs_attHoldDesiredAtt") params ["_setPitch", "_setRoll"];
+        _heli setVariable ["bmkhs_attHoldDesiredAtt", [_setPitch - _dPitch * (_gainDeg # 0), _setRoll - _dRoll * (_gainDeg # 1)]];
+    };
+    if (_newSubMode == "vel") then {
+        (_heli getVariable "bmkhs_attHoldDesiredVel") params ["_setVelX", "_setVelY"];
+        _heli setVariable ["bmkhs_attHoldDesiredVel", [_setVelX + _dRoll * (_gainKts # 1) * KNOTS_TO_MPS, _setVelY + _dPitch * (_gainKts # 0) * KNOTS_TO_MPS]];
+    };
+};
+if (_wasBeeping && {!_beeping}) then {
+    { _heli setVariable [_x, _heli getVariable _x, true] } forEach ["bmkhs_attHoldDesiredPos", "bmkhs_attHoldDesiredVel", "bmkhs_attHoldDesiredAtt"];
+};
+_heli setVariable ["bmkhs_attHoldBeeping", _beeping];
 
 //Always on - engaged whenever it can be, released by force trim, the ground or its gate, and
 //re-engaged on the new reference once they clear. The flight director's hover owns it while active.
@@ -73,7 +131,7 @@ if (_on && {_heli getVariable "bmkhs_attHoldActive"} && {!(_heli getVariable "bm
     //loop, so velocity does all the actuation and the integral only re-aims it - it can't fight the loop.
     //Anti-windup: the accumulator is clamped to a tiny ceiling (posIntClamp) near the loop's real working
     //range so it physically cannot rail the +-0.1 servo (the old 0.6 ceiling was 60x too big -> railed).
-    if (_subMode == "pos") then {
+    if (_newSubMode == "pos") then {
         private _desiredPos = _heli getVariable ["bmkhs_attHoldDesiredPos", getPos _heli];
         private _dPos = _desiredPos vectorDiff (getPos _heli);
         private _hdg  = direction _heli;
@@ -103,7 +161,7 @@ if (_on && {_heli getVariable "bmkhs_attHoldActive"} && {!(_heli getVariable "bm
         //Publish pos-branch internals for the hold-chain logger.
     };
     //Velocity hold
-    if (_subMode == "vel") then {
+    if (_newSubMode == "vel") then {
         (_heli getVariable "bmkhs_attHoldDesiredVel")
             params ["_setVelX", "_setVelY"];
         private _roll  = [_pidRoll,  _deltaTime, _setVelX, -_velX] call bmkhs_fnc_pidRun;
@@ -115,7 +173,7 @@ if (_on && {_heli getVariable "bmkhs_attHoldActive"} && {!(_heli getVariable "bm
         _attHoldCycRollOut  = _roll;
     };
     //Attitude hold
-    if (_subMode == "att") then {
+    if (_newSubMode == "att") then {
        (_heli getVariable "bmkhs_attHoldDesiredAtt")
               params ["_setPitch", "_setRoll"];
         private _pitchError = [_curPitch - _setPitch] call CBA_fnc_simplifyAngle180;

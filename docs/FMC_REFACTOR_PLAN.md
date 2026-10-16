@@ -1,6 +1,51 @@
 # Flight controls refactor - plan
 
-Status: IN PROGRESS. Step 1 built and tested on the MH-47G (2026-10-12); AH-64D force trim off not yet tested.
+Status: IN PROGRESS.
+
+## Where we are (2026-10-15, end of session)
+
+Nothing below is committed. Repos with uncommitted work: Core, H-60, MH-47G, AH-64D, Bo105, EC665.
+All pass `hemtt check`.
+
+**Step 1 - trim layer: DONE, pushed** (Core caf7301, MH-47G 2fbf3fe). AH-64D force trim off untested.
+
+**Step 2 and today's work - built, not committed. User flew the UH-60M, Bo105 and EC665: all
+operate and fly as expected. MH-47G and AH-64D not flown on this build yet:**
+- Beep with a hold on moves the trim and the hold reference (trimGain deg). Holds never move the
+  trim - only the pilot does (beep, or force trim and position the stick).
+- Fix 1: every sub-mode change captures the new sub-mode's reference. Fix 2: derivative cleared on
+  a sub-mode change, integrals kept. Laws run on this frame's sub-mode.
+- `AttitudeHold >> subModes[]` required (pos/vel/att; undeclared falls to nearest declared).
+  AH-64D, Bo105, EC665 all three; UH-60M, MH-47G `{"att"}`. FD HVR may use pos regardless.
+- `AttitudeHold >> alwaysOn = 1` on UH-60M and MH-47G (MH-47G not flown yet).
+- `HeadingHold >> subModes[]` required (hdg/yaw/trn; ntt is auto pedal only). AH-64D, Bo105, EC665
+  all three, unchanged. UH-60M, MH-47G `{"hdg","trn"}`: hdg at every speed, trn in turns (7/3 deg),
+  heading re-captured after. No blending change - it would change the Apache.
+- FD beep: fore/aft moves the IAS target (iasAccelKts/s), lateral the HDG target (turnRateDps),
+  unsnapped (fmcFdTarget _snap). NAV ignores it. On an FD axis the beep doesn't move the cyclic or
+  the attitude hold reference. Generic - any aircraft with a flight director. Flown, works.
+- FD speed floors: optional `class Floors`, {engage, drop} KTAS per mode. UH-60M {50, 48} on alt,
+  altp, ias, hdg, nav (not ralt, hvr).
+- Config errors go to the RPT and on screen once (bmkhs_fnc_utilConfigError, all 13 sites). A
+  missing required field switches off only that feature. Config versioning/migration was built and
+  removed (user: bloat).
+
+**Watch:** the Workshop copies of the Bo105 and EC665 lack subModes[] - attitude and heading hold
+off until republished (the local builds are fine).
+UH-60M/MH-47G pedal breakout is picked by attitude hold sub-mode, so always 0.20 (att) - may be stiff
+in the hover. Heading hold "gets confused" (2026-10-12) not seen since.
+
+**Next:**
+1. Fly the MH-47G (alwaysOn, att only, hdg/trn) and the AH-64D (must be unchanged).
+2. Collective beep on ALT/RALT - two new input commands, 4 fps then 16 fps. Agreed, not built.
+3. Commit when the user validates; then step 3.
+
+**Agreed, not built:** UH-60M trimGain {50, 60} (TM 5 deg/s pitch, 6 deg/s roll; MH-47G numbers
+open). 1 deg/s coordinated turn from lateral beep - user said useful, no design yet.
+
+**Future:** IAS (EAS = TAS x sqrt(bmkhs_rho / ISA sea level), CAS ~ EAS, optional per-aircraft
+position error table, own variable; everything else stays KTAS). Stabilator manual mode. FD VS and
+GO AROUND. SAS channels.
 
 ## 1. What the aircraft need
 

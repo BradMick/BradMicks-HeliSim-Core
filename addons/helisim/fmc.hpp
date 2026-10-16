@@ -36,12 +36,20 @@
 /////////////////////////////////////////////////////////////////////////////////////////////
 //
 //  gate[]
+//  subModes[]   required - any of "pos", "vel", "att". Where speed picks one not declared, the
+//               nearest declared flies. {"att"} = attitude hold at all speeds.
 //  posBelowKts  position hold at or below. 5
 //  velBelowKts  accelerating, velocity hold up to this, attitude hold above. 40
 //  attBelowKts  decelerating, attitude hold down to this, velocity hold below. 30
 //  authority    output limit, cyclic fraction. 0.1
 //  alwaysOn     1 = engaged whenever it can be, re-engaged after force trim; the keys do not
 //               engage or release it. 0
+//  trimGain[]   {pitch, roll} deg of attitude reference per unit of beep trim travel. {0, 0}
+//  trimGainKts[] {pitch, roll} kt of velocity reference per unit of beep trim travel. {0, 0}
+//               With either declared, beep (class Trim, trim.hpp) moves the engaged hold's
+//               reference with the stick: attitude in att, velocity in vel. In pos it flies
+//               vel while beeping and holds the spot it stops on. {0, 0} both: beep moves the
+//               stick only and the hold holds its reference.
 //  posPitch[] posRoll[]   gains, position and velocity hold
 //  attPitch[] attRoll[]   gains, attitude hold
 //
@@ -64,6 +72,8 @@
 /////////////////////////////////////////////////////////////////////////////////////////////
 //
 //  gate[]
+//  subModes[]   required - any of "hdg", "yaw", "trn". Without "yaw", hdg holds heading at
+//               every speed; without "trn", no turn coordination.
 //  hdgBelowKts  heading hold below this ground speed... 5
 //  blendToKts   ...blending to yaw damping / turn coordination by this one. 40
 //  breakout[]   pedal that drops the hold, by the attitude hold's sub-mode - {pos, vel, att},
@@ -81,6 +91,8 @@
 //  modes[]      the modes the aircraft has, of "ralt" "alt" "altp" "ias" "hdg" "nav" "hvr"
 //  class Targets  {min, max, step, wraps} for each target the aircraft has:
 //                 ralt[] / alt[] / altp[] ft, ias[] kt, hdg[] deg (wraps = 1)
+//  class Floors   optional, {engage at or above, drop below} KTAS for any mode, e.g. ias[] =
+//                 {50, 48}. A mode not listed has no floor.
 //  altGain      climb rate per foot of altitude error, fpm/ft. 10
 //  vsMaxFpm     climb rate limit. 1000
 //  vsAccelFpm   how fast the climb rate asked for may change, fpm per second. 200

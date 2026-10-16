@@ -89,12 +89,29 @@ if ("hvr" call _engaged && {_fd getOrDefault ["hvrHeld", false]} && {!(_heli get
     [_heli, "hvr"] call bmkhs_fnc_fmcFdMode;
 };
 
+//Speed floors
+{
+    if (_x call _engaged && {_airspeed < (_y select 1)}) then { [_heli, _x] call bmkhs_fnc_fmcFdMode };
+} forEach (_fd get "floors");
+
 //ALTP capture - inside the band it becomes ALT on the same target
 if ("altp" call _engaged && {"alt" in _modes}
     && {abs (_altNow - (_heli getVariable "bmkhs_fdTgt_altp")) < ((_fd get "captureFt") * FEET_TO_METERS)}) then {
     [_heli, "alt", _heli getVariable "bmkhs_fdTgt_altp"] call bmkhs_fnc_fmcFdTarget;
     [_heli, "alt"] call bmkhs_fnc_fmcFdMode;
 };
+
+//Beep moves the IAS / HDG target
+private _beep = _heli getVariable ["bmkhs_trimBeepDelta", [0.0, 0.0]];
+{
+    _x params ["_mode", "_d", "_rate"];
+    if (_d != 0 && {_mode call _engaged}) then {
+        [_heli, _mode, (_heli getVariable ("bmkhs_fdTgt_" + _mode)) + ([1, -1] select (_d < 0)) * _rate * _deltaTime, false] call bmkhs_fnc_fmcFdTarget;
+    };
+} forEach [
+    ["ias",  _beep select 0,  (_fd get "iasAccelKts") * KNOTS_TO_MPS],
+    ["hdg", -(_beep select 1), _fd get "turnRateDps"]
+];
 
 private _out = createHashMap;
 //What it is asking for, for the flight log - {climb m/s, pitch, bank, torque headroom}

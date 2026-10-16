@@ -9,6 +9,7 @@ Parameters:
     _heli   - The helicopter [Object]
     _target - "ralt", "alt", "altp", "ias" or "hdg" [String]
     _value  - m, m/s or deg [Number]
+    _snap   - Snap to the step [Bool, default true]
 
 Returns:
     Nothing
@@ -16,7 +17,7 @@ Returns:
 Author:
     BradMick
 ---------------------------------------------------------------------------- */
-params ["_heli", "_target", "_value"];
+params ["_heli", "_target", "_value", ["_snap", true]];
 
 private _fd = (_heli getVariable "bmkhs_fmc") getOrDefault ["FlightDirector", createHashMap];
 if (count _fd == 0) exitWith {};
@@ -24,7 +25,7 @@ private _t = (_fd get "targets") getOrDefault [_target, []];
 if (_t isEqualTo []) exitWith {};
 _t params ["_min", "_max", "_step", "_wraps"];
 
-_value = (round (_value / _step)) * _step;
+if (_snap) then { _value = (round (_value / _step)) * _step };
 _value = if (_wraps) then {
     private _span = _max - _min;
     _min + ((((_value - _min) mod _span) + _span) mod _span)

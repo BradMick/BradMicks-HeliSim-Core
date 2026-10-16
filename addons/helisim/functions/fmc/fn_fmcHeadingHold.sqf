@@ -8,6 +8,7 @@ private _pidTrn        = _hh get "trn";
 private _hdgBelow      = (_hh get "hdgBelowKts") * KNOTS_TO_MPS;
 private _blendTo       = (_hh get "blendToKts") * KNOTS_TO_MPS;
 private _authority     = _hh get "authority";
+private _subModes      = _hh get "subModes";
 
 //The SAS yaw loop is cleared alongside, where the aircraft has one
 private _pidYaw        = ((_heli getVariable "bmkhs_fmc") getOrDefault ["Sas", createHashMap]) getOrDefault ["yaw", createHashMap];
@@ -104,7 +105,7 @@ if (_heli getVariable "bmkhs_hdgHoldActive") then {
 
             //Turn coord: engages at > 7 deg bank from level, disengages when back within 3 deg.
             //When disengaging, reset att hold roll reference to 0 so yaw SAS holds level cleanly.
-            private _trnCoordActive = _attHoldActive && (if (_subMode == "trn") then { abs _curBank > 3.0 } else { abs _curBank > 7.0 });
+            private _trnCoordActive = ("trn" in _subModes) && _attHoldActive && (if (_subMode == "trn") then { abs _curBank > 3.0 } else { abs _curBank > 7.0 });
             if (_subMode == "trn" && !_trnCoordActive) then {
                 private _desiredAtt = _heli getVariable "bmkhs_attHoldDesiredAtt";
                 _heli setVariable ["bmkhs_attHoldDesiredAtt", [_desiredAtt # 0, 0.0], true];
@@ -112,6 +113,10 @@ if (_heli getVariable "bmkhs_hdgHoldActive") then {
 
             ["yaw", "trn"] select (_trnCoordActive)
         }
+    };
+    //Undeclared - first declared
+    if !(_targetSubMode in (_subModes + ["aut"])) then {
+        _targetSubMode = (["hdg", "yaw", "trn"] select {_x in _subModes}) select 0;
     };
 
     //On transition: reset outgoing PID; capture heading when returning to hdg.
@@ -158,7 +163,7 @@ if (_heli getVariable "bmkhs_hdgHoldActive") then {
         case "trn": { _trnOutput };
         case "yaw": { _yawOutput };
         case "aut": { 0.0 };        // auto pedal owns the axis; fn_fmc.sqf zeroes this anyway
-        default     { 0.0 };
+        default     { _hdgOutput }; //hdg at speed, no yaw declared
     };
     _output = linearConversion[_hdgBelow, _blendTo, _gndSpeed, _hdgOutput, _highSpeedOutput, true];
 } else {

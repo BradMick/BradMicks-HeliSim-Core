@@ -7,7 +7,7 @@ Description:
     to a stop and holds it on the attitude hold, releasing that when it disengages.
 
     Refused while the flight director's gate is shut, off the ground for anything
-    but the vertical modes, and for NAV with no waypoint.
+    but the vertical modes, for NAV with no waypoint, and below the mode's speed floor.
 
 Parameters:
     _heli - The helicopter [Object]
@@ -41,6 +41,8 @@ if !(_heli getVariable ["bmkhs_fmcFdAvail", false]) exitWith {};
 if (!(_mode in ["ralt", "alt", "altp"]) && {[_heli] call bmkhs_fnc_stateOnGround}) exitWith {};
 if (_mode == "nav" && {(_heli getVariable ["bmkhs_fdWaypoint", []]) isEqualTo []}) exitWith {};
 if (_mode == "hvr" && {!(_heli getVariable ["bmkhs_fmcAttHoldAvail", false])}) exitWith {};
+private _floor = (_fd get "floors") getOrDefault [_mode, []];
+if (_floor isNotEqualTo [] && {((_heli getVariable "bmkhs_velModelSpace") select 1) < (_floor select 0)}) exitWith {};
 
 private _axis = [["ralt", "alt", "altp"], ["ias", "hvr"], ["hdg", "nav"]] select {_mode in _x} select 0;
 { if (_x != _mode) then { _x call _off } } forEach _axis;
