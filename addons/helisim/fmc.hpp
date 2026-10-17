@@ -17,8 +17,42 @@
 //{circuit, threshold}, all must hold. A closed gate is the feature off: no output, its loops
 //reset. The FMC channels (bmkhs_fnc_fmcSetChannel) still switch individual axes on top.
 //
-//Gains are {kp, ki, kd, ki_clamp}. A feature missing any of its gain arrays is skipped and
-//logged. Every other field is optional and defaults to the value shown.
+//Gains are {kp, ki, kd, ki_clamp}, per pilot unit of error (deg, deg/s, kt, ft, fpm, g as
+//listed); Core converts them once at init. ki_clamp is in error unit-seconds. The gains for
+//what the aircraft runs are required - a feature missing one is skipped and logged; gains for
+//what it does not run may be left out. Every other field is optional and defaults to the value
+//shown - the FMC_ / TRIM_ defines at the end.
+//
+/////////////////////////////////////////////////////////////////////////////////////////////
+// Trim - where the controls sit with no force on them
+/////////////////////////////////////////////////////////////////////////////////////////////
+//
+//Declared in class Trim, beside class FMC. It needs no FMC. Every aircraft has force trim -
+//centre-sprung sticks need it - and the force trim button sets the trim position to where the
+//controls are. No class Trim is force trim with no beep.
+//
+//    class Trim {
+//        class Beep {...};
+//    };
+//
+//The force trim switch is bmkhs_fmcTrimOn (bmkhs_fnc_fmcSetChannel, "trim"). Off, the trim
+//positions are held at 0 and the force trim button and beep do nothing; back on, the trim is
+//set to where the controls are. A casual assist that owns an axis keeps writing it.
+//
+//Beep - trim moved by a switch, at a rate while held. Undeclared, the aircraft has no beep.
+//  gate[]       when it works - the trim actuators' power. Component gate form
+//  rate[]       {pitch, roll} trim travel per second held, control fraction. {0.10, 0.10}
+//It moves 0.1 s after the press. A press made on a flight director axis moves that director's
+//target instead, until it is released. Beep does nothing on an axis a casual assist owns, or
+//with a springless cyclic or sticky keyboard on that axis.
+//
+//Inputs, through bmkhs_fnc_inputControlHandle:
+//    bmkhs_beepTrimForward / Backward / Left / Right    held
+//    bmkhs_forceTrim                                    held, release sets the trim
+//    bmkhs_forceTrimPanic                               zero the trim and keyboard input
+//
+//Published: bmkhs_forceTrimPosPitch / Roll / Yaw (-1..1, + = forward / left / right, in the
+//packed state), bmkhs_trimOn (force trim working, local).
 //
 /////////////////////////////////////////////////////////////////////////////////////////////
 // Sas - rate damping
@@ -26,32 +60,36 @@
 //
 //  gate[]       when it works - the hydraulics and power its servos need
 //  authority[]  {pitch, roll, yaw} output limit, control fraction. {0.2, 0.1, 0.1}
-//  pitch[] roll[] yaw[]   gains, on body rate
+//  pitch[] roll[] yaw[]   gains, body rate (deg/s) to control
 //
 //With SAS available the pilot's command is unlagged (the electrical servo path); without it
 //the mechanical actuator lag applies.
 //
 /////////////////////////////////////////////////////////////////////////////////////////////
-// AttitudeHold - position, velocity or attitude, by ground speed
+// AttitudeHold - position, velocity or attitude, by ground speed; airspeed, by KTAS
 /////////////////////////////////////////////////////////////////////////////////////////////
 //
 //  gate[]
-//  subModes[]   required - any of "pos", "vel", "att". Where speed picks one not declared, the
-//               nearest declared flies. {"att"} = attitude hold at all speeds.
+//  subModes[]   any of "pos", "vel", "att", "spd". Where speed picks one not declared, the
+//               nearest declared flies. {"att"} = attitude hold at all speeds. "spd" = airspeed
+//               hold above spdAboveKts KTAS, to 10 kt below it: pitch holds the airspeed the
+//               aircraft settles at, roll holds bank as att. Not under FD HVR. {"pos", "vel", "att"}
 //  posBelowKts  position hold at or below. 5
 //  velBelowKts  accelerating, velocity hold up to this, attitude hold above. 40
 //  attBelowKts  decelerating, attitude hold down to this, velocity hold below. 30
+//  spdAboveKts  airspeed hold above this KTAS. 40
 //  authority    output limit, cyclic fraction. 0.1
+//  breakout     cyclic displacement from trim, per axis, past which that axis is not active - no
+//               output; back inside, it returns to its reference. No sub-mode change meanwhile. 0.10
 //  alwaysOn     1 = engaged whenever it can be, re-engaged after force trim; the keys do not
 //               engage or release it. 0
-//  trimGain[]   {pitch, roll} deg of attitude reference per unit of beep trim travel. {0, 0}
-//  trimGainKts[] {pitch, roll} kt of velocity reference per unit of beep trim travel. {0, 0}
-//               With either declared, beep (class Trim, trim.hpp) moves the engaged hold's
-//               reference with the stick: attitude in att, velocity in vel. In pos it flies
-//               vel while beeping and holds the spot it stops on. {0, 0} both: beep moves the
-//               stick only and the hold holds its reference.
-//  posPitch[] posRoll[]   gains, position and velocity hold
-//  attPitch[] attRoll[]   gains, attitude hold
+//  trimGain[]   {pitch, roll} deg of attitude reference per unit of beep trim travel. With it,
+//               beep (class Trim) moves the engaged hold's attitude reference with the
+//               stick; in spd the speed it then settles at is the new airspeed reference. {0, 0}:
+//               beep moves the stick only.
+//  posPitch[] posRoll[]   gains, ground velocity (kt) to cyclic - pos and vel, and FD HVR
+//  attPitch[] attRoll[]   gains, attitude (deg) to cyclic - att and spd
+//  spdPitch[]   gains, airspeed (kt) to pitch attitude (deg) - spd
 //
 /////////////////////////////////////////////////////////////////////////////////////////////
 // AltitudeHold - radar or barometric
@@ -63,25 +101,22 @@
 //  engageFpm    engages only within this vertical speed. 200
 //  collBand     drops out when the collective moves this fraction from where it engaged. 0.05
 //  dropAboveTq  drops out at this engine torque fraction. 0.98
-//  alwaysOn     1 = engaged whenever it can be, re-engaged near level flight after the collective
-//               or the torque limit drops it; the keys do not engage or release it. 0
-//  rad[] bar[]  gains
+//  rad[] bar[]  gains, altitude (ft) to collective
 //
 /////////////////////////////////////////////////////////////////////////////////////////////
 // HeadingHold - heading below, yaw damping and turn coordination above
 /////////////////////////////////////////////////////////////////////////////////////////////
 //
 //  gate[]
-//  subModes[]   required - any of "hdg", "yaw", "trn". Without "yaw", hdg holds heading at
-//               every speed; without "trn", no turn coordination.
+//  subModes[]   any of "hdg", "yaw", "trn". Without "yaw", hdg holds heading at every speed;
+//               without "trn", no turn coordination. {"hdg", "yaw", "trn"}
 //  hdgBelowKts  heading hold below this ground speed... 5
 //  blendToKts   ...blending to yaw damping / turn coordination by this one. 40
 //  breakout[]   pedal that drops the hold, by the attitude hold's sub-mode - {pos, vel, att},
 //               so it changes band on the attitude hold's speeds and hysteresis. {0.05, 0.10, 0.20}
 //  authority    output limit, pedal fraction. 0.1
-//  alwaysOn     always on - heading hold has no key. 1
-//  hdg[]        gains, heading
-//  trn[]        gains, yaw damping and turn coordination (on lateral g)
+//  hdg[]        gains, heading (deg) to pedal - hdg
+//  trn[]        gains, yaw damping and turn coordination (on lateral g) - yaw and trn
 //
 /////////////////////////////////////////////////////////////////////////////////////////////
 // FlightDirector - coupled modes
@@ -91,8 +126,8 @@
 //  modes[]      the modes the aircraft has, of "ralt" "alt" "altp" "ias" "hdg" "nav" "hvr"
 //  class Targets  {min, max, step, wraps} for each target the aircraft has:
 //                 ralt[] / alt[] / altp[] ft, ias[] kt, hdg[] deg (wraps = 1)
-//  class Floors   optional, {engage at or above, drop below} KTAS for any mode, e.g. ias[] =
-//                 {50, 48}. A mode not listed has no floor.
+//  floorKts     every mode but RALT and HVR engages at or above this KTAS and drops 2 kt below
+//               it. 0 = none
 //  altGain      climb rate per foot of altitude error, fpm/ft. 10
 //  vsMaxFpm     climb rate limit. 1000
 //  vsAccelFpm   how fast the climb rate asked for may change, fpm per second. 200
@@ -119,11 +154,11 @@
 //  hvrDecelKts  HVR's deceleration to the hover, kt per second. 2
 //  collAuthority / cycAuthority / pedAuthority   output limits. 1.0 / 0.1 / 0.1 - the
 //               collective is full travel, continuous torque limits it
-//  vs[]         gains, climb rate (m/s) to collective
-//  ias[]        gains, airspeed (m/s) to pitch attitude (deg)
-//  pitch[] roll[]   gains, attitude (deg) to cyclic
-//  yaw[]        gains, heading (deg) to pedal
-//  hvrPitch[] hvrRoll[]   gains, ground velocity (m/s) to cyclic, slowing to the hover
+//  vs[]         gains, climb rate (fpm) to collective - ralt, alt, altp
+//  ias[] pitch[]  gains, airspeed (kt) to pitch attitude (deg), attitude to cyclic - ias
+//  roll[] yaw[]   gains, bank (deg) to cyclic, heading (deg) to pedal - hdg, nav
+//  hvrPitch[] hvrRoll[]   gains, ground velocity (kt) to cyclic, slowing to the hover - hvr.
+//               HVR also needs the AttitudeHold's posPitch[] / posRoll[].
 //
 //Each command is eased onto at its rate from where the aircraft is, so a step in a target is
 //never a step in a control. Fields are in pilot units; the director works, and publishes its
@@ -132,9 +167,21 @@
 //An axis the director holds replaces that axis's hold. Engaging a mode cancels the others on
 //its axis: vertical {ralt, alt, altp}, longitudinal {ias, hvr}, lateral {hdg, nav}. HVR takes
 //the ground velocity it is engaged at down to nothing at hvrDecelKts, then engages the
-//AttitudeHold - in position hold by then - over the spot, and drops if that drops. HVR has the
-//cyclic, so HDG / NAV turn by pedal under it. Only the vertical modes engage on the ground; NAV
-//needs a waypoint.
+//AttitudeHold - in position hold by then - over the spot, and drops if that drops. HVR is a
+//low speed mode: it engages, and stays, at or below 40 kt ground speed. HVR has the cyclic, so
+//HDG / NAV turn by pedal under it. Only the vertical modes engage on the ground; NAV needs a
+//waypoint. Taking or giving up an axis, the director blends with the hold over 1 s.
+//
+//Force trim pressed and the director stands aside on the cyclic - the pilot flies it. Released,
+//IAS and HDG resume onto their targets; HVR takes the ground velocity the aircraft has and
+//slows to a hover over the new spot. A cyclic axis past the AttitudeHold breakout stands aside
+//on that axis only; back inside, it resumes on its reference.
+//
+//RALT, ALT, IAS and HDG engage on where the aircraft is - that is the target; ALTP flies to its
+//preselect. A beep pressed on a director axis moves its target, not the stick: fore/aft the IAS
+//target at iasAccelKts, lateral the HDG target at turnRateDps. In HVR both axes move the ground
+//velocity it holds at 1 kt/s - beep away from the hover, and back to nothing to hold the new
+//spot. The press stays on the target until released, even if the mode drops.
 //
 //Inputs are Core's own actions, through the established dispatchers - the cockpit calls them
 //by the same names:
@@ -149,5 +196,64 @@
 //
 //Published: bmkhs_fmcSasAvail, bmkhs_fmcAttHoldAvail, bmkhs_fmcAltHoldAvail,
 //bmkhs_fmcHdgHoldAvail, bmkhs_fmcFdAvail - declared and its gate holding, networked.
+
+/////////////////////////////////////////////////////////////////////////////////////////////
+// Defaults - a field an aircraft leaves out
+/////////////////////////////////////////////////////////////////////////////////////////////
+//Trim
+#define TRIM_BEEP_RATE              [0.10, 0.10]
+#define TRIM_BEEP_LAG               0.1         //s
+//Sas
+#define FMC_SAS_AUTHORITY           [0.2, 0.1, 0.1]
+//AttitudeHold
+#define FMC_ATT_SUB_MODES           ["pos", "vel", "att"]
+#define FMC_ATT_POS_BELOW_KTS       5
+#define FMC_ATT_VEL_BELOW_KTS       40
+#define FMC_ATT_ATT_BELOW_KTS       30
+#define FMC_ATT_SPD_ABOVE_KTS       40
+#define FMC_ATT_AUTHORITY           0.1
+#define FMC_ATT_ALWAYS_ON           0
+#define FMC_ATT_TRIM_GAIN           [0, 0]
+#define FMC_ATT_SPD_BAND_KTS        10          //spd out this far below spdAboveKts
+#define FMC_ATT_SPD_MAX_PITCH_DEG   10
+#define FMC_ATT_SPD_SETTLE_KTS      0.5         //kt/s
+#define FMC_ATT_BREAKOUT            0.10        //cyclic throw
+//AltitudeHold
+#define FMC_ALT_RAD_BELOW_FT        1428
+#define FMC_ALT_RAD_BELOW_KTS       40
+#define FMC_ALT_ENGAGE_FPM          200
+#define FMC_ALT_COLL_BAND           0.05
+#define FMC_ALT_DROP_ABOVE_TQ       0.98
+//HeadingHold
+#define FMC_HDG_SUB_MODES           ["hdg", "yaw", "trn"]
+#define FMC_HDG_BELOW_KTS           5
+#define FMC_HDG_BLEND_TO_KTS        40
+#define FMC_HDG_AUTHORITY           0.1
+#define FMC_HDG_BREAKOUT            [0.05, 0.10, 0.20]
+//FlightDirector
+#define FMC_FD_ALT_GAIN             10
+#define FMC_FD_VS_MAX_FPM           1000
+#define FMC_FD_VS_ACCEL_FPM         200
+#define FMC_FD_TQ_BAND              0.1
+#define FMC_FD_TQ_FPM_GAIN          1000
+#define FMC_FD_CAPTURE_FT           50
+#define FMC_FD_IAS_ACCEL_KTS        2
+#define FMC_FD_MAX_PITCH_DEG        15
+#define FMC_FD_PITCH_RATE_DPS       3
+#define FMC_FD_MAX_BANK_DEG         30
+#define FMC_FD_TURN_RATE_DPS        3
+#define FMC_FD_BANK_PER_DEG         1
+#define FMC_FD_ROLL_RATE_DPS        5
+#define FMC_FD_BANK_ABOVE_KTS       20
+#define FMC_FD_HVR_DECEL_KTS        2
+#define FMC_FD_FLOOR_KTS            0
+#define FMC_FD_COLL_AUTHORITY       1.0
+#define FMC_FD_CYC_AUTHORITY        0.1
+#define FMC_FD_PED_AUTHORITY        0.1
+#define FMC_FD_FLOOR_DROP_KTS       2           //modes drop this far below floorKts
+#define FMC_FD_HVR_BELOW_KTS        40          //ground speed
+#define FMC_FD_HVR_BEEP_KTS         1           //kt/s
+#define FMC_FD_HVR_HOLD_KTS         0.5         //beeped back below this, holds the spot
+#define FMC_FD_HANDOFF_SEC          1.0
 
 #endif

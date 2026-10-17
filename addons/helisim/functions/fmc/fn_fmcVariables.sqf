@@ -14,67 +14,114 @@ Returns:
 ---------------------------------------------------------------------------- */
 params ["_heli", "_config"];
 #include "\bmkhs_helisim\functions\core\core.hpp"
+#include "\bmkhs_helisim\fmc.hpp"
+
+//Gains are declared per pilot unit; the loops run in SI. [gains, pilot units per SI unit]
+private _pidSi = {
+    params ["_gains", "_perSi"];
+    _gains params ["_kp", "_ki", "_kd", "_clamp"];
+    [_kp * _perSi, _ki * _perSi, _kd * _perSi, _clamp / _perSi] call bmkhs_fnc_pidCreate
+};
 
 //The FMC - one entry per declared feature; an undeclared feature does not exist. Field
-//reference: \bmkhs_helisim\fmc.hpp
+//reference and defaults: \bmkhs_helisim\fmc.hpp. The gains a feature runs are required; the rest are 0.
 private _fmc = createHashMap;
+private _known = createHashMapFromArray [
+    ["AttitudeHold", ["pos", "vel", "att", "spd"]],
+    ["HeadingHold",  ["hdg", "yaw", "trn"]]
+];
+private _subDefault = createHashMapFromArray [
+    ["AttitudeHold", FMC_ATT_SUB_MODES],
+    ["HeadingHold",  FMC_HDG_SUB_MODES]
+];
 {
-    _x params ["_name", "_pids", "_nums", "_arrs"];
+    _x params ["_name", "_pids", "_nums", "_arrs", "_needs"];
     private _cfg = _config >> "FMC" >> _name;
     if (isClass _cfg) then {
         private _f = createHashMapFromArray [["gate", getArray (_cfg >> "gate")]];
-        private _ok = true;
-        {
-            private _gains = getArray (_cfg >> _x);
-            if (count _gains < 4) then { _ok = false } else { _f set [_x, _gains call bmkhs_fnc_pidCreate] };
-        } forEach _pids;
         { _f set [_x select 0, [_x select 1, getNumber (_cfg >> (_x select 0))] select (isNumber (_cfg >> (_x select 0)))] } forEach _nums;
         { _f set [_x select 0, [_x select 1, getArray (_cfg >> (_x select 0))] select (isArray (_cfg >> (_x select 0)))] } forEach _arrs;
-        if (_ok) then {
+        if (_name in _known) then {
+            private _sub = (_f get "subModes") select {_x in (_known get _name)};
+            _f set ["subModes", [_sub, _subDefault get _name] select (_sub isEqualTo [])];
+        };
+        private _missing = [];
+        {
+            _x params ["_pid", "_perSi"];
+            private _gains = getArray (_cfg >> _pid);
+            if (count _gains >= 4) then {
+                _f set [_pid, [_gains, _perSi] call _pidSi];
+            } else {
+                _f set [_pid, [0, 0, 0, 0] call bmkhs_fnc_pidCreate];
+                _missing pushBack _pid;
+            };
+        } forEach _pids;
+        _missing = _missing arrayIntersect (_f call _needs);
+        if (_missing isEqualTo []) then {
             _fmc set [_name, _f];
         } else {
-            (format ["[BMKHS] FMC CONFIG ERROR: %1 needs every gain array {kp, ki, kd, ki_clamp}: %2. Skipped.", _name, _pids]) call bmkhs_fnc_utilConfigError;
+            (format ["[BMKHS] FMC CONFIG ERROR: %1 needs gains {kp, ki, kd, ki_clamp}: %2. Skipped.", _name, _missing]) call bmkhs_fnc_utilConfigError;
         };
     };
 } forEach [
-    ["Sas",          ["pitch", "roll", "yaw"],
+    ["Sas",          [["pitch", RAD_TO_DEG], ["roll", RAD_TO_DEG], ["yaw", RAD_TO_DEG]],     //deg/s
                      [],
-                     [["authority", [0.2, 0.1, 0.1]]]],
-    ["AttitudeHold", ["posPitch", "posRoll", "attPitch", "attRoll"],
-                     [["posBelowKts", 5], ["velBelowKts", 40], ["attBelowKts", 30], ["authority", 0.1], ["alwaysOn", 0]],
-                     [["subModes", []], ["trimGain", [0, 0]], ["trimGainKts", [0, 0]]]],
-    ["AltitudeHold", ["rad", "bar"],
-                     [["radBelowFt", 1428], ["radBelowKts", 40], ["engageFpm", 200], ["collBand", 0.05], ["dropAboveTq", 0.98], ["alwaysOn", 0]],
-                     []],
-    ["HeadingHold",  ["hdg", "trn"],
-                     [["hdgBelowKts", 5], ["blendToKts", 40], ["authority", 0.1], ["alwaysOn", 1]],
-                     [["subModes", []], ["breakout", [0.05, 0.10, 0.20]]]],
-    ["FlightDirector", ["vs", "ias", "pitch", "roll", "yaw", "hvrPitch", "hvrRoll"],
-                     [["altGain", 10], ["vsMaxFpm", 1000], ["vsAccelFpm", 200], ["tqBand", 0.1], ["tqFpmGain", 1000], ["captureFt", 50],
-                      ["iasAccelKts", 2], ["maxPitchDeg", 15], ["pitchRateDps", 3],
-                      ["maxBankDeg", 30], ["turnRateDps", 3], ["bankPerDeg", 1], ["rollRateDps", 5], ["bankAboveKts", 20],
-                      ["hvrDecelKts", 2],
-                      ["collAuthority", 1.0], ["cycAuthority", 0.1], ["pedAuthority", 0.1]],
-                     [["modes", []]]]
+                     [["authority", FMC_SAS_AUTHORITY]],
+                     { ["pitch", "roll", "yaw"] }],
+    ["AttitudeHold", [["posPitch", MPS_TO_KNOTS], ["posRoll", MPS_TO_KNOTS], ["attPitch", 1], ["attRoll", 1],
+                      ["spdPitch", MPS_TO_KNOTS]],                                          //kt, deg
+                     [["posBelowKts", FMC_ATT_POS_BELOW_KTS], ["velBelowKts", FMC_ATT_VEL_BELOW_KTS], ["attBelowKts", FMC_ATT_ATT_BELOW_KTS],
+                      ["authority", FMC_ATT_AUTHORITY], ["alwaysOn", FMC_ATT_ALWAYS_ON], ["spdAboveKts", FMC_ATT_SPD_ABOVE_KTS],
+                      ["breakout", FMC_ATT_BREAKOUT]],
+                     [["subModes", []], ["trimGain", FMC_ATT_TRIM_GAIN]],
+                     {
+                         private _s = _this get "subModes";
+                         ([[], ["posPitch", "posRoll"]] select ("pos" in _s || {"vel" in _s}))
+                         + ([[], ["attPitch", "attRoll"]] select ("att" in _s || {"spd" in _s}))
+                         + ([[], ["spdPitch"]] select ("spd" in _s))
+                     }],
+    ["AltitudeHold", [["rad", METERS_TO_FEET], ["bar", METERS_TO_FEET]],                    //ft
+                     [["radBelowFt", FMC_ALT_RAD_BELOW_FT], ["radBelowKts", FMC_ALT_RAD_BELOW_KTS], ["engageFpm", FMC_ALT_ENGAGE_FPM],
+                      ["collBand", FMC_ALT_COLL_BAND], ["dropAboveTq", FMC_ALT_DROP_ABOVE_TQ]],
+                     [],
+                     { ["rad", "bar"] }],
+    ["HeadingHold",  [["hdg", 1], ["trn", 1]],                                              //deg, g
+                     [["hdgBelowKts", FMC_HDG_BELOW_KTS], ["blendToKts", FMC_HDG_BLEND_TO_KTS], ["authority", FMC_HDG_AUTHORITY]],
+                     [["subModes", []], ["breakout", FMC_HDG_BREAKOUT]],
+                     {
+                         private _s = _this get "subModes";
+                         ([[], ["hdg"]] select ("hdg" in _s)) + ([[], ["trn"]] select ("yaw" in _s || {"trn" in _s}))
+                     }],
+    ["FlightDirector", [["vs", MPS_TO_FPM], ["ias", MPS_TO_KNOTS], ["pitch", 1], ["roll", 1], ["yaw", 1],
+                        ["hvrPitch", MPS_TO_KNOTS], ["hvrRoll", MPS_TO_KNOTS]],                 //fpm, kt, deg
+                     [["altGain", FMC_FD_ALT_GAIN], ["vsMaxFpm", FMC_FD_VS_MAX_FPM], ["vsAccelFpm", FMC_FD_VS_ACCEL_FPM],
+                      ["tqBand", FMC_FD_TQ_BAND], ["tqFpmGain", FMC_FD_TQ_FPM_GAIN], ["captureFt", FMC_FD_CAPTURE_FT],
+                      ["iasAccelKts", FMC_FD_IAS_ACCEL_KTS], ["maxPitchDeg", FMC_FD_MAX_PITCH_DEG], ["pitchRateDps", FMC_FD_PITCH_RATE_DPS],
+                      ["maxBankDeg", FMC_FD_MAX_BANK_DEG], ["turnRateDps", FMC_FD_TURN_RATE_DPS], ["bankPerDeg", FMC_FD_BANK_PER_DEG],
+                      ["rollRateDps", FMC_FD_ROLL_RATE_DPS], ["bankAboveKts", FMC_FD_BANK_ABOVE_KTS],
+                      ["hvrDecelKts", FMC_FD_HVR_DECEL_KTS], ["floorKts", FMC_FD_FLOOR_KTS],
+                      ["collAuthority", FMC_FD_COLL_AUTHORITY], ["cycAuthority", FMC_FD_CYC_AUTHORITY], ["pedAuthority", FMC_FD_PED_AUTHORITY]],
+                     [["modes", []]],
+                     {
+                         private _m = (_this get "modes") select {_x in ["ralt", "alt", "altp", "ias", "hdg", "nav", "hvr"]};
+                         _this set ["modes", _m];
+                         ([[], ["vs"]] select ((_m findIf {_x in ["ralt", "alt", "altp"]}) >= 0))
+                         + ([[], ["ias", "pitch"]] select ("ias" in _m))
+                         + ([[], ["roll", "yaw"]] select ((_m findIf {_x in ["hdg", "nav"]}) >= 0))
+                         + ([[], ["hvrPitch", "hvrRoll"]] select ("hvr" in _m))
+                     }]
 ];
 
-{
-    _x params ["_name", "_known"];
-    private _h = _fmc getOrDefault [_name, createHashMap];
-    if (count _h > 0) then {
-        _h set ["subModes", (_h get "subModes") select {_x in _known}];
-        if (count (_h get "subModes") == 0) then {
-            (format ["[BMKHS] FMC CONFIG ERROR: %1 needs subModes[] - any of %2. Skipped.", _name, _known]) call bmkhs_fnc_utilConfigError;
-            _fmc deleteAt _name;
-        };
-    };
-} forEach [["AttitudeHold", ["pos", "vel", "att"]], ["HeadingHold", ["hdg", "yaw", "trn"]]];
-
-//The flight director's targets - {min, max, step, wraps} each, and only the modes Core knows.
-//Declared in ft, kt and deg; held in m, m/s and deg.
+//The flight director's targets - {min, max, step, wraps} each. Declared in ft, kt and deg;
+//held in m, m/s and deg.
 private _fd = _fmc getOrDefault ["FlightDirector", createHashMap];
 if (count _fd > 0) then {
-    _fd set ["modes", (_fd get "modes") select {_x in ["ralt", "alt", "altp", "ias", "hdg", "nav", "hvr"]}];
+    //HVR hands the hover to the attitude hold's position hold
+    private _ah = _fmc getOrDefault ["AttitudeHold", createHashMap];
+    if ("hvr" in (_fd get "modes") && {count _ah == 0 || {count getArray (_config >> "FMC" >> "AttitudeHold" >> "posPitch") < 4}}) then {
+        "[BMKHS] FMC CONFIG ERROR: FlightDirector hvr needs AttitudeHold posPitch[] and posRoll[]. hvr skipped." call bmkhs_fnc_utilConfigError;
+        _fd set ["modes", (_fd get "modes") - ["hvr"]];
+    };
     private _targets = createHashMap;
     {
         _x params ["_name", "_si"];
@@ -82,13 +129,6 @@ if (count _fd > 0) then {
         if (count _t >= 3) then { _targets set [_name, [(_t select 0) * _si, (_t select 1) * _si, (_t select 2) * _si, (_t param [3, 0]) > 0]] };
     } forEach [["ralt", FEET_TO_METERS], ["alt", FEET_TO_METERS], ["altp", FEET_TO_METERS], ["ias", KNOTS_TO_MPS], ["hdg", 1]];
     _fd set ["targets", _targets];
-    //{engage, drop} KTAS, in m/s
-    private _floors = createHashMap;
-    {
-        private _f = getArray (_config >> "FMC" >> "FlightDirector" >> "Floors" >> _x);
-        if (count _f >= 2) then { _floors set [_x, [(_f select 0) * KNOTS_TO_MPS, (_f select 1) * KNOTS_TO_MPS]] };
-    } forEach (_fd get "modes");
-    _fd set ["floors", _floors];
 };
 _heli setVariable ["bmkhs_fmc", _fmc];
 //The aircraft's active waypoint, posASL or [] - an input the aircraft writes
@@ -170,7 +210,8 @@ if (count _fd > 0) then {
 [_heli, "bmkhs_attHoldDesiredPos",      getPos _heli, true] call bmkhs_fnc_utilSeed;
 [_heli, "bmkhs_attHoldDesiredVel",      [0.0, 0.0], true] call bmkhs_fnc_utilSeed;
 [_heli, "bmkhs_attHoldDesiredAtt",      [0.0, 0.0], true] call bmkhs_fnc_utilSeed;
-[_heli, "bmkhs_attHoldSubMode",         "pos", true] call bmkhs_fnc_utilSeed;   //pos, vel, att
+[_heli, "bmkhs_attHoldDesiredSpd",      0.0,   true] call bmkhs_fnc_utilSeed;   //KTAS, m/s
+[_heli, "bmkhs_attHoldSubMode",         "pos", true] call bmkhs_fnc_utilSeed;   //pos, vel, att, spd
 //Altitude Hold
 [_heli, "bmkhs_altHoldActive",          false, true] call bmkhs_fnc_utilSeed;
 [_heli, "bmkhs_altHoldDesiredAlt",      0.0,   true] call bmkhs_fnc_utilSeed;

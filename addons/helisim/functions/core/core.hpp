@@ -35,6 +35,7 @@
 #define MPS_TO_FPM              196.85
 #define FPM_TO_MPS              0.00508
 #define KNOTS_TO_MPS            0.51444
+#define RAD_TO_DEG              57.29578
 
 #define GRAVITY                 9.806
 #define MOLAR_MASS_OF_AIR       0.0289644

@@ -1,5 +1,6 @@
 params ["_heli"];
 #include "\bmkhs_helisim\functions\core\core.hpp"
+#include "\bmkhs_helisim\fmc.hpp"
 
 private _fmc = _heli getVariable "bmkhs_fmc";
 
@@ -31,12 +32,22 @@ private _hdgHoldPedalYawOut = [_heli, _fmc getOrDefault ["HeadingHold", createHa
 ([_heli, _fmc getOrDefault ["Sas", createHashMap], _sasOn] call bmkhs_fnc_fmcSas)
     params ["_SASPitchOutput", "_SASRollOutput", "_SASYawOutput"];
 
-//Flight director - an axis it holds replaces that axis's hold
+//Flight director - an axis it holds replaces that axis's hold, blended in and out
 private _fdOut = [_heli, _fmc getOrDefault ["FlightDirector", createHashMap], _fdOn] call bmkhs_fnc_fmcFlightDirector;
 if ("coll"  in _fdOut) then { _altHoldCollOut     = _fdOut get "coll"  };
-if ("pitch" in _fdOut) then { _attHoldCycPitchOut = _fdOut get "pitch" };
-if ("roll"  in _fdOut) then { _attHoldCycRollOut  = _fdOut get "roll"  };
-if ("yaw"   in _fdOut) then { _hdgHoldPedalYawOut = _fdOut get "yaw"   };
+private _blend = _heli getVariable ["bmkhs_fmcFdBlend", createHashMap];
+private _step  = (_heli getVariable "bmkhs_deltaTime") / FMC_FD_HANDOFF_SEC;
+private _axes  = [["pitch", _attHoldCycPitchOut], ["roll", _attHoldCycRollOut], ["yaw", _hdgHoldPedalYawOut]] apply {
+    _x params ["_axis", "_hold"];
+    (_blend getOrDefault [_axis, [0, 0]]) params ["_w", "_last"];
+    if (_axis in _fdOut) then { _last = _fdOut get _axis; _w = (_w + _step) min 1 } else { _w = (_w - _step) max 0 };
+    _blend set [_axis, [_w, _last]];
+    (_w * _last) + ((1 - _w) * _hold)
+};
+_heli setVariable ["bmkhs_fmcFdBlend", _blend];
+_attHoldCycPitchOut = _axes select 0;
+_attHoldCycRollOut  = _axes select 1;
+_hdgHoldPedalYawOut = _axes select 2;
 
 if (bmkhs_springlessPedals || bmkhs_autoPedal) then {
     _hdgHoldPedalYawOut = 0.0;

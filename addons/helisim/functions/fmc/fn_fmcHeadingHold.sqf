@@ -52,8 +52,8 @@ private _onGnd         = [_heli] call bmkhs_fnc_stateOnGround;
 //Breakout values expand as the aircraft goes faster to provide good pedal response
 //at a hover. The expanded range is meant to de-sensitize the pedals in order to
 //prevent disengaging the heading hold mode during cruise flight. By the attitude hold's sub-mode,
-//so both holds change band together, on its hysteresis: {pos, vel, att}.
-private _breakoutValue = (_hh get "breakout") select ((["pos", "vel", "att"] find (_heli getVariable "bmkhs_attHoldSubMode")) max 0);
+//so both holds change band together, on its hysteresis: {pos, vel, att}, spd as att.
+private _breakoutValue = (_hh get "breakout") select ((["pos", "vel", "att"] find ((_heli getVariable "bmkhs_attHoldSubMode") regexReplace ["spd", "att"])) max 0);
 //If we are on the ground, or if the force trim is interupted, or the pilot has exceeded
 //the breakout values for the pedals, then heading hold is not active (doing work)
 //otherwise, heading hold is ALWAYS active

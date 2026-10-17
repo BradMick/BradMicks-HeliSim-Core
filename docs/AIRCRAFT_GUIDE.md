@@ -15,8 +15,7 @@ field means:
   storage, circuits, consumers
 - `addons/helisim/controls.hpp` - switches, buttons and levers
 - `addons/helisim/engine.hpp` - the gas turbine engine, station by station
-- `addons/helisim/fmc.hpp` - the flight management computer: SAS and the holds
-- `addons/helisim/trim.hpp` - the trim: force trim and beep
+- `addons/helisim/fmc.hpp` - the flight controls: trim, SAS, the holds and the flight director, and their defaults
 
 This guide is the ORDER. Those are the DETAIL.
 
@@ -1811,8 +1810,9 @@ Fuselage and airfoil folders publish no designer-facing values.
 | `bmkhs_fdWptBearing`, `bmkhs_fdWptDistance` | Number, deg / m, -1 with no waypoint | net on change | To `bmkhs_fdWaypoint`. NAV flies the bearing. (set in `fmc/fn_fmcFlightDirector.sqf`) |
 | `bmkhs_fdWaypoint` | Array posASL, or [] | input | The aircraft's active waypoint. The aircraft writes it; seeded [] locally if unset. |
 | `bmkhs_fmcTrimOn` | Bool, default true | net | The force trim switch. Off, the trim positions are held at 0, the force trim button does nothing and beep does nothing. Back on, the trim is set to where the controls are. (set in `fmc/fn_fmcVariables.sqf`, `fmc/fn_fmcSetChannel.sqf`, read in `trim/fn_trimUpdate.sqf`) |
-| `bmkhs_trimOn` | Bool | local | Force trim is working: declared (`class Trim >> forceTrim`) and `bmkhs_fmcTrimOn`. (set in `trim/fn_trimUpdate.sqf`) |
-| `bmkhs_trimBeepDelta` | Array [pitch, roll], trim fraction | local | The beep's trim travel this frame, 0 when not beeping. An attitude hold with `trimGain[]` / `trimGainKts[]` moves its reference by it. (set in `trim/fn_trimUpdate.sqf`, read in `fmc/fn_fmcAttitudeHold.sqf`) |
+| `bmkhs_trimOn` | Bool | local | Force trim is working: `bmkhs_fmcTrimOn`. (set in `trim/fn_trimUpdate.sqf`) |
+| `bmkhs_trimBeepDelta` | Array [pitch, roll], trim fraction | local | The beep's stick travel this frame, 0 when not beeping. An attitude hold with `trimGain[]` moves its reference by it. (set in `trim/fn_trimUpdate.sqf`, read in `fmc/fn_fmcAttitudeHold.sqf`) |
+| `bmkhs_trimBeepFd` | Array [pitch, roll], trim fraction | local | The beep's travel this frame for a press made on a flight director axis - it moves that director's target, not the stick. (set in `trim/fn_trimUpdate.sqf`, read in `fmc/fn_fmcFlightDirector.sqf`) |
 | `bmkhs_forceTrimInterupted` | Bool | net | True while the force-trim (trim release) button is held. While true, attitude hold does nothing and heading hold drops out. On release it goes false and new hold references are captured. Note the spelling ("Interupted"). (set in `trim/fn_trimForceHold.sqf`, `trim/fn_trimForceRelease.sqf`) |
 | `bmkhs_attHoldActive` | Bool | net | Attitude/position/velocity hold engaged. Toggled by the `bmkhs_holdModeAttitude` key. Cleared by `bmkhs_holdModesOff`. This is the mode state only. It stays true even when the pitch/roll channel is off or the hold's `gate[]` is shut, and both of those zero the output. (set in `fmc/fn_fmcAttitudeHoldEnable.sqf`, `fmc/fn_fmcHoldModesDisable.sqf`) |
 | `bmkhs_attHoldSubMode` | String `"pos"` / `"vel"` / `"att"` | net | Which attitude hold law applies. Chosen every frame from ground speed, even when the hold is off: `pos` at `posBelowKts` GS or less; `vel` up to `velBelowKts` accelerating, `att` above it until back below `attBelowKts` decelerating (`class FMC >> AttitudeHold`). Only sub-modes in `subModes[]`; where speed picks an undeclared one, the nearest declared applies. (set in `fmc/fn_fmcAttitudeHold.sqf`, `fmc/fn_fmcAttitudeHoldEnable.sqf`) |

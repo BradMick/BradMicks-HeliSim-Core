@@ -2,53 +2,77 @@
 
 Status: IN PROGRESS.
 
-## Where we are (2026-10-15, end of session)
+## Where we are (2026-10-16, end of session)
 
-Nothing below is committed. Repos with uncommitted work: Core, H-60, MH-47G, AH-64D, Bo105, EC665.
-All pass `hemtt check`.
+**How every step runs:** I propose the exact change (behaviour, TM line, files, any config value);
+the user says "go" for that step - nothing else is a go; I build only that step, terse comments,
+hemtt check, stop; the user flies it; next step only once it's right. No new config value without
+the user's yes. No aircraft-specific branches - one generic system, the AH-64D the reference.
 
-**Step 1 - trim layer: DONE, pushed** (Core caf7301, MH-47G 2fbf3fe). AH-64D force trim off untested.
+**Rules, 2026-10-16:** config stays minimal - a field only for what an aircraft has to tell Core
+(what it has, gates, TM facts, gains). Every default and Core constant is a #define in fmc.hpp,
+never a literal in an sqf. Gains are in pilot units, converted at load, required only for what
+the aircraft runs. Force trim is not optional. Sources: the AH-64D, CH-47F (TM 1-1520-271-10)
+and UH-60M (TM 1-1520-280-10) pages in the Claude memory folder (tm/); not the CH-47D course.
 
-**Step 2 and today's work - built, not committed. User flew the UH-60M, Bo105 and EC665: all
-operate and fly as expected. MH-47G and AH-64D not flown on this build yet:**
-- Beep with a hold on moves the trim and the hold reference (trimGain deg). Holds never move the
-  trim - only the pilot does (beep, or force trim and position the stick).
-- Fix 1: every sub-mode change captures the new sub-mode's reference. Fix 2: derivative cleared on
-  a sub-mode change, integrals kept. Laws run on this frame's sub-mode.
-- `AttitudeHold >> subModes[]` required (pos/vel/att; undeclared falls to nearest declared).
-  AH-64D, Bo105, EC665 all three; UH-60M, MH-47G `{"att"}`. FD HVR may use pos regardless.
-- `AttitudeHold >> alwaysOn = 1` on UH-60M and MH-47G (MH-47G not flown yet).
-- `HeadingHold >> subModes[]` required (hdg/yaw/trn; ntt is auto pedal only). AH-64D, Bo105, EC665
-  all three, unchanged. UH-60M, MH-47G `{"hdg","trn"}`: hdg at every speed, trn in turns (7/3 deg),
-  heading re-captured after. No blending change - it would change the Apache.
-- FD beep: fore/aft moves the IAS target (iasAccelKts/s), lateral the HDG target (turnRateDps),
-  unsnapped (fmcFdTarget _snap). NAV ignores it. On an FD axis the beep doesn't move the cyclic or
-  the attitude hold reference. Generic - any aircraft with a flight director. Flown, works.
-- FD speed floors: optional `class Floors`, {engage, drop} KTAS per mode. UH-60M {50, 48} on alt,
-  altp, ias, hdg, nav (not ralt, hvr).
-- Config errors go to the RPT and on screen once (bmkhs_fnc_utilConfigError, all 13 sites). A
-  missing required field switches off only that feature. Config versioning/migration was built and
-  removed (user: bloat).
+**Hold terms (AH-64D):** engaged = the mode is selected; active = it is doing work. A control past
+its breakout makes that axis not active - no output, no fight. Back inside, it is active again and
+returns the aircraft to its previous reference. Only force trim re-references. Breakouts are
+fractions of control throw; the pedals' vary with speed (by attitude hold sub-mode), the cyclic and
+collective do not.
 
-**Watch:** the Workshop copies of the Bo105 and EC665 lack subModes[] - attitude and heading hold
-off until republished (the local builds are fine).
-UH-60M/MH-47G pedal breakout is picked by attitude hold sub-mode, so always 0.20 (att) - may be stiff
-in the hover. Heading hold "gets confused" (2026-10-12) not seen since.
+**Plan, agreed 2026-10-16:**
+1. DONE - tree safe: director override back to force trim only, fmc.hpp text corrected.
+2. DONE - every FMC and trim default a #define in fmc.hpp; trim.hpp folded in and deleted; no
+   value changed.
+3. DONE, flown 2026-10-16 (AH-64D, UH-60M), works - cyclic breakout fly-through, per axis, every
+   aircraft: AttitudeHold breakout 0.10 of cyclic throw (FMC_ATT_BREAKOUT). No sub-mode change
+   while flying through; back inside, the axis returns to its previous reference (no re-anchor).
+   Director cyclic axes the same, HVR included.
+   That flight, UH-60M: spd entered at 51 kt in a -16 deg dive, captured it, ran to 119 kt (step
+   4). Beep moved the roll trim 0.09 while the reference moved 0.9 deg - the hold resisted every
+   beep, and sat at -20 deg bank saturated in cruise (step 6). HVR sank at -1500 fpm into a hard
+   landing with no vertical mode engaged - open question: should HVR hold height on its own?
+   NEXT: propose step 4 and wait for go.
+4. Airspeed hold reference - replace the settle rule (ran away in flight) with the 60 TM's
+   "airspeed at which the trim is established". UH-60M.
+5. HVR in the hover - no pos/att flipping while HVR holds; limit its decel attitude with the
+   FD's maxPitchDeg / maxBankDeg. UH-60M.
+6. UH-60M trimGain {50, 60}.
+7. Hold saturated after force trim release - re-check after 3 and 6, fix only if still there.
+8. Docs tidy, user validates, commit all six.
+9. MH-47G flight director, from the 47F TM.
+10. Build order below.
+11. Once all the above is done: tune the auto pedal in every attitude hold regime - pos, vel and att.
 
-**Save point committed 2026-10-15, not pushed:** Core fbcd7f8 (release/1.4.0), MH-47G 6d6497a,
-Bo105 0ccd631, EC665 1e1543e, H-60 5fcdf2f and AH-64D a58b5baf7 (both on local branch
-helisim-fmc-subModes off main/master). MH-47G and AH-64D not flown on this build yet.
+**Save point committed 2026-10-15, not pushed:** Core fbcd7f8, MH-47G 6d6497a, Bo105 0ccd631,
+EC665 1e1543e, H-60 5fcdf2f, AH-64D a58b5baf7 (H-60 and AH-64D on local branch helisim-fmc-subModes).
 
-**CH-47F DAFCS review (TM 1-1520-271-10, 2-22 to 2-30), 2026-10-16.** Already covered: SAS (rate
-damping, quickening), att (pitch/bank stabilization), force trim = CD REL, beep moves the hold
-reference, vel = TRC (beep 1 kt/s = trimGainKts 10), pos = PH, hdg = heading stabilization, trn =
-turn coordination above 40 kt, rad/bar = ALT-RAD/ALT-INRT, LCT, FD beep and speed floors.
+**Built 2026-10-16, uncommitted, hemtt check clean in all six, last version not flown:**
+- Gains per pilot unit (Sas deg/s; pos, spd, FD ias, hvr kt; rad/bar ft; FD vs fpm), packs rounded
+  to 2 significant figures (0.1-4.5 pct off the old values, AH-64D included).
+- Airspeed hold: AttitudeHold sub-mode "spd" above spdAboveKts KTAS (47 40, 60 50), out 10 kt below.
+  Captures the airspeed once it settles (0.5 kt/s) - on entry, after a beep, after force trim.
+  Pitch within 10 deg of the settled attitude. Needs spdPitch[].
+- FD: RALT/ALT/IAS/HDG engage on the present value, ALTP on its preselect. Beep in HVR slides the
+  held ground velocity at 1 kt/s; back to nothing holds the new spot. HVR only at or below 40 kt GS.
+  Force trim pressed: the director stands aside on the cyclic, resumes on release (HVR from where
+  the aircraft is). Axes blend in and out over 1 s.
+  floorKts replaces class Floors.
+- Beep: a press belongs to what it started on (director target or stick) until released.
+- Pruned: forceTrim, Beep lag / moves[], trimGainKts, AltitudeHold / HeadingHold alwaysOn, the
+  spd / hvr tuning fields; subModes[] optional (defaults = the old behaviour); packs lost every line
+  restating a default and gains for sub-modes they do not run.
+- Flights 2026-10-16 (UH-60M) found the problems plan steps 3-7 address: the hold fighting the
+  stick, spd running away from a captured dive, HVR flipping pos/att at 5 kt and banking 22 deg,
+  beep moving the stick far more than the reference (trimGain 10), two departures.
 
-**Next, in the user's order** - each a config field, Apache unchanged when not set:
-1. Airspeed hold - attitude hold sub-mode `spd`: above a set speed the pitch axis holds an airspeed
-   reference (KTAS) instead of an attitude; fore/aft beep changes it. 47 above 40 kt, 60 above
-   50 kt (60 TM 2.33.5c). See 3.3.
-3. Heading hold `trn` engage/exit as fields. 47/60: steps aside on pilot action (lateral beep, force
+**Watch:** the attitude hold still captures whatever attitude it has when a director pitch axis
+drops (+8.6 deg decelerating in that flight). MH-47G has no class FlightDirector yet (the 47F has
+one - modes from the TM).
+
+**Next, in the user's order** - minimal fields, Apache unchanged:
+3. Heading hold `trn` engage/exit. 47/60: steps aside on pilot action (lateral beep, force
    trim, stick or pedal displaced), resumes on bank and yaw rate below threshold (47 1.5 deg,
    1.5 deg/s; 60 2 deg, 2 deg/s for 2 s). Apache declares today's 7 deg engage / 3 deg exit.
 4. Collective beep on ALT/RALT - two new input commands; fields for step per press, held rate, and
@@ -60,8 +84,7 @@ turn coordination above 40 kt, rad/bar = ALT-RAD/ALT-INRT, LCT, FD beep and spee
 6. Altitude hold source chosen by the pilot (47 IN/RA) - the armed[] idea on AltitudeHold.
 Then fly the MH-47G and AH-64D, commit when the user validates.
 
-**Agreed, not built:** UH-60M trimGain {50, 60} (TM 5 deg/s pitch, 6 deg/s roll; MH-47G numbers
-open). 1 deg/s coordinated turn from lateral beep - user said useful, no design yet.
+**Agreed, not built:** 1 deg/s coordinated turn from lateral beep - user said useful, no design yet.
 
 **Future:** IAS (EAS = TAS x sqrt(bmkhs_rho / ISA sea level), CAS ~ EAS, optional per-aircraft
 position error table, own variable; everything else stays KTAS). Stabilator manual mode. FD VS,
