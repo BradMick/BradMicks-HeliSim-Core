@@ -19,8 +19,8 @@ params ["_heli", "_config"];
 //Gains are declared per pilot unit; the loops run in SI. [gains, pilot units per SI unit]
 private _pidSi = {
     params ["_gains", "_perSi"];
-    _gains params ["_kp", "_ki", "_kd", "_clamp"];
-    [_kp * _perSi, _ki * _perSi, _kd * _perSi, _clamp / _perSi] call bmkhs_fnc_pidCreate
+    _gains params ["_kp", "_ki", "_kd", "_limit"];
+    [_kp * _perSi, _ki * _perSi, _kd * _perSi, _limit] call bmkhs_fnc_pidCreate
 };
 
 //The FMC - one entry per declared feature; an undeclared feature does not exist. Field
@@ -60,7 +60,7 @@ private _subDefault = createHashMapFromArray [
         if (_missing isEqualTo []) then {
             _fmc set [_name, _f];
         } else {
-            (format ["[BMKHS] FMC CONFIG ERROR: %1 needs gains {kp, ki, kd, ki_clamp}: %2. Skipped.", _name, _missing]) call bmkhs_fnc_utilConfigError;
+            (format ["[BMKHS] FMC CONFIG ERROR: %1 needs gains {kp, ki, kd, limit}: %2. Skipped.", _name, _missing]) call bmkhs_fnc_utilConfigError;
         };
     };
 } forEach [
@@ -93,7 +93,7 @@ private _subDefault = createHashMapFromArray [
                          ([[], ["hdg"]] select ("hdg" in _s)) + ([[], ["trn"]] select ("yaw" in _s || {"trn" in _s}))
                      }],
     ["FlightDirector", [["vs", MPS_TO_FPM], ["ias", MPS_TO_KNOTS], ["pitch", 1], ["roll", 1], ["yaw", 1],
-                        ["hvrPitch", MPS_TO_KNOTS], ["hvrRoll", MPS_TO_KNOTS]],                 //fpm, kt, deg
+                        ["hvrPitch", MPS_TO_KNOTS], ["hvrRoll", MPS_TO_KNOTS]],                 //fpm, kt, deg; hvr kt to deg
                      [["altGain", FMC_FD_ALT_GAIN], ["vsMaxFpm", FMC_FD_VS_MAX_FPM], ["vsAccelFpm", FMC_FD_VS_ACCEL_FPM],
                       ["tqBand", FMC_FD_TQ_BAND], ["tqFpmGain", FMC_FD_TQ_FPM_GAIN], ["captureFt", FMC_FD_CAPTURE_FT],
                       ["iasAccelKts", FMC_FD_IAS_ACCEL_KTS], ["maxPitchDeg", FMC_FD_MAX_PITCH_DEG], ["pitchRateDps", FMC_FD_PITCH_RATE_DPS],
@@ -108,7 +108,7 @@ private _subDefault = createHashMapFromArray [
                          ([[], ["vs"]] select ((_m findIf {_x in ["ralt", "alt", "altp"]}) >= 0))
                          + ([[], ["ias", "pitch"]] select ("ias" in _m))
                          + ([[], ["roll", "yaw"]] select ((_m findIf {_x in ["hdg", "nav"]}) >= 0))
-                         + ([[], ["hvrPitch", "hvrRoll"]] select ("hvr" in _m))
+                         + ([[], ["hvrPitch", "hvrRoll", "pitch", "roll"]] select ("hvr" in _m))
                      }]
 ];
 
@@ -141,9 +141,6 @@ _heli setVariable ["bmkhs_pid_autoAttRoll", (getArray (_config >> "pidAutoAttRol
 _heli setVariable ["bmkhs_pid_autoPedalHdg", (getArray (_config >> "pidAutoPedalHdg")) call bmkhs_fnc_pidCreate];
 _heli setVariable ["bmkhs_pid_autoPedalNtt", (getArray (_config >> "pidAutoPedalNtt")) call bmkhs_fnc_pidCreate];
 _heli setVariable ["bmkhs_pid_autoPedalAero", (getArray (_config >> "pidAutoPedalAero")) call bmkhs_fnc_pidCreate];
-
-_heli setVariable ["bmkhs_posIntX",     0.0];
-_heli setVariable ["bmkhs_posIntY",     0.0];
 
 //FMC output state
 _heli setVariable ["bmkhs_fmcAttHoldCycPitchOut", 0.0];

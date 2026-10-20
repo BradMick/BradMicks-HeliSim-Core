@@ -30,8 +30,9 @@ _heli setVariable ["bmkhs_forceTrimInterupted",    false,                 true];
 _heli setVariable ["bmkhs_attHoldDesiredPos",      getPos _heli,          true];
 _heli setVariable ["bmkhs_attHoldDesiredVel",      [_curVelX, _curVelY],  true];
 _heli setVariable ["bmkhs_attHoldDesiredAtt",      [_curPitch, _curRoll], true];
-//Airspeed hold takes the speed once it settles
-_heli setVariable ["bmkhs_attHoldSpdPending",      true];
+//Airspeed hold - the speed now, KTAS
+_heli setVariable ["bmkhs_attHoldDesiredSpd",      (_heli getVariable "bmkhs_velModelSpace") # 1, true];
+_heli setVariable ["bmkhs_attHoldSpdPending",      false];
 _heli setVariable ["bmkhs_hdgHoldDesiredHdg",      getDir _heli,          true];
 //Sideslip setpoint is ZERO - a centred ball IS aerodynamic trim, which is what the
 //heading hold's yaw/trn sub-modes are for. Do not capture the gauge signal here: it is

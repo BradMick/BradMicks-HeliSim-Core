@@ -40,7 +40,7 @@ if (count _fd == 0) exitWith {createHashMap};
 
 private _modes   = _fd get "modes";
 private _engaged = { (_this in _modes) && {_heli getVariable ["bmkhs_fd_" + _this, false]} };
-private _refs    = ["climbRef", "iasRef", "pitchRef", "bankRef", "hvrRef", "hvrHeld", "hvrBeeped"];
+private _refs    = ["climbRef", "iasRef", "pitchRef", "bankRef", "hvrRef", "hvrHeld", "hvrBeeped", "hvrBase", "gndVelPrev", "gndAcc"];
 
 if (!_on) exitWith {
     { if (_x call _engaged) then { [_heli, _x] call bmkhs_fnc_fmcFdMode } } forEach _modes;
@@ -92,6 +92,12 @@ if (_override) then { _fd set ["hvrHeld", false]; _fd deleteAt "hvrBeeped" };
 private _bo      = ((_heli getVariable "bmkhs_fmc") getOrDefault ["AttitudeHold", createHashMap]) getOrDefault ["breakout", FMC_ATT_BREAKOUT];
 private _ovPitch = _override || {abs (_heli getVariable "bmkhs_cyclicFwdAft") > _bo};
 private _ovRoll  = _override || {abs (_heli getVariable "bmkhs_cyclicLeftRight") > _bo};
+//HVR flown through - it slows from where the pilot leaves it and anchors where it stops
+if ((_ovPitch || _ovRoll) && {"hvr" call _engaged}) then {
+    _fd set ["hvrHeld", false];
+    _fd deleteAt "hvrBeeped";
+    _fd deleteAt "hvrRef";
+};
 
 //HVR holding on the attitude hold - when that drops, so does HVR
 if ("hvr" call _engaged && {_fd getOrDefault ["hvrHeld", false]} && {!(_heli getVariable "bmkhs_attHoldActive")}) then {
@@ -194,15 +200,33 @@ if ("ias" call _engaged && {!_ovPitch}) then {
 } else {
     if ("ias" call _engaged) then { _out set ["pitch", 0.0] };
     [_fd get "ias"] call bmkhs_fnc_pidReset;
-    [_fd get "pitch"] call bmkhs_fnc_pidReset;
     _fd deleteAt "iasRef";
-    _fd deleteAt "pitchRef";
+    //HVR flies the same pitch loop
+    if (!_hvr) then {
+        [_fd get "pitch"] call bmkhs_fnc_pidReset;
+        _fd deleteAt "pitchRef";
+    };
 };
 
-//Longitudinal - HVR. The ground velocity it started with, eased to nothing; stopped, the
-//attitude hold's position hold holds the spot. A beeped velocity is held; beeped back to
-//nothing, it holds the spot again.
+//Longitudinal - HVR. The ground velocity it started with, eased to nothing through the capped
+//attitude; stopped, the attitude hold's position hold holds the spot. A beeped velocity is held;
+//beeped back to nothing, or flown through, it slows and anchors where it stops.
+//Ground acceleration, model space, filtered - m/s per s
+private _gndVelPrev = _fd getOrDefault ["gndVelPrev", [_gndVelX, _gndVelY]];
+private _gndAcc     = _fd getOrDefault ["gndAcc", [0, 0]];
+private _kAcc       = _deltaTime / (FMC_FD_ACCEL_FILTER_S + _deltaTime);
+_gndAcc = [0, 1] apply { (_gndAcc select _x) + _kAcc * (((([_gndVelX, _gndVelY] select _x) - (_gndVelPrev select _x)) / (_deltaTime max 0.001)) - (_gndAcc select _x)) };
+_fd set ["gndVelPrev", [_gndVelX, _gndVelY]];
+_fd set ["gndAcc", _gndAcc];
 if (_hvr && {!_override} && {!(_fd getOrDefault ["hvrHeld", false])}) then {
+    //Base - the attitude that holds no acceleration, from where it starts
+    private _maxPitch = _fd get "maxPitchDeg";
+    private _maxBank  = _fd get "maxBankDeg";
+    private _base = _fd getOrDefault ["hvrBase", [
+        ((_pitchNow + atan ((_gndAcc select 1) / 9.80665)) max -_maxPitch) min _maxPitch,
+        ((_bankNow  - atan ((_gndAcc select 0) / 9.80665)) max -_maxBank)  min _maxBank
+    ]];
+    _fd set ["hvrBase", _base];
     private _ref = _fd getOrDefault ["hvrRef", [_gndVelX, _gndVelY]];
     private _mag = vectorMagnitude [_ref select 0, _ref select 1, 0];
     private _new = _mag;
@@ -213,27 +237,68 @@ if (_hvr && {!_override} && {!(_fd getOrDefault ["hvrHeld", false])}) then {
     };
     _ref = if (_mag > 0) then { [(_ref select 0) * (_new / _mag), (_ref select 1) * (_new / _mag)] } else { [0, 0] };
     _fd set ["hvrRef", _ref];
+    //Slowing - the velocity integral waits for the stop
+    private _slowing = _new > 0 && {!(_fd getOrDefault ["hvrBeeped", false])};
 
-    private _roll  = [_fd get "hvrRoll",  _deltaTime, -(_ref select 0), -_gndVelX] call bmkhs_fnc_pidRun;
-    private _pitch = [_fd get "hvrPitch", _deltaTime,  (_ref select 1),  _gndVelY] call bmkhs_fnc_pidRun;
-    _out set ["roll",  (_roll  max -_cycAuth) min _cycAuth];
-    _out set ["pitch", (_pitch max -_cycAuth) min _cycAuth];
-    if (_ovRoll)  then { _out set ["roll",  0.0]; [_fd get "hvrRoll"]  call bmkhs_fnc_pidReset };
-    if (_ovPitch) then { _out set ["pitch", 0.0]; [_fd get "hvrPitch"] call bmkhs_fnc_pidReset };
+    //Velocity to attitude, limited and eased as IAS, then flown by the attitude loops
+    if (_ovRoll) then {
+        _out set ["roll", 0.0];
+        { [_fd get _x] call bmkhs_fnc_pidReset } forEach ["hvrRoll", "roll"];
+        _fd deleteAt "bankRef";
+    } else {
+        private _iHeld    = (_fd get "hvrRoll") get "integral";
+        private _wantBank = (_base select 1) - ([_fd get "hvrRoll", _deltaTime, -(_ref select 0), -_gndVelX] call bmkhs_fnc_pidRun);
+        if (_slowing) then { (_fd get "hvrRoll") set ["integral", _iHeld] };
+        _wantBank =["bankRef", (_wantBank max -_maxBank) min _maxBank, _fd get "rollRateDps", _bankNow] call _slew;
+        _log set [2, _wantBank];
+        private _roll = -([_fd get "roll", _deltaTime, 0.0, _bankNow - _wantBank] call bmkhs_fnc_pidRun);
+        _out set ["roll", (_roll max -_cycAuth) min _cycAuth];
+    };
+    if (_ovPitch) then {
+        _out set ["pitch", 0.0];
+        { [_fd get _x] call bmkhs_fnc_pidReset } forEach ["hvrPitch", "pitch"];
+        _fd deleteAt "pitchRef";
+    } else {
+        //Slow is nose down
+        private _iHeld     = (_fd get "hvrPitch") get "integral";
+        private _wantPitch = (_base select 0) - ([_fd get "hvrPitch", _deltaTime, _ref select 1, _gndVelY] call bmkhs_fnc_pidRun);
+        if (_slowing) then { (_fd get "hvrPitch") set ["integral", _iHeld] };
+        _wantPitch =["pitchRef", (_wantPitch max -_maxPitch) min _maxPitch, _fd get "pitchRateDps", _pitchNow] call _slew;
+        _log set [1, _wantPitch];
+        private _pitch = -([_fd get "pitch", _deltaTime, 0.0, _pitchNow - _wantPitch] call bmkhs_fnc_pidRun);
+        _out set ["pitch", (_pitch max -_cycAuth) min _cycAuth];
+    };
 
-    if (_new == 0 && {!(_fd getOrDefault ["hvrBeeped", false])} && {(_heli getVariable "bmkhs_attHoldSubMode") == "pos"}) then {
+    //Stopped and settled - the attitude hold's position hold takes the spot
+    private _still = FMC_FD_HVR_HOLD_KTS * KNOTS_TO_MPS;
+    if (_new == 0 && {!(_fd getOrDefault ["hvrBeeped", false])} && {_gndSpeed <= _still} && {vectorMagnitude [_gndAcc select 0, _gndAcc select 1, 0] <= _still}) then {
         _fd set ["hvrHeld", true];
         //The spot it stops on
         _heli setVariable ["bmkhs_attHoldDesiredPos", getPos _heli, true];
-        _heli setVariable ["bmkhs_posIntX", 0.0];
-        _heli setVariable ["bmkhs_posIntY", 0.0];
+        //Position hold starts on the cyclic applied last frame - no step
+        private _attHold = (_heli getVariable "bmkhs_fmc") getOrDefault ["AttitudeHold", createHashMap];
+        {
+            _x params ["_key", "_applied"];
+            private _pid = _attHold getOrDefault [_key, createHashMap];
+            private _ki  = _pid getOrDefault ["ki", 0];
+            if (_ki != 0) then {
+                private _cl = _pid get "ki_clamp";
+                _pid set ["integral", (((_heli getVariable [_applied, 0]) / _ki) max -_cl) min _cl];
+            };
+        } forEach [["posPitch", "bmkhs_fmcAttHoldCycPitchOut"], ["posRoll", "bmkhs_fmcAttHoldCycRollOut"]];
         if !(_heli getVariable "bmkhs_attHoldActive") then { [_heli] call bmkhs_fnc_fmcAttitudeHoldEnable };
     };
 } else {
     if (_hvr && _override) then { _out set ["roll", 0.0]; _out set ["pitch", 0.0] };
     [_fd get "hvrRoll"]  call bmkhs_fnc_pidReset;
     [_fd get "hvrPitch"] call bmkhs_fnc_pidReset;
+    if (_hvr) then {
+        { [_fd get _x] call bmkhs_fnc_pidReset } forEach ["pitch", "roll"];
+        _fd deleteAt "pitchRef";
+        _fd deleteAt "bankRef";
+    };
     _fd deleteAt "hvrRef";
+    _fd deleteAt "hvrBase";
     if (!_hvr) then { _fd deleteAt "hvrHeld"; _fd deleteAt "hvrBeeped" };
 };
 
@@ -270,16 +335,21 @@ if (_lMode isNotEqualTo []) then {
             private _roll = -([_fd get "roll", _deltaTime, 0.0, _bankNow - _wantBank] call bmkhs_fnc_pidRun);
             _out set ["roll", (_roll max -_cycAuth) min _cycAuth];
         } else {
-            [_fd get "roll"] call bmkhs_fnc_pidReset;
-            _fd deleteAt "bankRef";
+            //HVR flies the same roll loop
+            if (!_hvr) then {
+                [_fd get "roll"] call bmkhs_fnc_pidReset;
+                _fd deleteAt "bankRef";
+            };
         };
         private _yaw = [_fd get "yaw", _deltaTime, 0.0, [_hdgNow - _tgtHdg] call CBA_fnc_simplifyAngle180] call bmkhs_fnc_pidRun;
         _out set ["yaw", (_yaw max -(_fd get "pedAuthority")) min (_fd get "pedAuthority")];
     };
 } else {
-    [_fd get "roll"] call bmkhs_fnc_pidReset;
+    if (!_hvr) then {
+        [_fd get "roll"] call bmkhs_fnc_pidReset;
+        _fd deleteAt "bankRef";
+    };
     [_fd get "yaw"] call bmkhs_fnc_pidReset;
-    _fd deleteAt "bankRef";
 };
 
 _fd set ["log", _log];

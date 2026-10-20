@@ -77,8 +77,9 @@ private _wasBeeping = _heli getVariable ["bmkhs_attHoldBeeping", false];
 //velBelowKts accelerating, and attitude hold above it until back below attBelowKts. Airspeed
 //hold above spdAboveKts KTAS until 10 kt below it, pitch only.
 private _subModes = _att get "subModes";
-//FD HVR is position hold
-if (_heli getVariable ["bmkhs_fd_hvr", false]) then { _subModes = _subModes + ["pos"]; _hasSpd = false };
+//FD HVR is position hold, at any speed it runs at
+private _hvr = _heli getVariable ["bmkhs_fd_hvr", false];
+if (_hvr) then { _hasSpd = false };
 private _want = switch (true) do {
     case (_hasSpd && {_airspeed > _spdAbove || {_subMode == "spd" && {_airspeed >= _spdBelow}}}): { "spd" };
     case (_beeping && {_gndSpeed <= _posBelow}):             { "vel" };
@@ -91,6 +92,7 @@ if !(_want in _subModes) then {
     //Nearest declared
     _want = (([["vel", "att", "spd"], ["att", "pos", "spd"], ["vel", "pos", "spd"]] select (["pos", "vel", "att"] find _want)) select {_x in _subModes}) select 0;
 };
+if (_hvr) then { _want = "pos" };
 //No change while flying through
 if (_boPitch || _boRoll) then { _want = _subMode };
 [_heli, "bmkhs_attHoldSubMode", _want] call bmkhs_fnc_utilUpdateNetworkGlobal;
@@ -102,13 +104,14 @@ if (_newSubMode != _subMode) then {
         switch (_newSubMode) do {
             case "pos": {
                 _heli setVariable ["bmkhs_attHoldDesiredPos", getPos _heli, true];
-                _heli setVariable ["bmkhs_posIntX", 0.0];
-                _heli setVariable ["bmkhs_posIntY", 0.0];
             };
             case "vel": { _heli setVariable ["bmkhs_attHoldDesiredVel", [-_velX, _velY], true] };
             case "att": { _heli setVariable ["bmkhs_attHoldDesiredAtt", [_curPitch, _curRoll], true] };
-            //The speed once it settles
-            case "spd": { _heli setVariable ["bmkhs_attHoldDesiredAtt", [_curPitch, _curRoll], true] };
+            //The speed now
+            case "spd": {
+                _heli setVariable ["bmkhs_attHoldDesiredAtt", [_curPitch, _curRoll], true];
+                _heli setVariable ["bmkhs_attHoldDesiredSpd", _airspeed, true];
+            };
         };
     };
     //Clear derivative
@@ -118,18 +121,26 @@ if (_newSubMode != _subMode) then {
     } forEach ([_pidRoll, _pidPitch, _pidRoll_att, _pidPitch_att] + ([[], [_pidSpd]] select _hasSpd));
     //Only spd runs it
     if (_newSubMode == "spd") then { [_pidSpd] call bmkhs_fnc_pidReset };
-    _heli setVariable ["bmkhs_attHoldSpdPending", _newSubMode == "spd"];
+    _heli setVariable ["bmkhs_attHoldSpdPending", false];
+    _heli setVariable ["bmkhs_attHoldSpdSetPitch", nil];
 };
 if (_beeping) then {
     //Published on release
     _beepDelta params ["_dPitch", "_dRoll"];
     if (_newSubMode in ["att", "spd"]) then {
         (_heli getVariable "bmkhs_attHoldDesiredAtt") params ["_setPitch", "_setRoll"];
-        _heli setVariable ["bmkhs_attHoldDesiredAtt", [_setPitch - _dPitch * (_gainDeg # 0), _setRoll - _dRoll * (_gainDeg # 1)]];
+        //Speed loop folded in - no step
+        if (_newSubMode == "spd" && {_dPitch != 0} && {!(_heli getVariable ["bmkhs_attHoldSpdPending", false])}) then {
+            _setPitch = _heli getVariable ["bmkhs_attHoldSpdSetPitch", _setPitch];
+        };
+        _setPitch = _setPitch - _dPitch * (_gainDeg # 0);
+        if (_newSubMode == "spd") then { _setPitch = (_setPitch max -_maxPitch) min _maxPitch };
+        _heli setVariable ["bmkhs_attHoldDesiredAtt", [_setPitch, _setRoll - _dRoll * (_gainDeg # 1)]];
     };
-    //Airspeed re-captured once it settles after the beep
+    //Airspeed re-captured after the beep
     if (_newSubMode == "spd" && {_dPitch != 0}) then {
         _heli setVariable ["bmkhs_attHoldSpdPending", true];
+        _heli setVariable ["bmkhs_attHoldSpdWait", 0.0];
     };
 };
 if (_wasBeeping && {!_beeping}) then {
@@ -150,40 +161,34 @@ if ((_att get "alwaysOn") == 1) then {
 };
 
 if (_on && {_heli getVariable "bmkhs_attHoldActive"} && {!(_heli getVariable "bmkhs_forceTrimInterupted")}) then {
-    //Position hold = velocity-null loop + a SLOW, TIGHTLY-CLAMPED position-error integral that biases
-    //the velocity SETPOINT (not the output) to trim out the standing drift a pure velocity-null loop
-    //leaves (type-0 -> type-1: zero steady-state position error). The bias works THROUGH the velocity
-    //loop, so velocity does all the actuation and the integral only re-aims it - it can't fight the loop.
-    //Anti-windup: the accumulator is clamped to a tiny ceiling (posIntClamp) near the loop's real working
-    //range so it physically cannot rail the +-0.1 servo (the old 0.6 ceiling was 60x too big -> railed).
-    if (_newSubMode == "pos") then {
+    //FD HVR flying a velocity - position hold stands by on the present spot
+    private _standBy = _hvr && {!((((_heli getVariable "bmkhs_fmc") getOrDefault ["FlightDirector", createHashMap]) getOrDefault ["hvrHeld", false]))};
+    if (_newSubMode == "pos" && _standBy) then {
+        { [_x] call bmkhs_fnc_pidReset } forEach [_pidRoll, _pidPitch];
+        _heli setVariable ["bmkhs_attHoldDesiredPos", getPos _heli];
+    };
+    //Position hold - fly back to the spot at a speed set by the distance, through the velocity loop
+    if (_newSubMode == "pos" && !_standBy) then {
         private _desiredPos = _heli getVariable ["bmkhs_attHoldDesiredPos", getPos _heli];
         private _dPos = _desiredPos vectorDiff (getPos _heli);
         private _hdg  = direction _heli;
-        //model-space position error: X = right+, Y = fwd+
+        //Model space, m: X right, Y fwd
         private _posErrX = ((_dPos # 0) * cos _hdg) - ((_dPos # 1) * sin _hdg);
         private _posErrY = ((_dPos # 0) * sin _hdg) + ((_dPos # 1) * cos _hdg);
 
-        private _posIkp    = 0.0050;
-        private _posIclamp = 0.0200;
-        private _iX = (_heli getVariable ["bmkhs_posIntX", 0.0]) + (_posErrX * _deltaTime * _posIkp);
-        private _iY = (_heli getVariable ["bmkhs_posIntY", 0.0]) + (_posErrY * _deltaTime * _posIkp);
-        _iX = [_iX, -_posIclamp, _posIclamp] call BIS_fnc_clamp;
-        _iY = [_iY, -_posIclamp, _posIclamp] call BIS_fnc_clamp;
-        _heli setVariable ["bmkhs_posIntX", _iX];
-        _heli setVariable ["bmkhs_posIntY", _iY];
+        //Closing speed, m/s
+        private _vSet = [_posErrX * FMC_ATT_POS_GAIN, _posErrY * FMC_ATT_POS_GAIN, 0.0];
+        private _vMax = FMC_ATT_POS_MAX_KTS * KNOTS_TO_MPS;
+        if (vectorMagnitude _vSet > _vMax) then { _vSet = (vectorNormalized _vSet) vectorMultiply _vMax };
 
-        //Bias is a velocity SETPOINT (m/s toward datum). roll measures -velX so its setpoint = -_iX;
-        //pitch measures +velY so its setpoint = +_iY (matches the un-negated pos convention).
-        private _roll  = [_pidRoll,  _deltaTime, (-_iX), -_velX] call bmkhs_fnc_pidRun;
+        //Roll measures -velX
+        private _roll  = [_pidRoll,  _deltaTime, -(_vSet # 0), -_velX] call bmkhs_fnc_pidRun;
         _roll          = [_roll,  -1.0, 1.0] call BIS_fnc_clamp;
-        private _pitch = [_pidPitch, _deltaTime, ( _iY),  _velY] call bmkhs_fnc_pidRun;
+        private _pitch = [_pidPitch, _deltaTime,  (_vSet # 1),  _velY] call bmkhs_fnc_pidRun;
         _pitch         = [_pitch, -1.0, 1.0] call BIS_fnc_clamp;
 
         _attHoldCycPitchOut = _pitch;
         _attHoldCycRollOut  = _roll;
-
-        //Publish pos-branch internals for the hold-chain logger.
     };
     //Velocity hold
     if (_newSubMode == "vel") then {
@@ -203,19 +208,22 @@ if (_on && {_heli getVariable "bmkhs_attHoldActive"} && {!(_heli getVariable "bm
               params ["_setPitch", "_setRoll"];
         if (_newSubMode == "spd") then {
             if (_heli getVariable ["bmkhs_attHoldSpdPending", false]) then {
-                //Holding the beeped attitude until the speed settles, then that speed is the reference
-                if (!_beeping && {abs _spdRate < _settle}) then {
+                //Beeped attitude held until the speed settles or the delay ends
+                private _wait = 0.0;
+                if (!_beeping) then { _wait = (_heli getVariable ["bmkhs_attHoldSpdWait", 0.0]) + _deltaTime };
+                _heli setVariable ["bmkhs_attHoldSpdWait", _wait];
+                //Attitude reference kept - no step
+                if (!_beeping && {abs _spdRate < _settle || {_wait >= FMC_ATT_SPD_DELAY_S}}) then {
                     _heli setVariable ["bmkhs_attHoldSpdPending", false];
-                    _heli setVariable ["bmkhs_attHoldDesiredAtt", [_curPitch, _setRoll], true];
                     _heli setVariable ["bmkhs_attHoldDesiredSpd", _airspeed, true];
-                    _setPitch = _curPitch;
                 };
                 [_pidSpd] call bmkhs_fnc_pidReset;
             } else {
                 //Slow is nose down
-                private _dSpd = -([_pidSpd, _deltaTime, _heli getVariable "bmkhs_attHoldDesiredSpd", _airspeed] call bmkhs_fnc_pidRun);
-                _setPitch = _setPitch + ((_dSpd max -_maxPitch) min _maxPitch);
+                _setPitch = _setPitch - ([_pidSpd, _deltaTime, _heli getVariable "bmkhs_attHoldDesiredSpd", _airspeed] call bmkhs_fnc_pidRun);
             };
+            _setPitch = (_setPitch max -_maxPitch) min _maxPitch;
+            _heli setVariable ["bmkhs_attHoldSpdSetPitch", _setPitch];
         };
         private _pitchError = [_curPitch - _setPitch] call CBA_fnc_simplifyAngle180;
         private _rollError  = [_curRoll  - _setRoll]  call CBA_fnc_simplifyAngle180;
@@ -237,22 +245,17 @@ if (_on && {_heli getVariable "bmkhs_attHoldActive"} && {!(_heli getVariable "bm
     [_pidRoll_att]  call bmkhs_fnc_pidReset;
     [_pidPitch_att] call bmkhs_fnc_pidReset;
     if (_hasSpd) then { [_pidSpd] call bmkhs_fnc_pidReset };
-
-    //Clear the position integral so re-engaging pos hold starts clean (no stale bias on engage).
-    _heli setVariable ["bmkhs_posIntX", 0.0];
-    _heli setVariable ["bmkhs_posIntY", 0.0];
+    _heli setVariable ["bmkhs_attHoldSpdSetPitch", nil];
 };
 
 //Not active axes - no output, loops cleared, reference kept
 if (_boPitch) then {
     _attHoldCycPitchOut = 0.0;
     { [_x] call bmkhs_fnc_pidReset } forEach [_pidPitch, _pidPitch_att, _pidSpd];
-    _heli setVariable ["bmkhs_posIntY", 0.0];
 };
 if (_boRoll) then {
     _attHoldCycRollOut = 0.0;
     { [_x] call bmkhs_fnc_pidReset } forEach [_pidRoll, _pidRoll_att];
-    _heli setVariable ["bmkhs_posIntX", 0.0];
 };
 
 //systemChat format ["Dist = %4 -- DistX = %1 -- DistY = %2 -- Dir = %3", _distX toFixed 2, _distY toFixed 2, _dir toFixed 2, _dist toFixed 2];

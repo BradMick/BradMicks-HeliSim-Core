@@ -26,8 +26,9 @@ if (_heli getVariable "bmkhs_attHoldActive" == false) then {
             (_heli call BIS_fnc_getPitchBank)
                 params ["_curPitch", "_curRoll"];
             _heli setVariable ["bmkhs_attHoldDesiredAtt", [_curPitch, _curRoll], true];
-            //The speed once it settles
-            _heli setVariable ["bmkhs_attHoldSpdPending", true];
+            //The speed now
+            _heli setVariable ["bmkhs_attHoldDesiredSpd", (_heli getVariable "bmkhs_velModelSpace") # 1, true];
+            _heli setVariable ["bmkhs_attHoldSpdPending", false];
         };
     };
 

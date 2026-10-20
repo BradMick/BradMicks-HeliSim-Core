@@ -33,11 +33,65 @@ collective do not.
    4). Beep moved the roll trim 0.09 while the reference moved 0.9 deg - the hold resisted every
    beep, and sat at -20 deg bank saturated in cruise (step 6). HVR sank at -1500 fpm into a hard
    landing with no vertical mode engaged - open question: should HVR hold height on its own?
-   NEXT: propose step 4 and wait for go.
-4. Airspeed hold reference - replace the settle rule (ran away in flight) with the 60 TM's
-   "airspeed at which the trim is established". UH-60M.
-5. HVR in the hover - no pos/att flipping while HVR holds; limit its decel attitude with the
-   FD's maxPitchDeg / maxBankDeg. UH-60M.
+4. BUILT 2026-10-18, not flown - airspeed hold reference = the 60 TM's "airspeed at which the
+   trim is established": captured at once on spd entry, engage, force trim release. After a beep,
+   captured once settled or FMC_ATT_SPD_DELAY_S (0.1 s; 0.5 always timed out in flight).
+   No pitch-target steps (they kicked the att loop's derivative, the felt hitch): beep start folds
+   the speed loop into the attitude reference; capture keeps the attitude reference. spd pitch command, beeped reference
+   included, within FMC_ATT_SPD_MAX_PITCH_DEG (10) of level - was +-10 about the capture attitude,
+   which could not stop a dive entry. Watch: is 10 deg enough nose-down at top speed? UH-60M.
+   FLOWN 2026-10-19 (UH-60M): felt good, no derivative kicks on 12 beeps.
+4a. BUILT 2026-10-19, not flown - integrals that work. Every hold drifted: the 4th PID value
+   (raw error-seconds clamp) was ~ki in every pack, so ki x clamp ~ 0 (pos 0.00005 cyclic).
+   pidCreate's 4th value is now the LIMIT - most the integral can push, output units, whatever
+   ki is (ki_clamp = limit / ki, stored as before; pidRun, governor, Preston code unchanged).
+   Packs, all six: att, pos, FD hvr/pitch/yaw, hdg, auto attitude 0.1; rad 0.05; spdPitch 10 deg.
+   Every other PID (engine 3.0, Preston, auto pedal, Sas yaw, trn, FD vs/ias/roll) restated to
+   its exact old effect (ki x old clamp). bar still has ki 0. Position hold: closing speed
+   FMC_ATT_POS_GAIN 0.2 /s x distance, max FMC_ATT_POS_MAX_KTS 3, through the velocity loop -
+   replaces the 0.005 / 0.02 literal integral. Test on the UH-60M only for now.
+   4a FLOWN 2026-10-19 (UH-60M): HVR now holds the spot (0.1 kt for minutes, was 1.9 kt drift).
+   FD IAS/HDG/ALT/ALTP "dead" = the 60's floorKts 50 refusing them at a hover (silent). Open: keep
+   the 60's floor? pack comment says KIAS, Core uses KTAS.
+5. BUILT 2026-10-19, not flown - HVR in the hover. While HVR is on the attitude hold is pos at
+   any speed (no att at 5 kt - that ran away backwards at 13 kt); while the director flies a
+   velocity (slowing, beeped) pos stands by, loops clear, spot following. Hand-off at ref 0 and
+   ground speed <= posBelowKts. HVR slow-down is IAS-style: velocity -> wanted pitch / bank
+   (hvrPitch / hvrRoll now kt to deg, 60: {0.5, 0.05, 0, 5}), capped maxPitchDeg / maxBankDeg,
+   eased at pitchRateDps / rollRateDps, flown by FD pitch[] / roll[] (was velocity straight to
+   cyclic: +10 to -17 deg in 2 s). IAS / HDG no longer reset those loops while HVR runs. UH-60M.
+   Flown 2026-10-19: good overall; slow-down weak and slow (2 kt/s ramp, 0.5 deg/kt asked <= 8
+   deg), hand-off at 4.8 kt then pos slammed full aft (14 deg, overshot 6 kt back). Tuned, not
+   flown: 60 hvrDecelKts 4, hvrPitch / hvrRoll kp 1.0; hand-off only once stopped
+   (FMC_FD_HVR_HOLD_KTS 0.5 kt). Next knob if still restricted: pitchRateDps (3, shared with IAS).
+   Flown: slow-down good (32 -> 2 kt in 12 s on the 15 deg cap) but crawled 2 -> 0.8 kt for 27 s,
+   no hand-off; 60 hvrPitch / hvrRoll ki 0.05 -> 0.2. Tiger "oscillation" = Workshop EC665 1.1.3.2
+   (rad/s SAS gains, x57 under this Core) - RELEASE: Core 1.4.0 ships with every pack, never alone.
+   All six flown on local builds 2026-10-19: PIDs good, SAS never at its limit (47 att hold at its
+   pitch limit 38% - step 7). 60 HVR: crawled at 2 kt 15 s (wanted attitude was from level, the
+   integral had to build the whole +4.5 deg hover attitude), then bobbed 15 s after hand-off (pos
+   started from zero, dropping the director's 0.07 cyclic). Built, not flown: HVR wanted attitude =
+   base + velocity loop, base = attitude at start corrected for its acceleration (pitch + atan(a/g),
+   FMC_FD_ACCEL_FILTER_S 0.5 s); hand-off seeds pos's integrals with the director's cyclic.
+   Flown: director 9.3 -> 0.5 kt in 5.5 s (fixed), but after a fly-through pos went back to the
+   old spot at 11 kt: +26 deg, swung to 19 kt backwards, pinned 10 s. NOT DONE. Pos (velocity
+   straight to cyclic, no attitude cap) saturates above ~2 kt error - wrong tool above a crawl.
+   Built, not flown: the director flies ALL of HVR - slows (ref eased to 0), stops at 0.5 kt,
+   captures hvrSpot, then flies back to it (FMC_ATT_POS_GAIN x distance, max
+   FMC_ATT_POS_MAX_KTS) through the same capped attitude cascade. Fly-through returns to the
+   spot; force trim re-references. Attitude hold stays off under HVR (Enable refuses); step 5's
+   pos-forcing / standby / seeding removed - attitude hold HVR lines back to the save point.
+   Flown: better, but went back to the OLD anchor after a fly-through (user wants a new one) and
+   overshot 6 kt back (velocity integral built on the 15 deg cap). User: pos held perfectly before.
+   REVERTED to the hand-off version (director slows on the capped cascade, seeded hand-off to pos
+   at 0.5 kt, pos holds) plus: fly-through in HVR drops the anchor like force trim - the director
+   slows from there and hands over on a new spot; HVR velocity integral held while on the cap.
+   Flown: much better, still aggressive at the hand-off - handed over at 0.5 kt mid-flare (+8.6
+   deg, integral wound up in the slow-down), and on a one-frame engage from the hover pos was
+   seeded from the director's raw output while it was only ~10% blended in (pos pinned both axes).
+   Built, not flown: hand-off only stopped AND settled (ground acceleration <= FMC_FD_HVR_HOLD_KTS
+   per s); velocity integral waits for the stop (replaces held-on-the-cap); pos seeded from the
+   cyclic applied last frame (bmkhs_fmcAttHoldCycPitchOut / RollOut). No new constants.
 6. UH-60M trimGain {50, 60}.
 7. Hold saturated after force trim release - re-check after 3 and 6, fix only if still there.
 8. Docs tidy, user validates, commit all six.

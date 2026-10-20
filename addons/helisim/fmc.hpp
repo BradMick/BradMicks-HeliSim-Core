@@ -17,8 +17,9 @@
 //{circuit, threshold}, all must hold. A closed gate is the feature off: no output, its loops
 //reset. The FMC channels (bmkhs_fnc_fmcSetChannel) still switch individual axes on top.
 //
-//Gains are {kp, ki, kd, ki_clamp}, per pilot unit of error (deg, deg/s, kt, ft, fpm, g as
-//listed); Core converts them once at init. ki_clamp is in error unit-seconds. The gains for
+//Gains are {kp, ki, kd, limit}, per pilot unit of error (deg, deg/s, kt, ft, fpm, g as
+//listed); Core converts them once at init. limit = the most the integral can push, in the
+//loop's output (control fraction; deg where the output is an attitude), whatever ki is. The gains for
 //what the aircraft runs are required - a feature missing one is skipped and logged; gains for
 //what it does not run may be left out. Every other field is optional and defaults to the value
 //shown - the FMC_ / TRIM_ defines at the end.
@@ -72,8 +73,9 @@
 //  gate[]
 //  subModes[]   any of "pos", "vel", "att", "spd". Where speed picks one not declared, the
 //               nearest declared flies. {"att"} = attitude hold at all speeds. "spd" = airspeed
-//               hold above spdAboveKts KTAS, to 10 kt below it: pitch holds the airspeed the
-//               aircraft settles at, roll holds bank as att. Not under FD HVR. {"pos", "vel", "att"}
+//               hold above spdAboveKts KTAS, to 10 kt below it: pitch holds the airspeed at which
+//               the trim is set, within 10 deg of level; roll holds bank as att. Not under FD
+//               HVR. {"pos", "vel", "att"}
 //  posBelowKts  position hold at or below. 5
 //  velBelowKts  accelerating, velocity hold up to this, attitude hold above. 40
 //  attBelowKts  decelerating, attitude hold down to this, velocity hold below. 30
@@ -85,7 +87,7 @@
 //               engage or release it. 0
 //  trimGain[]   {pitch, roll} deg of attitude reference per unit of beep trim travel. With it,
 //               beep (class Trim) moves the engaged hold's attitude reference with the
-//               stick; in spd the speed it then settles at is the new airspeed reference. {0, 0}:
+//               stick; in spd the speed once settled, 0.1 s at most, is the new reference. {0, 0}:
 //               beep moves the stick only.
 //  posPitch[] posRoll[]   gains, ground velocity (kt) to cyclic - pos and vel, and FD HVR
 //  attPitch[] attRoll[]   gains, attitude (deg) to cyclic - att and spd
@@ -143,9 +145,9 @@
 //               altitude) - what the barometric altimeter reads; RALT flies radar height.
 //  captureFt    ALTP hands over to ALT inside this. 50
 //  iasAccelKts  how fast the airspeed asked for may change, kt per second. 2
-//  maxPitchDeg  IAS pitch limit. 15
+//  maxPitchDeg  IAS / HVR pitch limit. 15
 //  pitchRateDps how fast the pitch asked for may change, deg/s. 3
-//  maxBankDeg   HDG / NAV bank limit. 30
+//  maxBankDeg   HDG / NAV / HVR bank limit. 30
 //  turnRateDps  turn rate HDG / NAV bank for, deg/s - standard rate. The bank comes from the
 //               airspeed: tan(bank) = V * rate / g. 3
 //  bankPerDeg   bank per degree of heading error, so it rolls out onto the heading. 1
@@ -157,8 +159,10 @@
 //  vs[]         gains, climb rate (fpm) to collective - ralt, alt, altp
 //  ias[] pitch[]  gains, airspeed (kt) to pitch attitude (deg), attitude to cyclic - ias
 //  roll[] yaw[]   gains, bank (deg) to cyclic, heading (deg) to pedal - hdg, nav
-//  hvrPitch[] hvrRoll[]   gains, ground velocity (kt) to cyclic, slowing to the hover - hvr.
-//               HVR also needs the AttitudeHold's posPitch[] / posRoll[].
+//  hvrPitch[] hvrRoll[]   gains, ground velocity (kt) to pitch / bank (deg), slowing to the
+//               hover - hvr, flown by pitch[] / roll[]. Stopped, the AttitudeHold's position
+//               hold holds the spot (posPitch[] / posRoll[]). Flown through, force trimmed or
+//               beeped, HVR slows again and anchors where it stops.
 //
 //Each command is eased onto at its rate from where the aircraft is, so a step in a target is
 //never a step in a control. Fields are in pilot units; the director works, and publishes its
@@ -215,9 +219,12 @@
 #define FMC_ATT_ALWAYS_ON           0
 #define FMC_ATT_TRIM_GAIN           [0, 0]
 #define FMC_ATT_SPD_BAND_KTS        10          //spd out this far below spdAboveKts
-#define FMC_ATT_SPD_MAX_PITCH_DEG   10
+#define FMC_ATT_SPD_MAX_PITCH_DEG   10          //from level
 #define FMC_ATT_SPD_SETTLE_KTS      0.5         //kt/s
+#define FMC_ATT_SPD_DELAY_S         0.1        //beep release to capture, max
 #define FMC_ATT_BREAKOUT            0.10        //cyclic throw
+#define FMC_ATT_POS_GAIN            0.2         //closing speed per m off the spot, 1/s
+#define FMC_ATT_POS_MAX_KTS         3           //closing speed, max
 //AltitudeHold
 #define FMC_ALT_RAD_BELOW_FT        1428
 #define FMC_ALT_RAD_BELOW_KTS       40
@@ -253,7 +260,8 @@
 #define FMC_FD_FLOOR_DROP_KTS       2           //modes drop this far below floorKts
 #define FMC_FD_HVR_BELOW_KTS        40          //ground speed
 #define FMC_FD_HVR_BEEP_KTS         1           //kt/s
-#define FMC_FD_HVR_HOLD_KTS         0.5         //beeped back below this, holds the spot
+#define FMC_FD_ACCEL_FILTER_S       0.5         //ground acceleration filter, HVR base attitude
+#define FMC_FD_HVR_HOLD_KTS        0.5         //stopped - slowed or beeped below this, holds the spot
 #define FMC_FD_HANDOFF_SEC          1.0
 
 #endif

@@ -90,7 +90,7 @@
 //                ffwdGain        = 1.00;
 //                leverTravelTime = 8.0;
 //                loadShareGain   = 8.0;
-//                pid[]           = {80, 40, 0, 0.075};
+//                pid[]           = {80, 40, 0, 3.0};
 //                gate[]          = {};
 //            };
 //            class Starter {
@@ -176,8 +176,8 @@
 //  ffwdGain            Collective anticipation - the load demand spindle.
 //  leverTravelTime     s, idle to fly. The fuel ramp, the Np reference and the lever animation.
 //  loadShareGain       How hard an engine below its matched partners trims up to them.
-//  pid[]               Np governor {kp, ki, kd, ki_clamp}. ki * ki_clamp is the integral's
-//                      fuel authority - keep it at the fuel range.
+//  pid[]               Np governor {kp, ki, kd, limit}. limit is the integral's fuel
+//                      authority - keep it at the fuel range.
 //  gate[]              What the ECU needs to keep metering fuel. Empty = always powered.
 //
 //STARTER
