@@ -126,7 +126,8 @@ collective do not.
    per s); velocity integral waits for the stop (replaces held-on-the-cap); pos seeded from the
    cyclic applied last frame (bmkhs_fmcAttHoldCycPitchOut / RollOut). No new constants.
 6. CLOSED 2026-10-20 - UH-60M trimGain stays {10, 10}; user: the trim gains are fine.
-7. Hold saturated after force trim release - re-check after 3 and 6, fix only if still there.
+7. CLOSED 2026-10-20 - user happy with the 60 and 47. 47 pitch at its limit 25% hands-off, all
+   full aft in spd while accelerating (holding the old speed until it settles); never at steady speed.
 8. Docs tidy, user validates, commit all six.
 9. MH-47G flight director, from the 47F TM.
 10. Build order below.
