@@ -51,11 +51,11 @@ private _sysVars = [];
     forEach ["bmkhs_sysProducers", "bmkhs_sysConverters", "bmkhs_sysStorage", "bmkhs_sysNamed", "bmkhs_sysConsumers"];
 
 private _cols = [
-    "t", "id", "realism",
+    "t", "id", "type", "realism",
     "kts", "gsKts", "altFt", "radAltFt", "baroAltFt", "fatC", "vsFpm", "pitch", "bank", "hdg", "betaG", "betaDeg",
     "pRateDps", "rRateDps", "yRateDps",
     "tq1", "tq2", "np1", "np2", "nr",
-    "cyc", "cycLR", "pedal", "coll", "ftPitch", "ftRoll", "ftYaw",
+    "cyc", "cycLR", "pedal", "coll", "ftPitch", "ftRoll", "ftYaw", "pedalInL", "pedalInR",
     "sasP", "sasR", "sasY", "attP", "attR", "hdgY", "altC", "mixP", "mixR", "mixY",
     "sasAv", "attAv", "altAv", "hdgAv", "fdAv",
     "attOn", "attSub", "altOn", "altSub", "hdgOn", "hdgSub", "ftInt",
@@ -101,7 +101,7 @@ private _b = { [0, 1] select _this };
 private _tgtUnits = createHashMapFromArray [["ralt", METERS_TO_FEET], ["alt", METERS_TO_FEET], ["altp", METERS_TO_FEET], ["ias", MPS_TO_KNOTS]];
 
 private _row = [
-    time toFixed 2, netId _heli, str bmkhs_helisimRealismSetting,
+    time toFixed 2, netId _heli, typeOf _heli, str bmkhs_helisimRealismSetting,
     (((_heli getVariable "bmkhs_velModelSpace") select 1) * MPS_TO_KNOTS) toFixed 1,
     ((_heli getVariable "bmkhs_gndSpeed") * MPS_TO_KNOTS) toFixed 1,
     (((getPosASL _heli) select 2) * METERS_TO_FEET) toFixed 1,
@@ -117,6 +117,7 @@ private _row = [
     (_heli getVariable "bmkhs_pedalLeftRight") call _f, (_heli getVariable "bmkhs_collectiveOutput") call _f,
     (_heli getVariable "bmkhs_forceTrimPosPitch") call _f, (_heli getVariable "bmkhs_forceTrimPosRoll") call _f,
     (_heli getVariable "bmkhs_forceTrimPosYaw") call _f,
+    (_heli getVariable "bmkhs_heliRudderLeftOut") call _f, (_heli getVariable "bmkhs_heliRudderRightOut") call _f,
     (_heli getVariable "bmkhs_fmcSasPitchOut") call _f, (_heli getVariable "bmkhs_fmcSasRollOut") call _f,
     (_heli getVariable "bmkhs_fmcSasYawOut") call _f,
     (_heli getVariable "bmkhs_fmcAttHoldCycPitchOut") call _f, (_heli getVariable "bmkhs_fmcAttHoldCycRollOut") call _f,

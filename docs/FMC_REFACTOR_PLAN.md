@@ -2,6 +2,36 @@
 
 Status: IN PROGRESS.
 
+## 2026-10-20 session (uncommitted, all six built)
+
+- H-60 YawToRoll at 0.25x the rig table (full rolled the 60 over). Flown: rolls 2-4 deg AWAY from
+  the pedal now - next try 0.5x.
+- Auto pedal rebuilt as a pilot's foot (Core fn_inputAutoPedal.sqf). An older feet model (lag +
+  rate) was deleted 2026-09-23 in 3475b82 - check history before rebuilding anything.
+  - Foot: critically damped, AUTOPEDAL_FOOT_TIME 1.5 s to 95%. Sits on the pilot's pedal while on
+    it; on release starts there at rest.
+  - Hover release: eases to trim - AUTOPEDAL_FEEL x yaw rate (settles where the yaw stops);
+    heading captured at 2 deg/s or foot within AUTOPEDAL_FOOT_ARRIVED of that target.
+  - Slowing into the hover captures heading at once. Every hand-off bumpless: incoming PID's
+    integral preset so its first output = foot position.
+  - Aero (ball) only above 50 ft AND 50 kt ground speed; back below 45 ft OR 45 kt. All auto pedal
+    gates are ground speed (user).
+  - Analog spring-back faster than a foot = release, same as a key.
+  - Removed: dead keyboard fade (params-scoping bug threw its result away), 5 write-only vars,
+    stale feet comment. Flight log gains pedalInL / pedalInR (raw).
+  - User: "not bad", active testing. Known: a key tap at cruise = ~1 s of full pedal (key is 0/1).
+    Open: keys-only ramp for the pilot's own pedal; nose-to-tail/aero gains never retuned for the foot.
+- Analog right pedal capped at 0.6: hardware stop on the controller - not Core.
+- Flight log: new "type" column (typeOf) after id.
+- Pack tuning, flown, user happy ("where we need to be"):
+  - UH-60M: lift coefs roll 0.19 -> 0.14, pitch 0.72 -> 0.60; NTT kp 0.03 -> 0.015. Mast tilt
+    went to 0 (rig: -2 deg at 90 kt) then back to -3 (3 deg forward, user) - rig: +0.6 deg at 90 kt.
+  - EC665: NTT kp 0.015, hover hdg {0.05, 0.0025, 0.025, 0.15} (was the AH-64D's).
+  - Bo105: lift coefs roll 0.166 -> 0.116, pitch 0.315 -> 0.188; NTT kp 0.0075; hover hdg
+    halved; Sas / pos / att pitch x1.7, roll x1.4 to restore their effect after the cuts.
+  - Lesson: the AH-64D's auto pedal and hold gains were copied into the 60, Tiger and Bo105
+    untuned - tune per pack, not in Core.
+
 ## Where we are (2026-10-16, end of session)
 
 **How every step runs:** I propose the exact change (behaviour, TM line, files, any config value);

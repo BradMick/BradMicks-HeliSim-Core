@@ -2052,10 +2052,10 @@ Working state, solver bookkeeping, filters and debug. These change without notic
 - `bmkhs_autoAttLevelPitch`, `bmkhs_autoAttRollLimit`: config copy for assist.
 - `bmkhs_autoAttRollTarget`: assist roll setpoint, deg.
 - `bmkhs_autoPedalHdg`: auto-pedal heading setpoint (networked).
-- `bmkhs_autoPedalRegime`, `bmkhs_autoPedalRegimeWgt`: auto-pedal regime, weight always 1.
-- `bmkhs_autoPedalHdgErr`, `bmkhs_autoPedalNttErr`, `bmkhs_autoPedalAeroErr`: auto-pedal loop errors.
-- `bmkhs_autoPedalOut`: auto-pedal output; see forceTrimPosYaw.
-- `bmkhs_kbPedalLeftRight`: auto-pedal keyboard lerp state.
+- `bmkhs_autoPedalRegime`: auto-pedal regime, hdg / ntt / aero.
+- `bmkhs_autoPedalPos`, `bmkhs_autoPedalVel`: the auto-pedal foot, position and speed; it writes forceTrimPosYaw.
+- `bmkhs_autoPedalTrim`, `bmkhs_autoPedalHdgSet`: pedal before the pilot's turn; hover heading captured.
+- `bmkhs_autoPedalRawPrev`, `bmkhs_autoPedalSprung`: pilot's raw pedal last frame; analog spring-back seen as a release.
 - `bmkhs_cyclicPitchValue`, `bmkhs_cyclicRollValue`, `bmkhs_pedalYawValue`: sticky-keyboard accumulators.
 - `bmkhs_prevCyclicPitchValue`, `bmkhs_prevCyclicRollValue`, `bmkhs_prevPedalYawValue`: sticky-keyboard shadow values.
 - `bmkhs_kbStickyInterupt`: sticky interrupt key held.
