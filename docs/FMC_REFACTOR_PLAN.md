@@ -23,6 +23,9 @@ Status: IN PROGRESS.
     Open: keys-only ramp for the pilot's own pedal; nose-to-tail/aero gains never retuned for the foot.
 - Analog right pedal capped at 0.6: hardware stop on the controller - not Core.
 - Flight log: new "type" column (typeOf) after id.
+- After save point 6e88ca0: LCT goes to GND (0) on the ground (Core, tandem, stateOnGround);
+  MH-47G LCT flat to 40 kt (40 kt row = hover row, per the Chinook LCTA chart); MH-47G top
+  fuselage panels moved onto the front panel's plane (1.5 deg tilt kept) - pitch settles now.
 - Pack tuning, flown, user happy ("where we need to be"):
   - UH-60M: lift coefs roll 0.19 -> 0.14, pitch 0.72 -> 0.60; NTT kp 0.03 -> 0.015. Mast tilt
     went to 0 (rig: -2 deg at 90 kt) then back to -3 (3 deg forward, user) - rig: +0.6 deg at 90 kt.
@@ -122,7 +125,7 @@ collective do not.
    Built, not flown: hand-off only stopped AND settled (ground acceleration <= FMC_FD_HVR_HOLD_KTS
    per s); velocity integral waits for the stop (replaces held-on-the-cap); pos seeded from the
    cyclic applied last frame (bmkhs_fmcAttHoldCycPitchOut / RollOut). No new constants.
-6. UH-60M trimGain {50, 60}.
+6. CLOSED 2026-10-20 - UH-60M trimGain stays {10, 10}; user: the trim gains are fine.
 7. Hold saturated after force trim release - re-check after 3 and 6, fix only if still there.
 8. Docs tidy, user validates, commit all six.
 9. MH-47G flight director, from the 47F TM.

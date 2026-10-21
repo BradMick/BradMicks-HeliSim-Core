@@ -74,10 +74,13 @@ switch (_heli getVariable "bmkhs_controlScheme") do {
 
 		//LCT - the mast tilts on its schedule (airspeed by pressure altitude), + extends (forward).
 		//The actuator travels its full stroke in lctTime seconds. Casual and realistic alike.
+		//On the ground the proximity switches drive it to GND - 0, perpendicular to the mast.
 		private _lctSchedule = _rotor get "lctSchedule";
 		if (_lctSchedule isNotEqualTo []) then {
 			private _kts    = (_heli getVariable "bmkhs_vel2D") * MPS_TO_KNOTS;
-			private _target = [_lctSchedule, _kts, _heli getVariable "bmkhs_barAlt"] call bmkhs_fnc_mathLinearInterp2D;
+			private _target = if ([_heli] call bmkhs_fnc_stateOnGround) then { 0.0 } else {
+				[_lctSchedule, _kts, _heli getVariable "bmkhs_barAlt"] call bmkhs_fnc_mathLinearInterp2D
+			};
 			private _lctPos = _rotor getOrDefault ["lctPos", _target];
 			private _time   = _rotor get "lctTime";
 			if (_time > 0) then {
