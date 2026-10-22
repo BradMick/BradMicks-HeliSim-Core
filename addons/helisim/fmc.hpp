@@ -104,6 +104,8 @@
 //  collBand     drops out when the collective moves this fraction from where it engaged. 0.05
 //  dropAboveTq  drops out at this engine torque fraction. 0.98
 //  rad[] bar[]  gains, altitude (ft) to collective
+//  beep[]       altitude beep: {step ft, rate ft/s, fast rate ft/s, fast after s}. A tap steps;
+//               held, it moves at the rate, then the fast rate. None = no beep. {}
 //
 /////////////////////////////////////////////////////////////////////////////////////////////
 // HeadingHold - heading on the pedals below, on the roll axis above; pedals on the ball above
@@ -235,6 +237,7 @@
 #define FMC_ALT_ENGAGE_FPM          200
 #define FMC_ALT_COLL_BAND           0.05
 #define FMC_ALT_DROP_ABOVE_TQ       0.98
+#define FMC_ALT_BEEP_HOLD_S         0.5         //held this long, the beep moves at its rate
 //HeadingHold
 #define FMC_HDG_SUB_MODES           ["hdg", "yaw", "trn"]
 #define FMC_HDG_BELOW_KTS           5

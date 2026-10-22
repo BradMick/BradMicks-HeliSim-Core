@@ -45,6 +45,19 @@ private _beep = createHashMapFromArray [
 ];
 if (_name in _beep) exitWith { ([_heli, _name] + (_beep get _name) + [_state]) call bmkhs_fnc_trimBeepKey };
 
+//Altitude beep - held, both edges; fn_fmcAltitudeHold moves the reference
+if (_name in ["bmkhs_altBeepUp", "bmkhs_altBeepDn"]) exitWith {
+    if (!local _heli) exitWith {};
+    if (!_state) exitWith {
+        _heli setVariable ["bmkhs_altBeepHeld", []];
+        //Published on release
+        _heli setVariable ["bmkhs_altHoldDesiredAlt", _heli getVariable "bmkhs_altHoldDesiredAlt", true];
+    };
+    if (currentPilot _heli != player) exitWith {};
+    //{sign, pressed at, stepped}
+    _heli setVariable ["bmkhs_altBeepHeld", [[-1, 1] select (_name == "bmkhs_altBeepUp"), CBA_missionTime, false]];
+};
+
 if (_state) then {
     switch (_name) do {
         case "bmkhs_forceTrim":          { [_heli] call bmkhs_fnc_trimForceHold; };

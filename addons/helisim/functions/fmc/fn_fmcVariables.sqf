@@ -83,7 +83,7 @@ private _subDefault = createHashMapFromArray [
     ["AltitudeHold", [["rad", METERS_TO_FEET], ["bar", METERS_TO_FEET]],                    //ft
                      [["radBelowFt", FMC_ALT_RAD_BELOW_FT], ["radBelowKts", FMC_ALT_RAD_BELOW_KTS], ["engageFpm", FMC_ALT_ENGAGE_FPM],
                       ["collBand", FMC_ALT_COLL_BAND], ["dropAboveTq", FMC_ALT_DROP_ABOVE_TQ]],
-                     [],
+                     [["beep", []]],
                      { ["rad", "bar"] }],
     ["HeadingHold",  [["hdg", 1], ["trn", 1]],                                              //deg, g
                      [["hdgBelowKts", FMC_HDG_BELOW_KTS], ["blendToKts", FMC_HDG_BLEND_TO_KTS], ["authority", FMC_HDG_AUTHORITY],

@@ -13,6 +13,8 @@ class CfgDefaultKeysPresets {
             bmkhs_beepTrimBackward[] = {};
             bmkhs_beepTrimLeft[] = {};
             bmkhs_beepTrimRight[] = {};
+            bmkhs_altBeepUp[] = {};
+            bmkhs_altBeepDn[] = {};
             bmkhs_cyclicForward[] = {0x11};
             bmkhs_cyclicBackward[] = {0x1F};
             bmkhs_cyclicLeft[] = {0x1E};

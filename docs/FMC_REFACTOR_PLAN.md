@@ -23,6 +23,19 @@ Status: IN PROGRESS.
 - UH-60M stabilator table = the user's placard (40 TE down at 45 kt to 0 at 150), one row (no
   collective term; one row already works in Core).
 - Not flown: MH-47G, Tiger, Bo105 on this build.
+- Build order item 4, altitude beep, BUILT, not flown. Keys "Altitude Beep Up / Down" move only
+  the altitude hold's reference (the flight director is separate - its own beep later). A tap
+  steps; held past FMC_ALT_BEEP_HOLD_S (0.5) it moves at the rate, then the fast rate after its
+  time. AltitudeHold beep[] = {step ft, rate ft/s, fast ft/s, fast after s}; none = no beep.
+  MH-47G {1, 3, 3, 0}. UH-60M / AH-64D: none for now. User: working.
+- MH-47G masts corrected to 9 deg (front) and 4 deg (rear) forward (were 5.4 fwd / 1.5 aft from the
+  model). The LCT schedule had been tuned to cover for them; it is now the chart again: the
+  hover row's altitude columns, flat to 40 kt, then 0.058 (front) / 0.081 (rear) deg/kt to +4.
+  Altitude columns above 40 kt approximate (the hover row's offset carried up) - check against
+  the chart. Rig, 37,500 lb SL: +4.3 hover (user: the 47 hovers 4 nose up), +4.5 to 100 kt,
+  +3.9 at 120, +0.5 at 150. Not flown.
+- Open: CH-47 pitch reference from the trim (plan 3.2 "trim", never built) - with the trim
+  centred the reference is the hover attitude, +4 deg. Waiting on the go.
 - Commit messages and new comments carry no manual references (user).
 
 ## 2026-10-20 session (uncommitted, all six built)
