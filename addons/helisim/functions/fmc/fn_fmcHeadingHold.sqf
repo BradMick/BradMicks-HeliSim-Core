@@ -1,5 +1,6 @@
 params ["_heli", "_hh", "_on"];
 #include "\bmkhs_helisim\functions\core\core.hpp"
+#include "\bmkhs_helisim\fmc.hpp"
 
 if (count _hh == 0) exitWith {0.0};
 
@@ -9,15 +10,20 @@ private _hdgBelow      = (_hh get "hdgBelowKts") * KNOTS_TO_MPS;
 private _blendTo       = (_hh get "blendToKts") * KNOTS_TO_MPS;
 private _authority     = _hh get "authority";
 private _subModes      = _hh get "subModes";
+private _enterBank     = _hh get "trnEnterBankDeg";
+(_hh get "trnExit") params ["_exitBank", "_exitRate", "_exitSec"];
+//The turn sub-mode - pedals on the ball; none = heading on the pedals at every speed
+private _turn          = ["hdg", ["yaw", "trn"] select ("trn" in _subModes)] select ("trn" in _subModes || {"yaw" in _subModes});
 
 //The SAS yaw loop is cleared alongside, where the aircraft has one
 private _pidYaw        = ((_heli getVariable "bmkhs_fmc") getOrDefault ["Sas", createHashMap]) getOrDefault ["yaw", createHashMap];
 private _resetYaw      = { if (count _pidYaw > 0) then { [_pidYaw] call bmkhs_fnc_pidReset } };
+private _cycBreakout   = ((_heli getVariable "bmkhs_fmc") getOrDefault ["AttitudeHold", createHashMap]) getOrDefault ["breakout", FMC_ATT_BREAKOUT];
 
 private _deltaTime     = _heli getVariable "bmkhs_deltaTime";
 private _gndSpeed      = _heli getVariable "bmkhs_gndSpeed";
 private _angVelZ       = (_heli getVariable "bmkhs_angVelModelSpace") # 2;
-private _pedalTrim     = _heli getVariable "bmkhs_forceTrimPosYaw";
+private _curBank       = (_heli call BIS_fnc_getPitchBank) # 1;
 private _curHdg        = getDir _heli;
 private _desiredHdg    = _heli getVariable "bmkhs_hdgHoldDesiredHdg";
 private _hdgError      = [_curHdg - _desiredHdg] call CBA_fnc_simplifyAngle180;
@@ -36,16 +42,12 @@ private _hdgError      = [_curHdg - _desiredHdg] call CBA_fnc_simplifyAngle180;
 //
 //No CBA_fnc_simplifyAngle180 either: beta_g is a g-load, not an angle in degrees, so wrapping it
 //to +-180 is meaningless (the gauge value was being wrapped as though it were an angle).
-//ERROR SENSE: (actual - desired), the SAME form this always used. The two consumers below then
-//apply their own sense - "trn" passes it as the measurement against setpoint 0, "yaw" passes it as
-//the setpoint against measurement 0, which negates it. Those two branch signs are VALIDATED; do
-//not change them, and do not negate here either, or the "yaw" branch double-negates.
+//ERROR SENSE: (actual - desired), passed as the setpoint against measurement 0.
 private _desiredSlip   = _heli getVariable "bmkhs_hdgHoldDesiredSideslip";
 private _sideslipError = (_heli getVariable ["bmkhs_aero_beta_g", 0.0]) - _desiredSlip;
 private _subMode       = _heli getVariable "bmkhs_hdgHoldSubMode";
 private _hdgOutput     = 0.0;
 private _trnOutput     = 0.0;
-private _yawOutput     = 0.0;
 private _output        = 0.0;
 
 private _onGnd         = [_heli] call bmkhs_fnc_stateOnGround;
@@ -65,6 +67,12 @@ if ((_heli getVariable "bmkhs_pedalLeftRight") <= -_breakoutValue && (_heli getV
 if ((_heli getVariable "bmkhs_pedalLeftRight") >= _breakoutValue && (_heli getVariable "bmkhs_pedalLeftRight") > 0.0) then {
     _breakout = true;
 };
+//Pilot action - pedals, force trim, roll stick, lateral beep, bank
+private _action = _breakout
+    || {_heli getVariable "bmkhs_forceTrimInterupted"}
+    || {abs (_heli getVariable "bmkhs_cyclicLeftRight") > _cycBreakout}
+    || {((_heli getVariable ["bmkhs_trimBeepDelta", [0.0, 0.0]]) # 1) != 0}
+    || {_enterBank > 0 && {abs _curBank > _enterBank}};
 //systemChat format ["_breakoutValue = %1 -- bmkhs_pedalLeftRight = %2", _breakoutValue, (_heli getVariable "bmkhs_pedalLeftRight") toFixed 2];
 if (   !_on
     || _onGnd
@@ -73,6 +81,11 @@ if (   !_on
     ) then {
         if (_heli getVariable "bmkhs_hdgHoldActive" isNotEqualTo false) then {
             _heli setVariable ["bmkhs_hdgHoldActive", false, true];
+        };
+        //Pedals or force trim in flight - yaw SAS; auto pedal - aut
+        private _idle = ["yaw", "aut"] select bmkhs_autoPedal;
+        if (_on && {!_onGnd} && {_turn != "hdg" || {bmkhs_autoPedal}} && {_subMode != _idle}) then {
+            _heli setVariable ["bmkhs_hdgHoldSubMode", _idle, true];
         };
 } else {
     if (_heli getVariable "bmkhs_hdgHoldActive" isNotEqualTo true) then {
@@ -85,92 +98,91 @@ if (   !_on
         [_pidHdg] call bmkhs_fnc_pidReset;
         [_pidTrn] call bmkhs_fnc_pidReset;
         call _resetYaw;
+        //Heading captured once settled
+        if (_turn != "hdg" && {!bmkhs_autoPedal}) then {
+            _heli setVariable ["bmkhs_hdgHoldSubMode", "yaw", true];
+            _heli setVariable ["bmkhs_hdgHoldTrnSettle", 0.0];
+            _subMode = "yaw";
+        };
     };
 };
+private _bankDeg = 0.0;
 //Finally, if the heading hold is active, perform the required functions
 if (_heli getVariable "bmkhs_hdgHoldActive") then {
-    //Compute target sub-mode from current state — one authoritative decision per frame.
-    //  < 5 kts                              → hdg  (always, regardless of auto pedal)
-    //  >= 5 kts, auto pedal on              → aut  (auto pedal owns axis via force trim, PIDs idle)
-    //  >= 5 kts, auto pedal off, trn active → trn
-    //  >= 5 kts, auto pedal off, trn off    → yaw
-    private _targetSubMode = if (_gndSpeed < _hdgBelow) then {
-        "hdg"
-    } else {
-        if (bmkhs_autoPedal) then {
-            "aut"
-        } else {
-            private _attHoldActive = _heli getVariable "bmkhs_attHoldActive";
-            private _curBank       = (_heli call BIS_fnc_getPitchBank) # 1;
+    //Sub-mode. Below blendToKts heading hold; out of it is yaw SAS.
+    //At and above it: attitude hold on - hdg, trn on pilot action; off - trn always.
+    //  auto pedal                          -> aut, PIDs idle, any speed
+    //  no turn mode                        -> hdg, pedals
+    //  attitude hold off, fast             -> trn
+    //  hdg, pilot action (attitude hold)   -> yaw slow, trn fast
+    //  yaw / trn / aut, settled for the exit time -> hdg
+    private _attHoldOn = _heli getVariable "bmkhs_attHoldActive";
+    private _fast      = _gndSpeed >= _blendTo;
+    private _out       = ["yaw", _turn] select _fast;
+    private _yawRateOk = abs (_angVelZ * RAD_TO_DEG) < _exitRate;
+    private _targetSubMode = switch (true) do {
+        case (bmkhs_autoPedal):                                     { "aut" };
+        case (_turn == "hdg"):                                      { "hdg" };
+        case (!_attHoldOn && {_fast}):                              { _turn };
+        case (_subMode == "hdg"):                                   { ["hdg", _out] select (_attHoldOn && _action) };
+        default {
+            //Attitude hold off: yaw rate and 1 s
+            private _settled = [_yawRateOk, !_action && {abs _curBank < _exitBank} && {_yawRateOk}] select _attHoldOn;
+            private _t = [0.0, (_heli getVariable ["bmkhs_hdgHoldTrnSettle", 0.0]) + _deltaTime] select _settled;
+            _heli setVariable ["bmkhs_hdgHoldTrnSettle", _t];
+            ["hdg", _out] select (!_settled || {_t < ([_exitSec max FMC_HDG_SAS_REENGAGE_S, _exitSec] select _attHoldOn)})
+        };
+    };
 
-            //Turn coord: engages at > 7 deg bank from level, disengages when back within 3 deg.
-            //When disengaging, reset att hold roll reference to 0 so yaw SAS holds level cleanly.
-            private _trnCoordActive = ("trn" in _subModes) && _attHoldActive && (if (_subMode == "trn") then { abs _curBank > 3.0 } else { abs _curBank > 7.0 });
-            if (_subMode == "trn" && !_trnCoordActive) then {
+    if (_subMode != _targetSubMode) then {
+        //trn PID kept through hdg / yaw / trn
+        if (_subMode == "aut" || {_targetSubMode == "aut"}) then { [_pidTrn] call bmkhs_fnc_pidReset; call _resetYaw };
+        if (_targetSubMode == "hdg") then {
+            [_pidHdg] call bmkhs_fnc_pidReset;
+            _heli setVariable ["bmkhs_hdgHoldDesiredHdg", getDir _heli, true];
+            //Roll under 3 deg - reference to zero
+            if (_attHoldOn && {_subMode != "aut"}) then {
                 private _desiredAtt = _heli getVariable "bmkhs_attHoldDesiredAtt";
                 _heli setVariable ["bmkhs_attHoldDesiredAtt", [_desiredAtt # 0, 0.0], true];
             };
-
-            ["yaw", "trn"] select (_trnCoordActive)
-        }
-    };
-    //Undeclared - first declared
-    if !(_targetSubMode in (_subModes + ["aut"])) then {
-        _targetSubMode = (["hdg", "yaw", "trn"] select {_x in _subModes}) select 0;
-    };
-
-    //On transition: reset outgoing PID; capture heading when returning to hdg.
-    //NOTE "trn" and "yaw" SHARE _pidTrn, so switching between those two must also clear it -
-    //otherwise the incoming mode inherits the outgoing one's wound-up integrator and jumps on
-    //the first frame. Resetting the OUTGOING mode covers that (both branches hit _pidTrn), but
-    //the incoming one is reset explicitly too so a first-ever entry starts clean rather than
-    //from whatever the PID was seeded with.
-    if (_subMode != _targetSubMode) then {
-        if (_subMode == "hdg") then { [_pidHdg] call bmkhs_fnc_pidReset; };
-        if (_subMode == "trn" || _subMode == "yaw") then { [_pidTrn] call bmkhs_fnc_pidReset; };
-        if (_subMode == "aut") then { call _resetYaw; };
-        if (_targetSubMode == "hdg") then { [_pidHdg] call bmkhs_fnc_pidReset; };
-        if (_targetSubMode == "trn" || _targetSubMode == "yaw") then { [_pidTrn] call bmkhs_fnc_pidReset; };
-        if (_targetSubMode == "hdg") then {
-            _heli setVariable ["bmkhs_hdgHoldDesiredHdg", getDir _heli, true];
         };
+        if (_subMode == "hdg") then { _heli setVariable ["bmkhs_hdgHoldTrnSettle", 0.0] };
         _subMode = _targetSubMode;
         _heli setVariable ["bmkhs_hdgHoldSubMode", _subMode, true];
     };
 
-    //Run exactly one PID per frame based on current sub-mode
-    if (_subMode == "hdg") then {
+    //Ball share - 0 at hdgBelowKts, 1 at blendToKts
+    private _w = [linearConversion [_hdgBelow, _blendTo, _gndSpeed, 0, 1, true], 0] select (_turn == "hdg");
+
+    //Heading on the pedals
+    if (_subMode == "hdg" && {_w < 1}) then {
         _hdgOutput = [_pidHdg, _deltaTime, 0.0, _hdgError] call bmkhs_fnc_pidRun;
         _hdgOutput = [_hdgOutput, -1.0, 1.0] call BIS_fnc_clamp;
+    } else {
+        [_pidHdg] call bmkhs_fnc_pidReset;
     };
-    if (_subMode == "trn") then {
-        _trnOutput = [_pidTrn, _deltaTime, 0.0, _sideslipError] call bmkhs_fnc_pidRun;
+    //Ball on the pedals
+    if (_subMode != "aut" && {_w > 0}) then {
+        //Right pedal moves the ball negative - flight log 2026-10-21, AH-64D
+        _trnOutput = [_pidTrn, _deltaTime, _sideslipError, 0.0] call bmkhs_fnc_pidRun;
         _trnOutput = [_trnOutput, -1.0, 1.0] call BIS_fnc_clamp;
+    } else {
+        [_pidTrn] call bmkhs_fnc_pidReset;
     };
-    if (_subMode == "yaw") then {
-        //SIGN IS INTENTIONAL AND VALIDATED - do not "unify" it with the "trn" branch above.
-        //The two branches deliberately use opposite error senses.
-        _yawOutput = [_pidTrn, _deltaTime, _sideslipError, 0.0] call bmkhs_fnc_pidRun;
-        _yawOutput = [_yawOutput, -1.0, 1.0] call BIS_fnc_clamp;
-    };
-    //"aut": auto pedal owns the yaw axis via bmkhs_forceTrimPosYaw (fn_getInput.sqf).
-    //  fn_fmc.sqf zeroes _hdgHoldPedalYawOut when auto pedal is active, so no PID runs here.
-    //  This sub-mode exists only to block "yaw" and "trn" from interfering.
+    //"aut": auto pedal owns the yaw axis; fn_fmc.sqf zeroes the output
 
-    //Blend hdg → high-speed output across the 5-40 kt transition band.
-    //Below 5 kts: pure heading hold. Above 40 kts: pure yaw SAS, turn coord, or auto pedal.
-    private _highSpeedOutput = switch (_subMode) do {
-        case "trn": { _trnOutput };
-        case "yaw": { _yawOutput };
-        case "aut": { 0.0 };        // auto pedal owns the axis; fn_fmc.sqf zeroes this anyway
-        default     { _hdgOutput }; //hdg at speed, no yaw declared
+    //Heading at speed - a coordinated bank on the attitude hold's roll reference
+    if (_subMode == "hdg" && {_w > 0} && {_attHoldOn}) then {
+        _bankDeg = _w * (((-_hdgError * FMC_HDG_BANK_PER_DEG) max -FMC_HDG_MAX_BANK_DEG) min FMC_HDG_MAX_BANK_DEG);
     };
-    _output = linearConversion[_hdgBelow, _blendTo, _gndSpeed, _hdgOutput, _highSpeedOutput, true];
+
+    _output = ([0.0, (1 - _w) * _hdgOutput] select (_subMode == "hdg")) + ([0.0, _w * _trnOutput] select (_subMode != "aut"));
 } else {
     [_pidHdg] call bmkhs_fnc_pidReset;
     [_pidTrn] call bmkhs_fnc_pidReset;
     call _resetYaw;
 };
+_heli setVariable ["bmkhs_hdgHoldBankDeg", _bankDeg];
 
 _output = [_output, -_authority, _authority] call BIS_fnc_clamp;
 

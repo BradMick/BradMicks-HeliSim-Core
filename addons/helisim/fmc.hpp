@@ -106,14 +106,18 @@
 //  rad[] bar[]  gains, altitude (ft) to collective
 //
 /////////////////////////////////////////////////////////////////////////////////////////////
-// HeadingHold - heading below, yaw damping and turn coordination above
+// HeadingHold - heading on the pedals below, on the roll axis above; pedals on the ball above
 /////////////////////////////////////////////////////////////////////////////////////////////
 //
 //  gate[]
-//  subModes[]   any of "hdg", "yaw", "trn". Without "yaw", hdg holds heading at every speed;
-//               without "trn", no turn coordination. {"hdg", "yaw", "trn"}
-//  hdgBelowKts  heading hold below this ground speed... 5
-//  blendToKts   ...blending to yaw damping / turn coordination by this one. 40
+//  subModes[]   any of "hdg", "yaw", "trn". With "trn" (or "yaw") the pedals centre the ball at
+//               speed and heading is held by bank; with neither, pedals hold heading at every
+//               speed. {"hdg", "yaw", "trn"}
+//  hdgBelowKts  heading on the pedals below this ground speed... 5
+//  blendToKts   ...handed to bank and ball by this one. trn only at or above it; below it a
+//               pilot action is yaw SAS until settled. 40
+//  trnEnterBankDeg  bank that alone starts a turn; 0 = only pilot action does. 7
+//  trnExit[]    turn ends, heading captured: {bank deg, yaw rate deg/s, held s}. {3, 3, 0}
 //  breakout[]   pedal that drops the hold, by the attitude hold's sub-mode - {pos, vel, att},
 //               so it changes band on the attitude hold's speeds and hysteresis. {0.05, 0.10, 0.20}
 //  authority    output limit, pedal fraction. 0.1
@@ -237,6 +241,11 @@
 #define FMC_HDG_BLEND_TO_KTS        40
 #define FMC_HDG_AUTHORITY           0.1
 #define FMC_HDG_BREAKOUT            [0.05, 0.10, 0.20]
+#define FMC_HDG_TRN_ENTER_BANK_DEG  7
+#define FMC_HDG_TRN_EXIT            [3, 3, 0]   //deg, deg/s, s
+#define FMC_HDG_BANK_PER_DEG        1           //heading error to bank, at speed
+#define FMC_HDG_MAX_BANK_DEG        3
+#define FMC_HDG_SAS_REENGAGE_S      1           //attitude hold off
 //FlightDirector
 #define FMC_FD_ALT_GAIN             10
 #define FMC_FD_VS_MAX_FPM           1000

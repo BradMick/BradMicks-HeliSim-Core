@@ -86,8 +86,9 @@ private _subDefault = createHashMapFromArray [
                      [],
                      { ["rad", "bar"] }],
     ["HeadingHold",  [["hdg", 1], ["trn", 1]],                                              //deg, g
-                     [["hdgBelowKts", FMC_HDG_BELOW_KTS], ["blendToKts", FMC_HDG_BLEND_TO_KTS], ["authority", FMC_HDG_AUTHORITY]],
-                     [["subModes", []], ["breakout", FMC_HDG_BREAKOUT]],
+                     [["hdgBelowKts", FMC_HDG_BELOW_KTS], ["blendToKts", FMC_HDG_BLEND_TO_KTS], ["authority", FMC_HDG_AUTHORITY],
+                      ["trnEnterBankDeg", FMC_HDG_TRN_ENTER_BANK_DEG]],
+                     [["subModes", []], ["breakout", FMC_HDG_BREAKOUT], ["trnExit", FMC_HDG_TRN_EXIT]],
                      {
                          private _s = _this get "subModes";
                          ([[], ["hdg"]] select ("hdg" in _s)) + ([[], ["trn"]] select ("yaw" in _s || {"trn" in _s}))

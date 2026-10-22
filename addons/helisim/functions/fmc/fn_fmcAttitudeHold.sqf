@@ -225,6 +225,8 @@ if (_on && {_heli getVariable "bmkhs_attHoldActive"} && {!(_heli getVariable "bm
             _setPitch = (_setPitch max -_maxPitch) min _maxPitch;
             _heli setVariable ["bmkhs_attHoldSpdSetPitch", _setPitch];
         };
+        //Heading hold's bank
+        _setRoll = _setRoll + (_heli getVariable ["bmkhs_hdgHoldBankDeg", 0.0]);
         private _pitchError = [_curPitch - _setPitch] call CBA_fnc_simplifyAngle180;
         private _rollError  = [_curRoll  - _setRoll]  call CBA_fnc_simplifyAngle180;
 

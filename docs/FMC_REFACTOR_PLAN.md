@@ -2,6 +2,29 @@
 
 Status: IN PROGRESS.
 
+## 2026-10-21 session - committed; UH-60M and AH-64D flown, user: good to go
+
+- Build order item 3, heading hold `trn`, DONE. One state machine for every aircraft.
+  - Pedals: heading below hdgBelowKts, the ball at blendToKts and up, blended between.
+  - Heading at speed is held by bank: heading error x FMC_HDG_BANK_PER_DEG (1), capped at
+    FMC_HDG_MAX_BANK_DEG (3), added to the attitude hold's roll reference (bmkhs_hdgHoldBankDeg).
+  - Below blendToKts: hdg. With attitude hold on, a pilot action (lateral cyclic past breakout,
+    lateral beep, force trim, pedal breakout, bank > trnEnterBankDeg) drops to yaw (SAS only); hdg
+    re-engages once bank and yaw rate are under trnExit[] for its time. With it off, pedals or force
+    trim give yaw, and hdg re-engages on yaw rate + FMC_HDG_SAS_REENGAGE_S (1 s).
+  - At blendToKts and up: attitude hold on, hdg <-> trn on the same rules, roll reference to 0 on
+    the way back to hdg; off, trn always and yaw while the pedals or force trim are in use.
+  - Auto pedal on: aut (idle) at every airborne speed.
+  - Control indicator label shows the sub-mode: HDG / TRN / YAW / AUT.
+  - Fields: trnEnterBankDeg (7) and trnExit[] ({3, 3, 0}). MH-47G 0 / {1.5, 1.5, 0}; UH-60M
+    0 / {2, 2, 2} and blendToKts 50.
+  - The "trn" error sign was backwards (right pedal moves the ball negative) - one ball loop now,
+    the "yaw" sign. trn[] integral limit 0.1 in all five packs (was 0.009; UH-60M 0.06).
+- UH-60M stabilator table = the user's placard (40 TE down at 45 kt to 0 at 150), one row (no
+  collective term; one row already works in Core).
+- Not flown: MH-47G, Tiger, Bo105 on this build.
+- Commit messages and new comments carry no manual references (user).
+
 ## 2026-10-20 session (uncommitted, all six built)
 
 - H-60 YawToRoll at 0.25x the rig table (full rolled the 60 over). Flown: rolls 2-4 deg AWAY from
