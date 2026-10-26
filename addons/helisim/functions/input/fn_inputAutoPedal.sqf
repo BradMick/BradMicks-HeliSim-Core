@@ -6,7 +6,7 @@ Description:
 
     Three regimes, selected by hysteresis:
         HDG  (hover)        - hold HEADING (deg); the ball is meaningless without airflow
-        NTT  (accel, <50ft) - NOSE-TO-TAIL: drive kinematic sideslip (beta_deg) to zero
+        NTT  (accel, <50ft) - NOSE-TO-TAIL: drive the ground track's angle off the nose to zero
         AERO (>50ft AGL)    - AERODYNAMIC: drive lateral accel (beta_g) to zero, ball centred
 
     The foot is critically damped - it eases off, eases in, and never overshoots on its own.
@@ -113,10 +113,17 @@ if (_engaged || _velFwd > AUTOPEDAL_NTT_SPD) then {
 //ERROR SIGNS ARE VETTED - do not unify them. Heading is (actual - desired); the slip channels
 //are negated, because a heading error and a lateral acceleration need opposite pedal sense.
 private _betaG   = _heli getVariable "bmkhs_aero_beta_g";     // g,   + = accel right
-private _betaDeg = _heli getVariable "bmkhs_aero_beta_deg";   // deg, + = flow from right
+
+//Nose-to-tail is the FLIGHT PATH on the nose - the ground track, not the airflow. The tail
+//follows the nose past obstacles, and an aircraft that settles in moves straight onto its gear
+//instead of sideways into a dynamic rollover. Air sideslip would crab it into a crosswind.
+//Same sense as beta_deg (+ = moving right of the nose), so calm air is unchanged.
+(_heli getVariable "bmkhs_velModelSpaceNoWind") params ["_gndVelX", "_gndVelY"];
+private _gndVelXY = vectorMagnitude [_gndVelX, _gndVelY, 0.0];
+private _trackDeg = if (_gndVelXY > 0.0) then { asin (_gndVelX / _gndVelXY) } else { 0.0 };
 
 private _hdgError  = [_curHdg - _desiredHdg] call CBA_fnc_simplifyAngle180;
-private _nttError  = 0.0 - _betaDeg;
+private _nttError  = 0.0 - _trackDeg;
 private _aeroError = 0.0 - _betaG;
 
 //PILOT DEADBAND. Subtracting the band rather than zeroing inside it keeps the response

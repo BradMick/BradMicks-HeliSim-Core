@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.4.1.0
+
+### Flight controls
+- **Nose-to-tail auto pedal holds the flight path, not the airflow.** In wind it kept the
+  nose into the air instead of on the track, crabbing the aircraft over the ground. The
+  tail now follows the nose, and an aircraft that settles in meets the ground straight.
+
+### Flight log
+- **Auto pedal columns**: on, mode (hdg / ntt / aero), hover heading captured, the held
+  heading and the pedal it is holding.
+
 ## 1.4.0.0
 
 **Update every HeliSim aircraft with this release.** Packs built for 1.3 misread 1.4's
