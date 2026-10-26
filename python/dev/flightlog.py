@@ -76,6 +76,9 @@ def summary(cols, rows):
     modes = sorted({r.get('fdModes', '') for r in rows} - {''})
     if modes:
         print('    FD modes seen: %s' % ', '.join(modes))
+    ap = sorted({r.get('apMode', '') for r in rows if r.get('apOn') == '1'} - {''})
+    if ap:
+        print('    auto pedal modes seen: %s' % ', '.join(ap))
 
 
 if __name__ == '__main__':

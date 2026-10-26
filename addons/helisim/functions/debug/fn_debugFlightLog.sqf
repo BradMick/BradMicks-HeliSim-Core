@@ -59,6 +59,7 @@ private _cols = [
     "sasP", "sasR", "sasY", "attP", "attR", "hdgY", "altC", "mixP", "mixR", "mixY",
     "sasAv", "attAv", "altAv", "hdgAv", "fdAv",
     "attOn", "attSub", "altOn", "altSub", "hdgOn", "hdgSub", "ftInt",
+    "apOn", "apMode", "apHdgSet", "apHdg", "apPos",
     "fdModes", "fdFpm", "fdWantPitch", "fdWantBank", "fdTqRoom",
     "engOn", "engState", "engOverspeed", "engTqTimer", "lct", "massKg", "com", "bc", "stabDeg", "forces"
 ] + (_fdTargets apply {"tgt_" + _x})
@@ -152,6 +153,10 @@ private _row = [
     str ((_heli getVariable "bmkhs_altHoldActive") call _b), _heli getVariable "bmkhs_altHoldSubMode",
     str ((_heli getVariable "bmkhs_hdgHoldActive") call _b), _heli getVariable "bmkhs_hdgHoldSubMode",
     str ((_heli getVariable "bmkhs_forceTrimInterupted") call _b),
+    //Auto pedal: on, regime (hdg / ntt / aero), hover heading captured, that heading, the foot's pedal
+    str (bmkhs_autoPedal call _b), _heli getVariable ["bmkhs_autoPedalRegime", ""],
+    str ((_heli getVariable ["bmkhs_autoPedalHdgSet", false]) call _b),
+    (_heli getVariable ["bmkhs_autoPedalHdg", 0]) toFixed 1, (_heli getVariable ["bmkhs_autoPedalPos", 0]) call _f,
     ((_fdModes select {_heli getVariable ["bmkhs_fd_" + _x, false]}) joinString "|"),
     (_climb * MPS_TO_FPM) toFixed 0, _wantPitch toFixed 2, _wantBank toFixed 2, _tqRoom call _f,
     str (isEngineOn _heli call _b),
