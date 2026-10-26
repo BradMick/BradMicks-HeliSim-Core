@@ -120,7 +120,7 @@ private _colour = {
 
 //Full scales from engine 1, so the tapes line up.
 private _tgtRed = ([_engines # 0, _tgtKey] call _band) # 1;
-private _npOvsp = (_engines # 0) get "maxNp";
+private _npOvsp = (_engines # 0) get "npOvrspdProt";
 
 //Full scale sits above the top limit so the red band has somewhere to be drawn.
 private _tqFs  = ED_TQ_FULL_SCALE;
@@ -164,7 +164,7 @@ if (_nr > 0.01 && {_nr < _nrLow}) then { _warn pushBack "LOW RTR" };
 if (_nr >= _nrHighRtr) then           { _warn pushBack "HIGH RTR" };
 if ((fuel _heli) < ED_FUEL_LOW) then      { _caut pushBack "FUEL LOW" };
 
-//Hold modes - the AH-64D WCA short forms, unpadded.
+//Hold modes - default WCA labels, unpadded.
 if (_heli getVariable ["bmkhs_attHoldActive", false]) then {
     _advs pushBack "ATT HOLD";
 

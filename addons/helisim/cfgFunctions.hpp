@@ -117,15 +117,21 @@ class CfgFunctions
             class fmcFdSync {R;};
             class fmcFdTarget {R;};
             class fmcFlightDirector {R;};
-            class fmcForceTrimHold {R;};
-            class fmcForceTrimRelease {R;};
-            class fmcForceTrimReset {R;};
-            class fmcForceTrimSet {R;};
             class fmcSetChannel {R;};
             class fmcHeadingHold {R;};
             class fmcHoldModesDisable {R;};
             class fmcSas {R;};
             class fmcVariables {R;};
+        };
+        class trim  {
+            file = "\bmkhs_helisim\functions\trim";
+            class trimBeepKey {R;};
+            class trimForceHold {R;};
+            class trimForceRelease {R;};
+            class trimForceReset {R;};
+            class trimForceSet {R;};
+            class trimUpdate {R;};
+            class trimVariables {R;};
         };
         class prestonAi {
             file = "\bmkhs_helisim\functions\prestonAi";
@@ -202,9 +208,11 @@ class CfgFunctions
         };
         class util {
             file = "\bmkhs_helisim\functions\util";
+            class utilConfigError {R;};
             class utilSmoothAverage {R;};
             class utilNotify {R;};
             class utilNotifyRegister {R;};
+            class utilGateOpen {R;};
             class utilSeed {R;};
             class utilSetArrayVariable {R;};
             class utilSetMultiArrayVariable {R;};
@@ -248,6 +256,7 @@ class CfgFunctions
             file = "\bmkhs_helisim\functions\simpleRotor";
             class simpleRotor {R;};
             class simpleRotorControl {R;};
+            class simpleRotorGetLiftCoefDelta {R;};
             class simpleRotorTorque {R;};
             class simpleRotorUpdate {R;};
             class simpleRotorVariables {R;};

@@ -34,7 +34,6 @@ _heli setVariable ["bmkhs_cyclicRollValue",       0.0];
 _heli setVariable ["bmkhs_prevCyclicRollValue",   0.0];
 
 _heli setVariable ["bmkhs_pedalLeftRight",        0.0];
-_heli setVariable ["bmkhs_kbPedalLeftRight",      0.0];
 _heli setVariable ["bmkhs_pedalYawValue",         0.0];
 _heli setVariable ["bmkhs_prevPedalYawValue",     0.0];
 
@@ -51,8 +50,9 @@ _heli setVariable ["bmkhs_autoAttCycRollOut",  0.0];
 _heli setVariable ["bmkhs_autoAttRollTarget",  0.0];
 _heli setVariable ["bmkhs_autoPedalHdg",       getDir _heli];
 _heli setVariable ["bmkhs_autoPedalRegime",    "hdg"];   //hdg | ntt | aero (live regime)
-_heli setVariable ["bmkhs_autoPedalRegimeWgt", 1.0];     //0-1, share of the pedal that regime owns
-_heli setVariable ["bmkhs_autoPedalHdgErr",    0.0];     //deg, heading error
-_heli setVariable ["bmkhs_autoPedalNttErr",    0.0];     //deg, kinematic sideslip
-_heli setVariable ["bmkhs_autoPedalAeroErr",   0.0];     //g,   lateral accel
-_heli setVariable ["bmkhs_autoPedalOut",       0.0];     //blended pedal output
+_heli setVariable ["bmkhs_autoPedalPos",       0.0];     //where the feet have the pedals
+_heli setVariable ["bmkhs_autoPedalVel",       0.0];     //foot speed, per s
+_heli setVariable ["bmkhs_autoPedalTrim",      0.0];     //pedal before the pilot's turn
+_heli setVariable ["bmkhs_autoPedalHdgSet",    true];    //hover heading captured
+_heli setVariable ["bmkhs_autoPedalRawPrev",   0.0];     //pilot's raw pedal, last frame
+_heli setVariable ["bmkhs_autoPedalSprung",    false];   //analog pedal springing back - released

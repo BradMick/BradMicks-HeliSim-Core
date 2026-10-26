@@ -134,7 +134,20 @@ if (local _heli) then {
         //trips the engine-out warning against an Ng still climbing from zero.
         //Everything wakes together: buses, pressure and the engines. Nothing is simulated
         //without systems, so these are set once here rather than solved.
-        private _awake = isEngineOn _heli;
+        //Arma stops the engine when someone gets out - that one is ignored. Added on whichever
+        //machine owns the aircraft, so it is there wherever this runs.
+        if (isNil {_heli getVariable "bmkhs_getOutEH"}) then {
+            _heli setVariable ["bmkhs_getOutEH", _heli addEventHandler ["GetOut", {
+                (_this select 0) setVariable ["bmkhs_getOutFrame", diag_frameNo];
+            }]];
+        };
+        private _awake   = isEngineOn _heli;
+        private _justOut = (diag_frameNo - (_heli getVariable ["bmkhs_getOutFrame", -10])) <= 1;
+        //An empty aircraft runs on too. Engine off from anyone aboard is respected.
+        if (!_awake && {_justOut || {((crew _heli) findIf {alive _x}) < 0}} && {(_engState findIf {_x != "OFF"}) >= 0}) then {
+            _heli engineOn true;
+            _awake = true;
+        };
         if ((_heli getVariable ["bmkhs_acBusOn", false]) isNotEqualTo _awake) then {
             [_heli, "bmkhs_acBusOn",    _awake] call bmkhs_fnc_utilUpdateNetworkGlobal;
             [_heli, "bmkhs_dcBusOn",    _awake] call bmkhs_fnc_utilUpdateNetworkGlobal;
@@ -176,9 +189,14 @@ if (local _heli) then {
                 };
             } forEach (_heli getVariable "bmkhs_engines");
         } else {
+            //Engine off - the levers to OFF too, or the engine model keeps making power from them
             {
                 if (_x != "OFF") then {
                     [_heli, "bmkhs_engState", _forEachIndex, "OFF", true] call bmkhs_fnc_utilSetArrayVariable;
+                };
+                if ((_engPwrLvrState select _forEachIndex) != "OFF") then {
+                    [_heli, "bmkhs_engPowerLeverState", _forEachIndex, "OFF", true] call bmkhs_fnc_utilSetArrayVariable;
+                    [format ["eng%1PwrLvr", _forEachIndex + 1], 0, _heli] call bmkhs_fnc_controlSet;
                 };
             } forEach _engState;
         };

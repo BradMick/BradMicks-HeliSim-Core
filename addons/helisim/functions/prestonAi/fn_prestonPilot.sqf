@@ -155,11 +155,9 @@ if (_active) then {
     _heli setVariable ["bmkhs_prestonPitchTarget", _pitchTarget];
 
     //ROLL target sweep - DECAYS to wings-level on release (kills the standing right roll).
-    //SIGN: _cyclicLeftRight is built as (heliCyclicLeftOut - heliCyclicRightOut) - but that name
-    //is misleading. In this codebase that expression is the RIGHT-positive stick convention (the
-    //same one _rollInput uses downstream in fn_simpleRotorControl), and BIS_fnc_getPitchBank also
-    //reports bank RIGHT-positive. The two senses AGREE, so the key is ADDED, not subtracted.
-    //Subtracting it inverted the commanded bank in the ATT regime while pitch stayed correct.
+    //SIGN: _cyclicLeftRight here is the command channel, + = right bank, added to the bank target
+    //(BIS bank, + = right). The stick's bmkhs_cyclicLeftRight is + = left; the negation below turns
+    //the bank error into that.
     if (_rollKey != 0.0) then {
         _rollTarget = _rollTarget + (_rollKey * AUTO_ATT_ROLL_RATE * _deltaTime);
     } else {

@@ -51,9 +51,11 @@ if (_prevLever != _lever) then {
     [_heli, "bmkhs_engPrevLever", _index, _lever] call bmkhs_fnc_utilSetArrayVariable;
 };
 
-//Ng fly weights and the Np electrical trip. Both cut fuel; a repair is what resets them.
+//Ng fly weights (ngOvrspdProt, where fitted) and the Np electrical trip. Both cut fuel; a repair is what resets them.
 private _tripped = _heli getVariable "bmkhs_engineOverspeed" select _index;
-if (!_tripped && {_ng >= (_engine get "maxNg") || {_np >= (_engine get "maxNp")}}) then {
+private _ngOvrspdProt  = _engine get "ngOvrspdProt";
+private _npOvrspdProt  = _engine get "npOvrspdProt";
+if (!_tripped && {(_ngOvrspdProt > 0 && {_ng >= _ngOvrspdProt}) || {_npOvrspdProt > 0 && {_np >= _npOvrspdProt}}}) then {
     _tripped = true;
     [_heli, "bmkhs_engineOverspeed", _index, true, true] call bmkhs_fnc_utilSetArrayVariable;
 };

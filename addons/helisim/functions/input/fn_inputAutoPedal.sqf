@@ -2,38 +2,32 @@
 Function: bmkhs_fnc_inputAutoPedal
 
 Description:
-    Auto pedal - an input assist that works the pedals for the pilot.
+    Auto pedal - an input assist that works the pedals for the pilot, like a pilot's feet.
 
-    Three regimes, selected by hysteresis and blended across the transition band:
+    Three regimes, selected by hysteresis:
         HDG  (hover)        - hold HEADING (deg); the ball is meaningless without airflow
         NTT  (accel, <50ft) - NOSE-TO-TAIL: drive kinematic sideslip (beta_deg) to zero
         AERO (>50ft AGL)    - AERODYNAMIC: drive lateral accel (beta_g) to zero, ball centred
 
+    The foot is critically damped - it eases off, eases in, and never overshoots on its own.
+    On release it starts from the pilot's pedal and, in the hover, eases to the pedal that
+    stops the yaw, then holds the heading. An analog pedal springing back faster than a foot
+    moves is a release, the same as a key.
+
 Parameters:
-    _heli             - The helicopter [Object].
-    _deltaTime        - Frame time [Number].
-    _pedalLeftRight   - Current pedal input [Number].
-    _kbPedalLeftRight - Keyboard pedal input [Number].
-    _kbYawSwitchVel   - Hover -> nose-to-tail handover speed [Number].
+    _heli           - The helicopter [Object].
+    _deltaTime      - Frame time [Number].
+    _pedalLeftRight - Pilot's pedal [Number].
 
 Returns:
-    [_pedalLeftRight, _yawBreakout] - the pedal to pass downstream, and whether the
-    pilot is on the pedals this frame.
+    The pilot's pedal to pass downstream - zero once released [Number].
 
 Author:
     BradMick
 ---------------------------------------------------------------------------- */
 #include "\bmkhs_helisim\functions\core\core.hpp"
 
-params ["_heli", "_deltaTime", "_pedalLeftRight", "_kbPedalLeftRight", "_kbYawSwitchVel"];
-
-private _yawBreakout = false;
-private _gndSpeed    = _heli getVariable "bmkhs_gndSpeed";
-
-private _yawBreakoutVal = (_heli getVariable "bmkhs_heliRudderRightOut") - (_heli getVariable "bmkhs_heliRudderLeftOut");
-if (_yawBreakoutVal < -0.01 || _yawBreakoutVal > 0.01) then {
-    _yawBreakout = true;
-};
+params ["_heli", "_deltaTime", "_pedalLeftRight"];
 
 private _pidAutoPedalHdg  = _heli getVariable "bmkhs_pid_autoPedalHdg";
 private _pidAutoPedalNtt  = _heli getVariable "bmkhs_pid_autoPedalNtt";
@@ -42,7 +36,6 @@ private _pidAutoPedalAero = _heli getVariable "bmkhs_pid_autoPedalAero";
 private _hdgOut     = 0.0;
 private _nttOut     = 0.0;
 private _aeroOut    = 0.0;
-private _yawOutput  = 0.0;
 private _curHdg     = getDir _heli;
 private _desiredHdg = _heli getVariable "bmkhs_autoPedalHdg";
 
@@ -65,31 +58,56 @@ if (_regime != "hdg" && _velFwd < AUTOPEDAL_NTT_SPD) then {
     [_pidAutoPedalNtt]  call bmkhs_fnc_pidReset;
     [_pidAutoPedalAero] call bmkhs_fnc_pidReset;
 };
-//NTT <-> AERO handover on height, once out of the hover regime.
-if (_regime == "ntt" && _radAltRaw >= AUTOPEDAL_AERO_AGL_FT) then {
+//NTT <-> AERO - ball only when high AND fast
+private _gsKts = (_heli getVariable "bmkhs_gndSpeed") * MPS_TO_KNOTS;
+if (_regime == "ntt" && {_radAltRaw > AUTOPEDAL_AERO_IN_FT && _gsKts > AUTOPEDAL_AERO_IN_KTS}) then {
     _regime = "aero";
     [_pidAutoPedalNtt] call bmkhs_fnc_pidReset;
 };
-if (_regime == "aero" && _radAltRaw < AUTOPEDAL_NTT_AGL_FT) then {
+if (_regime == "aero" && {_radAltRaw < AUTOPEDAL_AERO_OUT_FT || _gsKts < AUTOPEDAL_AERO_OUT_KTS}) then {
     _regime = "ntt";
     [_pidAutoPedalAero] call bmkhs_fnc_pidReset;
 };
 _heli setVariable ["bmkhs_autoPedalRegime", _regime];
 
-//The setpoint tracks the aircraft while the pilot is on the pedals AND at any speed above
-//the hover gate - above it the slip channels own the axis, so a frozen heading would have
-//the heading PID fighting them. Below it, in a hover, the setpoint holds and heading hold works.
-//The keyboard pedal is lerped BOTH ways - in toward the key the pilot is holding, and back
-//to centre when they let go. A key is on or off; the pedal it drives is not.
-private _kbTarget = [_pedalLeftRight, 0.0] select (!_yawBreakout);
-_kbPedalLeftRight = [_kbPedalLeftRight, _kbTarget, (1.0 / AUTOPEDAL_KB_FADE_TIME) * _deltaTime] call BIS_fnc_lerp;
-_kbPedalLeftRight = [_kbPedalLeftRight, -1.0, 1.0] call BIS_fnc_clamp;
-_heli setVariable ["bmkhs_kbPedalLeftRight", _kbPedalLeftRight];
+private _yawRate = deg ((_heli getVariable "bmkhs_angVelModelSpace") select 2);
+private _ftYaw   = _heli getVariable "bmkhs_forceTrimPosYaw";
+private _pos     = _heli getVariable "bmkhs_autoPedalPos";
+private _trim    = _heli getVariable "bmkhs_autoPedalTrim";
+private _w       = AUTOPEDAL_FOOT_95PCT / AUTOPEDAL_FOOT_TIME;
 
-if (_yawBreakout || _velFwd > AUTOPEDAL_NTT_SPD) then {
-    _desiredHdg     = getDir _heli;
-    _pedalLeftRight = _kbPedalLeftRight;
+//On the pedals - unless the pedal is springing back faster than a foot moves
+private _raw      = abs ((_heli getVariable "bmkhs_heliRudderRightOut") - (_heli getVariable "bmkhs_heliRudderLeftOut"));
+private _rawPrev  = _heli getVariable "bmkhs_autoPedalRawPrev";
+private _onPedals = _raw > 0.01;
+private _pilot    = [_pedalLeftRight, _ftYaw] call bmkhs_fnc_inputGetInterp;
+private _sprung   = _onPedals && {_heli getVariable "bmkhs_autoPedalSprung"};
+if (_onPedals) then {
+    if (_raw > _rawPrev) then { _sprung = false };                          //pushing again
+    if (_rawPrev - _raw > _w * _deltaTime) then { _sprung = true };         //spring, not a foot
+};
+_heli setVariable ["bmkhs_autoPedalRawPrev", _raw];
+_heli setVariable ["bmkhs_autoPedalSprung", _sprung];
+private _engaged = _onPedals && !_sprung;
+
+//The setpoint tracks the aircraft while the pilot is on the pedals AND at any speed above
+//the hover gate - above it the slip channels own the axis. Below it, the hover heading holds.
+if (_engaged || _velFwd > AUTOPEDAL_NTT_SPD) then {
+    _desiredHdg = getDir _heli;
     _heli setVariable ["bmkhs_autoPedalHdg", _desiredHdg];
+    _heli setVariable ["bmkhs_autoPedalHdgSet", !_engaged];   //slowing into the hover holds at once
+    if (!_sprung) then {
+        _trim = _ftYaw;     //pedal before the turn
+        _heli setVariable ["bmkhs_autoPedalTrim", _trim];
+    };
+} else {
+    //Hold where the turn stopped - or where the foot reached the pedal it was easing to
+    private _feel = [_trim - AUTOPEDAL_FEEL * _yawRate, -1.0, 1.0] call BIS_fnc_clamp;
+    if (!(_heli getVariable "bmkhs_autoPedalHdgSet") && {abs _yawRate < AUTOPEDAL_HDG_SETTLE_DPS || {abs (_pos - _feel) < AUTOPEDAL_FOOT_ARRIVED}}) then {
+        _desiredHdg = getDir _heli;
+        _heli setVariable ["bmkhs_autoPedalHdg", _desiredHdg];
+        _heli setVariable ["bmkhs_autoPedalHdgSet", true];
+    };
 };
 
 //ERROR SIGNS ARE VETTED - do not unify them. Heading is (actual - desired); the slip channels
@@ -114,44 +132,59 @@ if (abs _nttError <= AUTOPEDAL_NTT_DEADBAND_DEG) then {
     _nttError = _nttError - (AUTOPEDAL_NTT_DEADBAND_DEG * ([1, -1] select (_nttError < 0)));
 };
 
+//Hand-off: a loop fresh from reset starts from the pedal the foot holds - nothing moves at the switch
+private _takeOver = {
+    params ["_pid", "_err"];
+    if !("prevError" in _pid) then {
+        private _ki = _pid get "ki";
+        private _i  = if (_ki == 0) then { 0.0 } else { (_pos - (_pid get "kp") * _err) / _ki };
+        _pid set ["integral", [_i, -(_pid get "ki_clamp"), _pid get "ki_clamp"] call BIS_fnc_clamp];
+        _pid set ["prevError", _err];
+    };
+};
+
 //Only the active regime's PID runs.
 switch (_regime) do {
     case "hdg": {
-        _hdgOut = [_pidAutoPedalHdg, _deltaTime, 0.0, _hdgError] call bmkhs_fnc_pidRun;
-        _hdgOut = [_hdgOut, -1.0, 1.0] call BIS_fnc_clamp;
+        if (_heli getVariable "bmkhs_autoPedalHdgSet") then {
+            [_pidAutoPedalHdg, -_hdgError] call _takeOver;
+            _hdgOut = [_pidAutoPedalHdg, _deltaTime, 0.0, _hdgError] call bmkhs_fnc_pidRun;
+            _hdgOut = [_hdgOut, -1.0, 1.0] call BIS_fnc_clamp;
+        } else {
+            //Ease toward the pedal that stops the yaw - settles where the yaw stops
+            _hdgOut = [_trim - AUTOPEDAL_FEEL * _yawRate, -1.0, 1.0] call BIS_fnc_clamp;
+        };
     };
     case "ntt": {
+        [_pidAutoPedalNtt, -_nttError] call _takeOver;
         _nttOut = [_pidAutoPedalNtt, _deltaTime, 0.0, _nttError] call bmkhs_fnc_pidRun;
         _nttOut = [_nttOut, -1.0, 1.0] call BIS_fnc_clamp;
     };
     case "aero": {
+        [_pidAutoPedalAero, -_aeroError] call _takeOver;
         _aeroOut = [_pidAutoPedalAero, _deltaTime, 0.0, _aeroError] call bmkhs_fnc_pidRun;
         _aeroOut = [_aeroOut, -1.0, 1.0] call BIS_fnc_clamp;
     };
 };
 
-//Only one regime is ever active, so its output IS the pedal - blending it against the
-//idle channels would hand back a fraction of the authority the active one asked for.
-//The hysteresis band is what keeps the handover from chattering.
-_yawOutput = _hdgOut + _nttOut + _aeroOut;
+//Only one regime is ever active, so its output IS the pedal.
+private _yawOutput = _hdgOut + _nttOut + _aeroOut;
 
-//Normalise the clamp by deltaTime so the angular impulse stays constant regardless of
-//step size - prevents Euler instability during large time steps.
-private _apClamp = [0.033 / (_deltaTime max 0.001), 0.0, 1.0] call BIS_fnc_clamp;
-_yawOutput = [_yawOutput, -_apClamp, _apClamp] call BIS_fnc_clamp;
-
-_heli setVariable ["bmkhs_autoPedalRegimeWgt", 1.0];
-_heli setVariable ["bmkhs_autoPedalHdgErr",    _hdgError];
-_heli setVariable ["bmkhs_autoPedalNttErr",    _nttError];
-_heli setVariable ["bmkhs_autoPedalAeroErr",   _aeroError];
-_heli setVariable ["bmkhs_autoPedalOut",       _yawOutput];
-
-if (_yawBreakout) then {
+//The foot - critically damped: eases off, eases in, no overshoot of its own
+if (_engaged) then {
     [_pidAutoPedalHdg]  call bmkhs_fnc_pidReset;
     [_pidAutoPedalNtt]  call bmkhs_fnc_pidReset;
     [_pidAutoPedalAero] call bmkhs_fnc_pidReset;
+    //Sits on the pilot's pedal, at rest - release starts from there
+    _heli setVariable ["bmkhs_autoPedalPos", _pilot];
+    _heli setVariable ["bmkhs_autoPedalVel", 0.0];
 } else {
-    _heli setVariable ["bmkhs_forceTrimPosYaw", _yawOutput];
+    private _vel = _heli getVariable "bmkhs_autoPedalVel";
+    _vel = _vel + (_w * _w * (_yawOutput - _pos) - 2.0 * _w * _vel) * _deltaTime;
+    _pos = [_pos + _vel * _deltaTime, -1.0, 1.0] call BIS_fnc_clamp;
+    _heli setVariable ["bmkhs_autoPedalPos", _pos];
+    _heli setVariable ["bmkhs_autoPedalVel", _vel];
+    _heli setVariable ["bmkhs_forceTrimPosYaw", _pos];
 };
 
-[_pedalLeftRight, _yawBreakout]
+[_pedalLeftRight, 0.0] select _sprung

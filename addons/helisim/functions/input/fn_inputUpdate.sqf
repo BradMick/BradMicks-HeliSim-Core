@@ -48,12 +48,6 @@ private _deltaTime          = _heli getVariable "bmkhs_deltaTime";
 private _kbStickyInterupt   = _heli getVariable "bmkhs_kbStickyInterupt";
 private _fltControlLockout  = _heli getVariable "bmkhs_flightControlLockOut";
 
-//Auto-pedal hover->nose-to-tail handover speed: 12.35 m/s = ~24kts GS (5.14444 m/s = 10kts, x2.4).
-//Below this the pedals hold heading; above it they hold the velocity vector on the nose.
-private _kbYawSwitchVel     = 5.14444 * 2.4;
-private _yawBreakout        = false;
-private _kbPedalLeftRight   = _heli getVariable "bmkhs_kbPedalLeftRight";
-
 private _priHydPumpDamage   = [_heli, "priPump"] call bmkhs_fnc_damageGet;
 //No systems modelled -> full pressure, not the failure threshold
 private _priHydPSI          = _heli getVariable ["bmkhs_priHydPsi", 3000];
@@ -157,8 +151,7 @@ if (bmkhs_keyboardStickyYaw && !bmkhs_autoPedal) then {
 // Auto Pedal          /////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////
 if (bmkhs_autoPedal) then {
-    ([_heli, _deltaTime, _pedalLeftRight, _kbPedalLeftRight, _kbYawSwitchVel]
-        call bmkhs_fnc_inputAutoPedal) params ["_pedalLeftRight", "_yawBreakout"];
+    _pedalLeftRight = [_heli, _deltaTime, _pedalLeftRight] call bmkhs_fnc_inputAutoPedal;
 };
 /////////////////////////////////////////////////////////////////////////////////////////////
 // Auto Attitude       /////////////////////////////////////////////////////////////////////

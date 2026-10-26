@@ -51,16 +51,16 @@ private _sysVars = [];
     forEach ["bmkhs_sysProducers", "bmkhs_sysConverters", "bmkhs_sysStorage", "bmkhs_sysNamed", "bmkhs_sysConsumers"];
 
 private _cols = [
-    "t", "id", "realism",
+    "t", "id", "type", "realism",
     "kts", "gsKts", "altFt", "radAltFt", "baroAltFt", "fatC", "vsFpm", "pitch", "bank", "hdg", "betaG", "betaDeg",
     "pRateDps", "rRateDps", "yRateDps",
     "tq1", "tq2", "np1", "np2", "nr",
-    "cyc", "cycLR", "pedal", "coll", "ftPitch", "ftRoll", "ftYaw",
+    "cyc", "cycLR", "pedal", "coll", "ftPitch", "ftRoll", "ftYaw", "pedalInL", "pedalInR",
     "sasP", "sasR", "sasY", "attP", "attR", "hdgY", "altC", "mixP", "mixR", "mixY",
     "sasAv", "attAv", "altAv", "hdgAv", "fdAv",
     "attOn", "attSub", "altOn", "altSub", "hdgOn", "hdgSub", "ftInt",
     "fdModes", "fdFpm", "fdWantPitch", "fdWantBank", "fdTqRoom",
-    "engOn", "engState", "engOverspeed", "engTqTimer"
+    "engOn", "engState", "engOverspeed", "engTqTimer", "lct", "massKg", "com", "bc", "stabDeg", "forces"
 ] + (_fdTargets apply {"tgt_" + _x})
   + (_dmgCols apply {"dmg_" + (_x select 0) + ([str (_x select 2), ""] select ((_x select 2) isEqualTo ""))})
   + (_ownDmg apply {"dmg_" + ((_x select 0) select [6])})
@@ -97,11 +97,32 @@ private _b = { [0, 1] select _this };
 (_heli getVariable "bmkhs_engPctTq") params [["_tq1", 0], ["_tq2", 0]];
 (_heli getVariable "bmkhs_engPctNp") params [["_np1", 0], ["_np2", 0]];
 (_fd getOrDefault ["log", [0, 0, 0, 0]]) params ["_climb", "_wantPitch", "_wantBank", "_tqRoom"];
+//Every force generator's row this frame, summed per generator (a rotor's blades together):
+//name:Fx|Fy|Fz|Mx|My|Mz, model space N and Nm about the CoM
+private _dt     = (_heli getVariable "bmkhs_deltaTime") max 0.0001;
+private _fNames = [];
+private _fSums  = [];
+{
+    _x params ["_name", "_force", "_arm"];
+    private _cut = _name find " blade";
+    if (_cut >= 0) then { _name = _name select [0, _cut] };
+    private _at = _fNames find _name;
+    if (_at < 0) then { _fNames pushBack _name; _fSums pushBack [[0,0,0], [0,0,0]]; _at = (count _fNames) - 1 };
+    (_fSums select _at) params ["_fAcc", "_mAcc"];
+    private _fN = _force vectorMultiply (1 / _dt);
+    _fSums set [_at, [_fAcc vectorAdd _fN, _mAcc vectorAdd (_arm vectorCrossProduct _fN)]];
+} forEach (_heli getVariable ["bmkhs_dbgForces", []]);
+private _forceItems = [];
+{
+    (_fSums select _forEachIndex) params ["_fv", "_mv"];
+    _forceItems pushBack (_x + ":" + (((_fv + _mv) apply {_x toFixed 0}) joinString "|"));
+} forEach _fNames;
+private _forces = _forceItems joinString ";";
 //Targets in ft and kt, like the rest of the log
 private _tgtUnits = createHashMapFromArray [["ralt", METERS_TO_FEET], ["alt", METERS_TO_FEET], ["altp", METERS_TO_FEET], ["ias", MPS_TO_KNOTS]];
 
 private _row = [
-    time toFixed 2, netId _heli, str bmkhs_helisimRealismSetting,
+    time toFixed 2, netId _heli, typeOf _heli, str bmkhs_helisimRealismSetting,
     (((_heli getVariable "bmkhs_velModelSpace") select 1) * MPS_TO_KNOTS) toFixed 1,
     ((_heli getVariable "bmkhs_gndSpeed") * MPS_TO_KNOTS) toFixed 1,
     (((getPosASL _heli) select 2) * METERS_TO_FEET) toFixed 1,
@@ -117,6 +138,7 @@ private _row = [
     (_heli getVariable "bmkhs_pedalLeftRight") call _f, (_heli getVariable "bmkhs_collectiveOutput") call _f,
     (_heli getVariable "bmkhs_forceTrimPosPitch") call _f, (_heli getVariable "bmkhs_forceTrimPosRoll") call _f,
     (_heli getVariable "bmkhs_forceTrimPosYaw") call _f,
+    (_heli getVariable "bmkhs_heliRudderLeftOut") call _f, (_heli getVariable "bmkhs_heliRudderRightOut") call _f,
     (_heli getVariable "bmkhs_fmcSasPitchOut") call _f, (_heli getVariable "bmkhs_fmcSasRollOut") call _f,
     (_heli getVariable "bmkhs_fmcSasYawOut") call _f,
     (_heli getVariable "bmkhs_fmcAttHoldCycPitchOut") call _f, (_heli getVariable "bmkhs_fmcAttHoldCycRollOut") call _f,
@@ -135,7 +157,15 @@ private _row = [
     str (isEngineOn _heli call _b),
     (_heli getVariable ["bmkhs_engState", []]) joinString "|",
     ((_heli getVariable ["bmkhs_engineOverspeed", []]) apply {_x call _b}) joinString "|",
-    ((_heli getVariable ["bmkhs_engTqTimer", []]) apply {_x toFixed 1}) joinString "|"
+    ((_heli getVariable ["bmkhs_engTqTimer", []]) apply {_x toFixed 1}) joinString "|",
+    //LCT position per rotor, deg
+    ((_heli getVariable ["bmkhs_simpleRotors", []]) apply {(_x getOrDefault ["lctPos", 0]) toFixed 2}) joinString "|",
+    //Mass, CoM and boundingCenter, model space m x|y|z - what the rig trims about
+    (getMass _heli) toFixed 0,
+    ((getCenterOfMass _heli) apply {_x toFixed 3}) joinString "|",
+    ((boundingCenter _heli) apply {_x toFixed 3}) joinString "|",
+    (_heli getVariable ["bmkhs_stabilatorPosition", 0]) toFixed 2,
+    _forces
 ] + (_fdTargets apply { ((_heli getVariable ["bmkhs_fdTgt_" + _x, 0]) * (_tgtUnits getOrDefault [_x, 1])) toFixed 0 })
   + (_dmgCols apply { ([_heli, _x select 0, _x select 1] call bmkhs_fnc_damageGet) call _f })
   + (_ownDmg apply { (_heli getVariable [_x select 1, 0]) call _f })

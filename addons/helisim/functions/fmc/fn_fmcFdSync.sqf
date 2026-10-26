@@ -7,6 +7,7 @@ Description:
 Parameters:
     _heli   - The helicopter [Object]
     _target - "ralt", "alt", "altp", "ias" or "hdg" [String]
+    _snap   - Snap to the target's step [Bool, default true]
 
 Returns:
     Nothing
@@ -14,7 +15,7 @@ Returns:
 Author:
     BradMick
 ---------------------------------------------------------------------------- */
-params ["_heli", "_target"];
+params ["_heli", "_target", ["_snap", true]];
 #include "\bmkhs_helisim\functions\core\core.hpp"
 
 private _now = switch (_target) do {
@@ -27,4 +28,4 @@ private _now = switch (_target) do {
 };
 if (isNil "_now") exitWith {};
 
-[_heli, _target, _now] call bmkhs_fnc_fmcFdTarget;
+[_heli, _target, _now, _snap] call bmkhs_fnc_fmcFdTarget;

@@ -1,5 +1,5 @@
 /* ----------------------------------------------------------------------------
-Function: bmkhs_fnc_fmcForceTrimReset
+Function: bmkhs_fnc_trimForceReset
 
 Description:
     Force trim panic button. Zeroes the trim references and the accumulated

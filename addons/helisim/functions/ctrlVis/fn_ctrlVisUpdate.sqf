@@ -306,8 +306,9 @@ private _yawCtrY = _yYaw + _yawH * 0.50;
 CTRL(5140) ctrlSetPosition [_yawBarX, _yYaw, _cyclicW, _yawH];
 CTRL(5140) ctrlCommit 0;
 
-// HDG label — lit only when heading hold is active AND sub-mode is "hdg" (low-speed hover)
-private _hdgLabelActive = _hdgHoldActive && (_hdgHoldSubMode == "hdg");
+// Heading hold label - its sub-mode, lit while active
+private _hdgLabelActive = _hdgHoldActive && {_hdgHoldSubMode != ""};
+CTRL(5145) ctrlSetText           ([toUpper _hdgHoldSubMode, "HDG"] select (_hdgHoldSubMode == ""));
 CTRL(5145) ctrlSetPosition       [_x0, _yYaw, _collW, _yawH];
 CTRL(5145) ctrlSetFontHeight     _fontSzS;
 CTRL(5145) ctrlSetTextColor       ([_colInactive, _colActive]  select _hdgLabelActive);

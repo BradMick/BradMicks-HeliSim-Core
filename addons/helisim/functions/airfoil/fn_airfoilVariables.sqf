@@ -29,14 +29,14 @@ for "_i" from 1 to (getNumber (_config >> "numAirfoils")) do {
     private _name = getText (_a >> "name");
 
     if (_name == "") then {
-        diag_log text format [
+        (format [
             "[BMKHS] AIRFOIL CONFIG ERROR: Airfoil%1 has no name and cannot be referenced.", _i
-        ];
+        ]) call bmkhs_fnc_utilConfigError;
     } else {
         if (_name in _airfoils) then {
-            diag_log text format [
+            (format [
                 "[BMKHS] AIRFOIL CONFIG ERROR: '%1' is declared more than once; the later one wins.", _name
-            ];
+            ]) call bmkhs_fnc_utilConfigError;
         };
         _airfoils set [_name, getArray (_a >> "table")];
     };

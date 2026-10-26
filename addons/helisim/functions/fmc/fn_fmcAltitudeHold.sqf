@@ -1,5 +1,6 @@
 params ["_heli", "_alt", "_on"];
 #include "\bmkhs_helisim\functions\core\core.hpp"
+#include "\bmkhs_helisim\fmc.hpp"
 
 if (count _alt == 0) exitWith {0.0};
 
@@ -37,6 +38,22 @@ if (_on && {_heli getVariable "bmkhs_altHoldActive"}) then {
         [_heli, "bmkhs_altHoldSubMode", "rad"] call bmkhs_fnc_utilUpdateNetworkGlobal;
     } else {
         [_heli, "bmkhs_altHoldSubMode", "bar"] call bmkhs_fnc_utilUpdateNetworkGlobal;
+    };
+
+    //Beep - a tap steps, held moves at the rate, then the fast rate
+    private _beep = _alt get "beep";
+    private _held = _heli getVariable ["bmkhs_altBeepHeld", []];
+    if (count _beep >= 4 && {count _held > 0}) then {
+        _beep params ["_stepFt", "_rateFps", "_fastFps", "_fastAfterS"];
+        _held params ["_sign", "_t0", "_stepped"];
+        private _heldFor = CBA_missionTime - _t0 - FMC_ALT_BEEP_HOLD_S;
+        private _moveFt  = 0.0;
+        if (!_stepped) then { _moveFt = _stepFt; _held set [2, true] };
+        if (_heldFor > 0) then { _moveFt = _moveFt + ([_rateFps, _fastFps] select (_heldFor > _fastAfterS)) * _deltaTime };
+        if (_moveFt != 0) then {
+            _desiredAlt = _desiredAlt + _sign * _moveFt * FEET_TO_METERS;
+            _heli setVariable ["bmkhs_altHoldDesiredAlt", _desiredAlt];
+        };
     };
 
     if (_subMode == "rad") then {

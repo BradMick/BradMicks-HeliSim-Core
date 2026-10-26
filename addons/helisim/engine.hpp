@@ -90,7 +90,7 @@
 //                ffwdGain        = 1.00;
 //                leverTravelTime = 8.0;
 //                loadShareGain   = 8.0;
-//                pid[]           = {80, 40, 0, 0.075};
+//                pid[]           = {80, 40, 0, 3.0};
 //                gate[]          = {};
 //            };
 //            class Starter {
@@ -115,9 +115,12 @@
 //                      The torque the engine actually MAKES comes from the physics.
 //  maxFuelFlow         kg/s per fuel unit. The combustor burns fuel units * maxFuelFlow kg/s,
 //                      so this is physical, not just the gauge's scale.
-//  maxNg               Fly-weight trip - shuts the engine down. ALSO the compressor map's
-//                      100% point: the map's Ng axis runs 0 to 1 as a fraction of maxNg.
-//  maxNp               Electrical overspeed trip - shuts the engine down.
+//  maxNg               The compressor map's 100% point - the map's Ng axis runs 0 to 1 as a
+//                      fraction of maxNg - and the highest Ng the spool can reach.
+//  ngOvrspdProt        OPTIONAL. Ng fly-weight trip - shuts the engine down. maxNg when not
+//                      declared; 0 for an engine without fly weights (T55, Bo 105's, Tiger's).
+//  npOvrspdProt        Np electrical overspeed trip - shuts the engine down. 0 for none. The older
+//                      name maxNp is still read when npOvrspdProt is not declared.
 //  fuelSelector        OPTIONAL. The control whose position picks this engine's fuel source -
 //                      a FUEL SYS lever, say. Declare none and the engine draws through the
 //                      fuel config's CrossfeedModes.
@@ -173,8 +176,8 @@
 //  ffwdGain            Collective anticipation - the load demand spindle.
 //  leverTravelTime     s, idle to fly. The fuel ramp, the Np reference and the lever animation.
 //  loadShareGain       How hard an engine below its matched partners trims up to them.
-//  pid[]               Np governor {kp, ki, kd, ki_clamp}. ki * ki_clamp is the integral's
-//                      fuel authority - keep it at the fuel range.
+//  pid[]               Np governor {kp, ki, kd, limit}. limit is the integral's fuel
+//                      authority - keep it at the fuel range.
 //  gate[]              What the ECU needs to keep metering fuel. Empty = always powered.
 //
 //STARTER

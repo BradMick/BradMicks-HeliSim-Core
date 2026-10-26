@@ -36,7 +36,18 @@ private _scasAvail = switch (_inputAxis) do {
     default { false };
 };
 
-if (_scasAvail) then {
+//Hydraulic boost - declared, switched on and its gate holding - is crisp on every axis.
+private _boostOn = (_heli getVariable ["bmkhs_hydBoost", false])
+    && {_heli getVariable ["bmkhs_hydBoostOn", true]}
+    && {((_heli getVariable ["bmkhs_hydBoostGate", []]) findIf {
+        !(if (_x isEqualType []) then {
+            ([_heli, _x select 0] call bmkhs_fnc_systemCircuit) >= (_x select 1)
+        } else {
+            _heli getVariable [_x, false]
+        })
+    }) < 0};
+
+if (_scasAvail || _boostOn) then {
     _input   // fast electrical path -> instant, no lag
 } else {
     [_heli, _inputAxis, _input, _lagVal] call bmkhs_fnc_actuatorLag   // mechanical lag

@@ -11,7 +11,7 @@ What it answers: at each collective, in a hover out of ground effect at 100% Nr,
 cyclic that null the pitch, roll and yaw moments. Those trims, less their value at the bottom of
 the collective, are the control mixing a pack declares in ControlMixing (helisim_flightControls).
 
-Not ported: fuselage and wings (no forces in a hover), ground effect, flapback and the induced
+Not ported: fuselage and wings (no forces in a hover), ground effect and the induced
 velocity terms (all inert at zero airspeed, zero vertical speed, out of ground effect).
 
 If this file and the SQF ever disagree, the SQF is right and this file is the bug.
@@ -24,7 +24,15 @@ import sys
 sys.path.insert(0, os.path.dirname(__file__))
 import engine as E  # noqa: E402 - reads BMKHS_CONFIG at import
 
-MAIN, TAIL = E.MAIN, E.TAIL
+MAIN, TAIL, PROPELLER, PROPROTOR = E.MAIN, E.TAIL, E.PROPELLER, E.PROPROTOR
+SCHEMES = ['conventional', 'tandem', 'coaxial', 'tiltrotor', 'compound']
+CONVENTIONAL, TANDEM, COAXIAL, TILTROTOR, COMPOUND = range(5)
+
+
+def control_scheme():
+    """fn_simpleRotorVariables - conventional when not declared."""
+    s = str(E.CFG.get('controlScheme', '')).lower()
+    return SCHEMES.index(s) if s in SCHEMES else CONVENTIONAL
 
 
 # ---------------------------------------------------------------------------------------------
@@ -68,26 +76,55 @@ def _cross(a, b): return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], 
 # fn_simpleRotorControl, fn_simpleRotor (force path)
 # ---------------------------------------------------------------------------------------------
 
-def simple_rotor_control(rotorType, pitch, roll, yaw, coll):
-    """Control outputs for one rotor, from the summed inputs (pilot + trims + FMC + mixing)."""
+def simple_rotor_control(r, pitch, roll, yaw, coll, kts=0.0, paFt=0.0):
+    """Control outputs for one rotor, from the summed inputs (pilot + trims + FMC + mixing). The
+    LCT is taken at its schedule - the rig has no clock for the actuator's travel."""
+    rotorType = E.rotor_type(r['type'])
     pitch = E.clamp(pitch, -1.0, 1.0)
     roll = E.clamp(roll, -1.0, 1.0)
     yaw = E.clamp(yaw, -1.0, 1.0)
-    if rotorType == MAIN:
-        return E.clamp(pitch, -1.0, 1.0), E.clamp(roll, -1.0, 1.0), E.clamp(coll, 0.0, 1.0)
-    return 0.0, 0.0, E.clamp(yaw, -1.0, 1.0)
+    scheme = control_scheme()
+    if scheme == CONVENTIONAL:
+        if rotorType == MAIN:
+            return E.clamp(pitch, -1.0, 1.0), E.clamp(roll, -1.0, 1.0), E.clamp(coll, 0.0, 1.0), 0.0, 0.0, 0.0
+        return 0.0, 0.0, E.clamp(yaw, -1.0, 1.0), 0.0, 0.0, 0.0
+    if scheme == TANDEM:
+        #Stick moves lift between the rotors; pedal is lateral cyclic on each rotor, opposite ways
+        pos = str(r.get('position', '')).lower()
+        sign = -1.0 if pos == 'front' else (1.0 if pos == 'rear' else 0.0)
+        sched = r.get('lctSchedule')
+        lct = E.math_linear_interp_2d(E.math_build_interp_grid(sched), kts, paFt) if sched else 0.0
+        return 0.0, roll, E.clamp(coll, 0.0, 1.0), sign * pitch, sign * yaw, lct
+    return 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+
+
+def simple_rotor_get_lift_coef_delta(r, psi, ctl, liftCoef):
+    """fn_simpleRotorGetLiftCoefDelta - one blade's lift coefficient change, mixed for the control
+    scheme into a roll and a pitch part."""
+    pitchOutput, rollOutput, collOutput, tandemPitch, tandemYaw, lct = ctl
+    scheme = control_scheme()
+    if scheme == CONVENTIONAL:
+        return rollOutput * _cos(psi) * r['rollLiftCoef'], pitchOutput * _sin(psi) * r['pitchLiftCoef']
+    if scheme == TANDEM:
+        roll = rollOutput * _cos(psi) * r['rollLiftCoef']
+        pitch = (pitchOutput * _sin(psi) * r['pitchLiftCoef']) + (tandemPitch * r.get('tandemPitchLiftCoef', 0.0))
+        yaw = tandemYaw * _cos(psi) * r.get('tandemYawLiftCoef', 0.0)
+        return roll + yaw, pitch
+    return 0.0, 0.0
 
 
 def simple_rotor_forces(r, ctl, rho, xmsnRpm, com):
     """One rotor's total force and moment about com, model space, N and Nm - the sum of the
     four blades' lift and drag vectors fn_simpleRotor hands to addForce, without the frame's dt.
     Hover: zero velocity, out of ground effect."""
-    pitchOutput, rollOutput, collOutput = ctl
-    rotorType = TAIL if r['type'].lower() == 'tail' else MAIN
+    pitchOutput, rollOutput, collOutput, tandemPitch, tandemYaw, lct = ctl
+    rotorType = E.rotor_type(r['type'])
     torqueSign = -1.0 if r['direction'].lower() == 'cw' else 1.0
 
-    flapLon = math_linear_interp_from_center(-1, 1, pitchOutput, r['pitchFlapMin'], r['pitchFlapMid'], r['pitchFlapMax'])
+    #LCT is longitudinal cyclic - - forward, as rotation[]
+    flapLon = math_linear_interp_from_center(-1, 1, pitchOutput, r['pitchFlapMin'], r['pitchFlapMid'], r['pitchFlapMax']) - lct
     flapLat = math_linear_interp_from_center(-1, 1, rollOutput, r['rollFlapMin'], r['rollFlapMid'], r['rollFlapMax'])
+    flapLat += math_linear_interp_from_center(-1, 1, tandemYaw, r['rollFlapMin'], r['rollFlapMid'], r['rollFlapMax'])
     p, rr, y = r['rotation']
     fVec = math_vector_rotate([0.0, 1.0, 0.0], p, rr, y)
     rVec = math_vector_rotate([1.0, 0.0, 0.0], p, rr, y)
@@ -106,28 +143,31 @@ def simple_rotor_forces(r, ctl, rho, xmsnRpm, com):
     dragGrid = E.math_build_interp_grid(r['dragCoefTable'])
     tableKey = E.simple_rotor_table_key(r, collOutput)
 
+    rot = math_vector_rotate_around_axis
+    discUVec = rot(uVec, rVec, flapLon)
+    discFVec = rot(fVec, rVec, flapLon)
+    discUVec = rot(discUVec, discFVec, flapLat)
+    discRVec = rot(rVec, discFVec, flapLat)
+
     F, M = [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]
     for i in range(4):
         psi = i * 90.0
-        locRVec = math_vector_rotate_around_axis(rVec, uVec, psi)
-        locFVec = math_vector_rotate_around_axis(fVec, uVec, psi)
-        #No flapback in a hover - advance ratio 0
-        rollFlap = flapLat * _cos(psi)
-        pitchFlap = flapLon * _sin(psi)
-        bladeFlap = collCone + rollFlap + pitchFlap
+        locRVec = rot(discRVec, discUVec, psi)
+        locFVec = rot(discFVec, discUVec, psi)
+        bladeFlap = collCone
         bladeOffset = math_vector_rotate_around_axis(_mul(locRVec, r['bladeRadius']), locFVec, bladeFlap)
         bladeThrustPos = _add(pos, _mul(bladeOffset, 0.75))
 
         liftCoef = E.math_linear_interp_2d(liftGrid, tableKey, 0.0)
         bladeLift = liftCoef * q * bladeScalar
-        liftCoefDelta = (rollOutput * _cos(psi) * r['rollLiftCoef']) + (pitchOutput * _sin(psi) * r['pitchLiftCoef'])
+        liftCoefDelta = sum(simple_rotor_get_lift_coef_delta(r, psi, ctl, liftCoef))
         bladeLiftDelta = liftCoefDelta * q * bladeScalar
         dragCoef = E.math_linear_interp_2d(dragGrid, tableKey, 0.0)
         bladeDrag = dragCoef * q * bladeScalar
 
-        #viScalar 1 (no vertical speed), gndEffScalar 1 (out of ground effect)
+        #viScalar 1 on every blade (no airspeed or vertical speed), gndEffScalar 1 (out of ground effect)
         bladeLift = bladeLift + bladeLiftDelta
-        liftVec = math_vector_rotate_around_axis(_mul(uVec, bladeLift), locFVec, bladeFlap)
+        liftVec = rot(_mul(discUVec, bladeLift), locFVec, bladeFlap)
         dragVec = _mul(locFVec, -bladeDrag * torqueSign * r['reacTqScalar'])
 
         arm = _sub(bladeThrustPos, com)
@@ -157,8 +197,7 @@ def hover_rpm():
 def totals(pitch, roll, yaw, coll, com, rho, rpm):
     F, M = [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]
     for r in rotors():
-        rType = TAIL if r['type'].lower() == 'tail' else MAIN
-        f, m = simple_rotor_forces(r, simple_rotor_control(rType, pitch, roll, yaw, coll), rho, rpm, com)
+        f, m = simple_rotor_forces(r, simple_rotor_control(r, pitch, roll, yaw, coll), rho, rpm, com)
         F, M = _add(F, f), _add(M, m)
     return F, M
 

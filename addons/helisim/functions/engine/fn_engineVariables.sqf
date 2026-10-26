@@ -105,6 +105,11 @@ for "_i" from 1 to _numEngines do {
 
     _engine set ["pid", getArray (_e >> "Governor" >> "pid")];
 
+    //Ng fly-weight trip - maxNg unless declared; 0 for an engine without fly weights.
+    _engine set ["ngOvrspdProt", [_engine get "maxNg", getNumber (_e >> "ngOvrspdProt")] select (isNumber (_e >> "ngOvrspdProt"))];
+    //Np electrical overspeed trip - npOvrspdProt, or the older maxNp; 0 for none.
+    _engine set ["npOvrspdProt", [_engine get "maxNp", getNumber (_e >> "npOvrspdProt")] select (isNumber (_e >> "npOvrspdProt"))];
+
     _engine set ["damageRoleIndex", getNumber (_e >> "damageRoleIndex")];
 
     private _name = _engine get "name";
@@ -235,5 +240,7 @@ _heli setVariable ["bmkhs_engLeverSched",         +_zeros];
 _heli setVariable ["bmkhs_engNpRef",              _engines apply {-1.0}];
 //Fuel the TGT and Ng limiters allow; wide open until one is near its limit.
 _heli setVariable ["bmkhs_engLimFuel",            _engines apply {_x get "fuelFly"}];
+_heli setVariable ["bmkhs_engNgPrev",             _engines apply {0.0}];
+_heli setVariable ["bmkhs_engNgRate",             _engines apply {0.0}];
 //Minimum flow that holds Ng at idle; zero until Ng falls under it.
 _heli setVariable ["bmkhs_engMinFuel",            +_zeros];

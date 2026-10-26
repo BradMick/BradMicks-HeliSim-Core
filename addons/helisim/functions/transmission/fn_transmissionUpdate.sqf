@@ -1,7 +1,8 @@
 params ["_heli"];
 #include "\bmkhs_helisim\functions\core\core.hpp"
 
-if (currentPilot _heli != player || !local _heli) exitWith {};
+//The owner runs it, crewed or not - an empty aircraft finishes spooling up or down
+if (!local _heli) exitWith {};
 
 private _mainRotorGearRatio = ((_heli getVariable "bmkhs_simpleRotors") select 0) get "gearRatio";
 
@@ -28,6 +29,13 @@ private _engInputTq  = 0.0;
 {
     if (_clutch select _forEachIndex) then { _engInputTq = _engInputTq + _x };
 } forEach _engOutputTq;
+
+//Drivetrain drag - gearboxes, shafting and accessories. Constant torque at the engine shaft; it
+//only resists, so a stopped drivetrain stays stopped until the drive overcomes it.
+private _dragTq = 0.0;
+{ _dragTq = _dragTq + ((_x get "refTq") * (_heli getVariable ["bmkhs_drivetrainDrag", 0.0])) } forEach (_heli getVariable "bmkhs_engines");
+if (_outputRpm <= 0.0) then { _dragTq = _dragTq min ((_engInputTq - _totTq) max 0.0) };
+_totTq = _totTq + _dragTq;
 
 // Lumped at the engine shaft, dimensionally correct and framerate-independent:
 //   alpha = tau_net / J_eng           [rad/s^2]

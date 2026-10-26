@@ -31,6 +31,12 @@ class UserActionGroups {
             "bmkhs_holdModeAltitude",
             "bmkhs_holdModeAttitude",
             "bmkhs_holdModesOff",
+            "bmkhs_beepTrimForward",
+            "bmkhs_beepTrimBackward",
+            "bmkhs_beepTrimLeft",
+            "bmkhs_beepTrimRight",
+            "bmkhs_altBeepUp",
+            "bmkhs_altBeepDn",
             "bmkhs_stickyInterrupt",
             "bmkhs_ctrlVisToggle",
             "bmkhs_fdRalt",
@@ -82,6 +88,12 @@ class UserActionsConflictGroups {
             "bmkhs_holdModeAltitude",
             "bmkhs_holdModeAttitude",
             "bmkhs_holdModesOff",
+            "bmkhs_beepTrimForward",
+            "bmkhs_beepTrimBackward",
+            "bmkhs_beepTrimLeft",
+            "bmkhs_beepTrimRight",
+            "bmkhs_altBeepUp",
+            "bmkhs_altBeepDn",
             "bmkhs_stickyInterrupt"
         };
     };

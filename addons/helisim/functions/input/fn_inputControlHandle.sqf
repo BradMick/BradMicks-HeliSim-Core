@@ -2,8 +2,8 @@
 Function: bmkhs_fnc_inputControlHandle
 
 Description:
-    Dispatches HeliSim's discrete flight-control actions - force trim, hold
-    modes, the flight director and the sticky-input interrupt. Bound from Core's
+    Dispatches HeliSim's discrete flight-control actions - force trim, beep
+    trim, hold modes, the flight director and the sticky-input interrupt. Bound from Core's
     CfgUserActions; a cockpit control calls it with the same action name.
 
 Parameters:
@@ -38,19 +38,39 @@ if (_state && {_name in _fdMode}) exitWith { [_heli, _fdMode get _name] call bmk
 if (_state && {_name in _fdStep}) exitWith { ([_heli] + (_fdStep get _name)) call bmkhs_fnc_fmcFdStep };
 if (_state && {_name in _fdSync}) exitWith { [_heli, _fdSync get _name] call bmkhs_fnc_fmcFdSync };
 
+//Beep trim - held, both edges; {axis, sign}, roll + = left
+private _beep = createHashMapFromArray [
+    ["bmkhs_beepTrimForward", [0, 1]], ["bmkhs_beepTrimBackward", [0, -1]],
+    ["bmkhs_beepTrimLeft",    [1, 1]], ["bmkhs_beepTrimRight",    [1, -1]]
+];
+if (_name in _beep) exitWith { ([_heli, _name] + (_beep get _name) + [_state]) call bmkhs_fnc_trimBeepKey };
+
+//Altitude beep - held, both edges; fn_fmcAltitudeHold moves the reference
+if (_name in ["bmkhs_altBeepUp", "bmkhs_altBeepDn"]) exitWith {
+    if (!local _heli) exitWith {};
+    if (!_state) exitWith {
+        _heli setVariable ["bmkhs_altBeepHeld", []];
+        //Published on release
+        _heli setVariable ["bmkhs_altHoldDesiredAlt", _heli getVariable "bmkhs_altHoldDesiredAlt", true];
+    };
+    if (currentPilot _heli != player) exitWith {};
+    //{sign, pressed at, stepped}
+    _heli setVariable ["bmkhs_altBeepHeld", [[-1, 1] select (_name == "bmkhs_altBeepUp"), CBA_missionTime, false]];
+};
+
 if (_state) then {
     switch (_name) do {
-        case "bmkhs_forceTrim":          { [_heli] call bmkhs_fnc_fmcForceTrimHold; };
-        case "bmkhs_holdModeAltitude":   { [_heli] call bmkhs_fnc_fmcAltitudeHoldEnable; };
-        case "bmkhs_holdModeAttitude":   { [_heli] call bmkhs_fnc_fmcAttitudeHoldEnable; };
+        case "bmkhs_forceTrim":          { [_heli] call bmkhs_fnc_trimForceHold; };
+        case "bmkhs_holdModeAltitude":   { [_heli, true] call bmkhs_fnc_fmcAltitudeHoldEnable; };
+        case "bmkhs_holdModeAttitude":   { [_heli, true] call bmkhs_fnc_fmcAttitudeHoldEnable; };
         case "bmkhs_holdModesOff":       { [_heli] call bmkhs_fnc_fmcHoldModesDisable; };
         case "bmkhs_stickyInterrupt":    { [_heli, true] call bmkhs_fnc_stickyInterrupt; };
         case "bmkhs_ctrlVisToggle":      { [_heli] call bmkhs_fnc_ctrlVisToggle; };
     };
 } else {
     switch (_name) do {
-        case "bmkhs_forceTrim":          { [_heli] call bmkhs_fnc_fmcForceTrimRelease; };
-        case "bmkhs_forceTrimPanic":     { [_heli] call bmkhs_fnc_fmcForceTrimReset; };
+        case "bmkhs_forceTrim":          { [_heli] call bmkhs_fnc_trimForceRelease; };
+        case "bmkhs_forceTrimPanic":     { [_heli] call bmkhs_fnc_trimForceReset; };
         case "bmkhs_stickyInterrupt":    { [_heli, false] call bmkhs_fnc_stickyInterrupt; };
     };
 };

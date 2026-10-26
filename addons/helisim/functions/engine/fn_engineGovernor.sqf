@@ -29,6 +29,15 @@ params ["_heli", "_index", "_engine", "_ng", "_np", "_tgt", "_lever", "_fat", "_
 
 private _idleNg = _engine get "idleNg";
 
+//Ng's rate of change, filtered - what the Ng limiter anticipates with.
+private _ngRate = (_heli getVariable "bmkhs_engNgRate") select _index;
+if (_deltaTime > 0) then {
+    private _raw = (_ng - ((_heli getVariable "bmkhs_engNgPrev") select _index)) / _deltaTime;
+    _ngRate = _ngRate + ((_raw - _ngRate) * (1.0 - (exp (0 - (_deltaTime / GT_NG_RATE_TAU)))));
+};
+[_heli, "bmkhs_engNgRate", _index, _ngRate] call bmkhs_fnc_utilSetArrayVariable;
+[_heli, "bmkhs_engNgPrev", _index, _ng] call bmkhs_fnc_utilSetArrayVariable;
+
 //Single engine when one engine's torque is below 51% of another's.
 private _tqs = _heli getVariable "bmkhs_engPctTq";
 private _tqHigh = 0;
@@ -88,7 +97,8 @@ if (_lever == "FLY" && {_govPowered}) then {
     //is over its limit. Never below the idle floor.
     private _tgtLim = [_engine get "maxTgt", _engine get "maxTgtSe"] select (_heli getVariable "bmkhs_isSingleEng");
     private _ngLim  = (_engine get "ngLimitMax") min ((_engine get "ngLimitBase") + ((_engine get "ngLimitSlope") * _fat));
-    private _err    = ((_tgtLim - _tgt) / GT_TGT_LIMIT_BAND) min ((_ngLim - _ng) / GT_NG_LIMIT_BAND);
+    private _ngAhead = _ng + (_ngRate * GT_NG_LEAD);
+    private _err    = ((_tgtLim - _tgt) / GT_TGT_LIMIT_BAND) min ((_ngLim - _ngAhead) / GT_NG_LIMIT_BAND);
     private _lim    = ((_heli getVariable "bmkhs_engLimFuel") select _index) + (GT_LIMIT_GAIN * _err * _deltaTime);
     _lim = _lim min ((_fuelSched min (_govFuel max 0.0)) * GT_LIMIT_TRACK);
     _lim = (_lim max _fuelIdle) min _fuelFly;

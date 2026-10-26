@@ -15,7 +15,7 @@ field means:
   storage, circuits, consumers
 - `addons/helisim/controls.hpp` - switches, buttons and levers
 - `addons/helisim/engine.hpp` - the gas turbine engine, station by station
-- `addons/helisim/fmc.hpp` - the flight management computer: SAS and the holds
+- `addons/helisim/fmc.hpp` - the flight controls: trim, SAS, the holds and the flight director, and their defaults
 
 This guide is the ORDER. Those are the DETAIL.
 
@@ -339,7 +339,7 @@ that is not a T700 can declare its own `Compressor >> compressorMap[]`; see
 Set it up in this order:
 
 1. **Spec numbers.** `pressureRatio`, `massFlow`, `powerKw`, `designRpm`,
-   `npFly`, `maxNg`, `maxNp`, and the book limits.
+   `npFly`, `maxNg`, `ngOvrspdProt` (if the engine has Ng fly weights), `npOvrspdProt`, and the book limits.
 2. **Idle.** Adjust `fuelIdle` until the engine, lever at IDLE, settles at
    `idleNg`.
 3. **Start.** `startFuelBase` sets the peak TGT, `Starter >> torque` how quickly
@@ -348,7 +348,9 @@ Set it up in this order:
    Torque Available chart and set that row of `airflowTable` - below 1.0 where
    the engine makes too much, above where too little. Leave the 15 C row at 1.0:
    a standard day is the untrimmed engine. The Ng and TGT limiters then decide
-   which limit holds, as on the real engine.
+   which limit holds, as on the real engine. From an OGE hover chart instead,
+   `python/dev/airflow_trim.py` works the multiplier per FAT through the rig -
+   its docstring gives the chart file and options.
 
 **An engine that is not a T700 - build its compressor map.** If you have the
 engine's limitations table (N1, T45 and torque for each rating, at sea level and
@@ -432,8 +434,8 @@ It is never loaded or referenced in game - it is only read by the tool.
 
 #### 2. Model each surface as quads
 
-Every face must be a **quad** - exactly four vertices. Triangles and faces with
-more corners are rejected.
+Every face must be a **quad** - exactly four vertices. A triangle is taken as a
+quad with one corner repeated. Faces with more corners are rejected.
 
 **A quad is the surface's outline, not its shape.** Do not model an airfoil
 section, camber or thickness - the section comes from the `airfoil` the surface
@@ -530,8 +532,28 @@ first, then lists what it found:
       fuselageFront          forward  18 quads
       leftWing               up       2 quads
       ...
+      Placement: turn 0 pitch 0.000 roll 0.000 yaw 0.000 forward 0.000 down 0.000 right 0.000
 
     All data will be reset to default. Continue? (y/n)
+
+**Placing a model that was not built over the aircraft.** If your fm.p3d was built
+in another frame - from blueprints, or facing the other way - the tool places it as
+it reads it:
+
+| Option | Effect |
+|---|---|
+| `--turn` | Turn it 180 deg about vertical - for a model built facing aft |
+| `--pitch DEG` `--roll DEG` `--yaw DEG` | Then rotate it about the fm.p3d's own origin, degrees, as a rotor's `rotation[]` |
+| `--forward M` `--down M` `--right M` | Then shift it, metres |
+| `--add` | Add the angles and the shift to the placement recorded in the current files, keeping its turn |
+
+The placement is written in the header of both files, so `--add` always has the last
+one to add to, and as `fmPlacement[]` in `helisim_fuselage.hpp`, where the nudge
+reads it - it rotates about the fm.p3d's origin where the placement put it. Find the
+placement in game with `tools/fm_nudge.sqf` (section 7), which prints the `--add`
+command. A file with no recorded placement refuses `--add`: regenerate it once with
+the full placement first. A file placed before the angles existed still adds; run
+`--add` with nothing else once to write `fmPlacement[]` before rotating it in game.
 
 Answer `y` to write both files. Anything else writes nothing. **Both files are
 rewritten in full every time** - geometry, facing, and every other value back
@@ -543,7 +565,7 @@ If the model has a problem, the tool writes nothing and says what:
 | Message | Fix |
 |---|---|
 | `you didn't name X correctly - it must be one of: ...` | Rename the selection to a name from the table, with or without a number |
-| `X must be exactly one 4-sided face` | The selection holds a triangle, more than one face, or stray vertices - reselect just the quad |
+| `X must be exactly one 4-sided face, or a triangle` | The selection holds more than one face, a face with more than four corners, or stray vertices - reselect just the quad |
 | `quad facing mismatch, please ensure all quads are facing the same direction on surface X` | The surface's quads split evenly between two directions, or one faces along a different axis - reverse the wrong ones |
 | `X faces Y - it must face ...` | A fuselage surface faces the wrong axis - reverse or remodel it |
 | `the fuselage needs all three surfaces - X missing` | Model the missing fuselage surface |
@@ -596,7 +618,38 @@ and look at the aircraft. Every quad is drawn where Core has it:
 
 The quads should lie on the airframe. If they sit off it, the faces in fm.p3d
 do not overlay your aircraft's model in Object Builder - paste the model in and
-compare.
+compare, or move them in game with the nudge.
+
+**The nudge - `tools/fm_nudge.sqf`.** It moves the aerosurfaces, each rotor hub and
+the centre of mass live, because Core reads all of them from the vehicle every
+frame. With FM debugging on, sit in the aircraft, paste it into the debug console
+and LOCAL EXEC:
+
+| Key | Does |
+|---|---|
+| Numpad 0 | Next target: fuselage + wings, each simple rotor, centre of mass |
+| Numpad 7 | Mode. Fuselage + wings: move, rotate (about the fm.p3d's origin). A rotor: move (`pivot[]`), rotate (`rotation[]`), mast (`mastLength`) |
+| Numpad 8 / 2 | Forward / aft - rotate mode: pitch |
+| Numpad 6 / 4 | Right / left - rotate mode: roll |
+| Numpad 9 / 3 | Up / down - rotate mode: yaw; mast mode: longer / shorter |
+| Numpad + / - | Double / halve the current mode's step (0.05 m, 0.5 deg, 0.05 m to start) |
+| Numpad 5 | Copy every value that changed, one line each |
+
+Numpad 5 copies every change since the tool was pasted, each line labelled with where
+it goes, and prints them to the chat. The hint marks the current target's changed lines
+with `*`.
+
+- **Fuselage + wings** - the generator's `--add` command, shift and angles (section 5). Put your two paths
+  in place of `FM_P3D` and `BMKHS_CONFIG` and run it from `@bmkhs/python/`.
+- **A rotor** - its `pivot[]`, `rotation[]` and `mastLength` lines for
+  `helisim_simpleRotor.hpp`.
+- **Centre of mass** - `comCorrection[]` (REALISTIC) or `casualModeCom[]` (other
+  modes) for `helisim_mass.hpp`.
+
+It counts from what is loaded. Re-enter the aircraft before pasting it again.
+
+The tool carries no comments: a debug console that does not strip them fails on the
+first one past the start of the code ("Invalid number in expression").
 
 ### Rotor control map
 
@@ -632,6 +685,18 @@ the control itself, not the mapped key.
 **Inflow is read along the thrust.** The descent and VRS law takes the rotor's axial speed in
 the direction it is actually pushing. A main rotor always pushes up its mast; a tail rotor
 pushes either way with the pedal, and its sideslip is read against whichever way that is.
+Air coming down through a main rotor's disc - a climb, or the disc tilted into the wind - costs
+the blades angle of attack: it comes off the collective the lift table is read at, so the pilot
+pulls collective to get the lift back. The descent and VRS factor acts only in descent. A tail
+rotor takes both through the factor.
+
+**The disc tilts as one.** Cyclic tilts the whole disc and every blade's lift with it. Flap back
+comes from the rotor's own state, with nothing to declare: the disc tilts aft with speed and
+sideways with coning (a counter-clockwise rotor left, a clockwise one right), taking blade pitch
+as collective times 10 deg for every rotor. Each blade's own inflow, read along its lift in the
+tilted, coned disc, changes its lift - the forward blade lifts more than the aft - and the pilot
+holds forward cyclic against it. A tandem's `lctSchedule[]` is longitudinal cyclic on that disc,
+deg, - forward, + aft; the masts stay where `rotation[]` puts them.
 
 Outside REALISTIC Core sets every tail rotor upright - pitch 0, roll 90 - so a canted tail rotor
 yaws without pitching or rolling the aircraft. Nothing to declare.
@@ -665,8 +730,7 @@ out of ground effect:
 
 Every aerodynamic value that sets these trims is solved for them together - the rotor tables,
 the front fuselage drag and the stabilator schedule - not one at a time. Values Core takes as a
-convention stay as Core has them: `flapBackPitchMax` and the other flap values keep their sign
-and are not fitting variables.
+convention stay as Core has them: the flap values keep their sign and are not fitting variables.
 
 **2. Mass and centre of mass.** Load the aircraft to the target weight from its own
 `helisim_mass.hpp`, the way `fn_massUpdate` does:
@@ -914,6 +978,13 @@ a hover) - prints `FAILED:` at once with what it got. The run ends with either `
 of every problem and exit code 1; do not paste tables from a run that ends in problems. Every
 loop is bounded, so it cannot sit there indefinitely.
 
+A column that falls short of its torque at the stall edge has its drag raised, with every column
+above it, by its shortfall and the top margin, then solved again (at most 4 times). A column
+proven out of reach is not solved again until its drag changes. With `--cruise-pitch`, if the
+cruise column itself cannot reach its torque the run stops there and says the attitude is out of
+reach. "At the stall edge" means the trim stopped converging - check the collective before
+reading it as blade stall.
+
 A plain fit takes under a minute (the AH-64D's, 58 s, including one raise of `top`).
 `--hover-coll` reruns the hover column for each peak it tries, and `--cruise-pitch` reruns the
 whole column solve for each drag it tries - starting from the pack's own drag and stepping 10%
@@ -1013,7 +1084,7 @@ Each mix adds control travel to one rotor axis from one control's position:
 class ControlMixing {
     class YawToPitch {
         source  = "pedal";       //"collective" (0..1) or "pedal" (-1..1, + right)
-        target  = "pitch";       //"pitch" (+ fwd), "roll" (+ left) or "yaw" (+ right pedal)
+        target  = "pitch";       //"pitch" (+ fwd), "roll" (+ left), "yaw" (+ right pedal) or "collective" (+ up)
         table[] = {              //{source position, added travel}
             {-1.0, -0.060},
             { 1.0,  0.060}
@@ -1096,6 +1167,17 @@ the empty CG's model y. The same applies to every `EmptyMassVariants` `mass` and
 **5. Item arms.** Seats, tanks, wing stations, magazines and equipment are model
 positions `{x, y, z}`. Read them in Object Builder, or convert a manual station
 with step 2 for y.
+
+When the aircraft's config or model cannot be read on disk, measure it in game.
+Sit in it, paste into the debug console and LOCAL EXEC:
+
+- `tools/seats.sqf` - every seat's arm (at the occupant's pelvis) and every pylon's,
+  in the model frame. It fills empty seats with temporary soldiers, so close the
+  pause menu after running it.
+- `tools/dump.sqf` - every variant of your pack's base class: turrets, weapons,
+  magazines, pylons and animation sources (for `Equipment`).
+
+Both write to the RPT and the clipboard.
 
 **Fitted equipment.** Parts the aircraft fits and removes by showing and hiding
 them - a probe, a hoist, pylon wings, doors, seats - are declared in
@@ -1357,7 +1439,7 @@ Core raises events to the handler your pack registers for its base class, in
 it; another pack's aircraft never reach it.
 
 **Core drives two sound controllers** for the translational lift, high speed and VRS
-effects: `CustomSoundController64` (intensity) and `CustomSoundController63` (blend, 0
+effects: `CustomSoundController32` (intensity) and `CustomSoundController31` (blend, 0
 outside every band). Use them in your sound config for those effects; leave them free
 for anything else.
 
@@ -1528,7 +1610,7 @@ machines, and what it means. Inputs are the config field references
 | `bmkhs_engClutch` | array of booleans, per engine | local | True while the freewheel is engaged and the turbine is driving the rotor (set in `engine/turboShaftEngine/fn_turboShaftEngine.sqf`). |
 | `bmkhs_isSingleEng` | boolean | local | True when any engine's torque is below 51% of the highest. Switches the TGT limiter to `maxTgtSe` and the TGT book limits to `tgtLimitsSe` (set in `engine/fn_engineGovernor.sqf`). |
 | `bmkhs_engFuelAvail` | array of booleans, per engine | net on change | Engine has fuel. False once its selected tank (via crossfeed) has been empty for 2 s, or the engine's fire handle (`eng<N>FireHandle`) is armed with DC on. Always true if the aircraft has no fuel tanks. False forces the engine OFF (set in `engine/fn_engineFuelAvail.sqf`). |
-| `bmkhs_engineOverspeed` | array of booleans, per engine | net on change | Latched. Set when Ng >= `maxNg` (fly-weight trip) or Np >= `maxNp` (electrical trip). Cuts fuel and locks out the starter. Cleared only by repair (set in `engine/turboShaftEngine/fn_turboShaftEngine.sqf`). |
+| `bmkhs_engineOverspeed` | array of booleans, per engine | net on change | Latched. Set when Ng >= `ngOvrspdProt` (fly-weight trip - `maxNg` unless declared, none when 0) or Np >= `npOvrspdProt` (electrical trip - the older `maxNp` when not declared, none when 0). Cuts fuel and locks out the starter. Cleared only by repair (set in `engine/turboShaftEngine/fn_turboShaftEngine.sqf`). |
 | `bmkhs_engChips` | array of booleans, per engine | net on change | Latched chip detector. useSystems = 1: engine hitpoint damage >= 0.50. useSystems = 0: a random engine at shared damage >= 0.25 (50% chance, else oil failure), and any healthy engine at >= 0.75. Cleared by repair (set in `engine/fn_engineDamage.sqf`). |
 | `bmkhs_engFailed` | array of booleans, per engine | net on change | Latched engine failure. useSystems = 1: engine hitpoint damage reaches 1.0. useSystems = 0: one engine at shared damage >= 0.50, all at 1.0. Forces the engine OFF and blocks restarts. Cleared by repair (set in `engine/fn_engineDamage.sqf`). |
 | `bmkhs_lowOilPsiFailure` | array of booleans, per engine | net on change | Latched oil system failure. useSystems = 1: oil health reaches 0 while the engine is STARTING/ON. useSystems = 0: the oil branch of the random fault. Cleared by repair (set in `engine/fn_engineDamage.sqf`). |
@@ -1556,6 +1638,7 @@ machines, and what it means. Inputs are the config field references
 | `bmkhs_numSimpleRotors` | number | local | Rotor count, from config `numSimpleRotors` (set in `simpleRotor/fn_simpleRotorVariables.sqf`). |
 | `bmkhs_simpleRotors` | array of hashmaps, per rotor | local | Each simple rotor's config, keyed by config property name (`type`, `dir`, `gearRatio`, `numBlades`, `bladeRadius`, ...). `gearRatio` converts `bmkhs_xmsnOutputRpm` to rotor rpm (set in `simpleRotor/fn_simpleRotorVariables.sqf`). |
 | `bmkhs_nrLimits` | array of 4 numbers, fraction | local | From config `nrLimits[]`: {normal low, normal high, high rotor, maximum} (e.g. {0.96, 1.05, 1.06, 1.10}). Core only stores it (set in `simpleRotor/fn_simpleRotorVariables.sqf`). |
+| `bmkhs_drivetrainDrag` | number, fraction | local | From config `drivetrainDrag` (aircraft level, beside `nrLimits[]`; 0 when not declared): constant drivetrain drag torque - gearboxes, shafting, accessories - as a fraction of each engine's 100% torque. Added to the rotor load in `transmission/fn_transmissionUpdate.sqf`; it only resists, so a stopped drivetrain stays stopped. |
 | `bmkhs_reqEngTorque` | array of numbers, per rotor, Nm at the engine shaft | 10 Hz | Rotor torque demand referred to the engine shaft, filtered. Sum it for total load. Seeded as 2 slots (set in `simpleRotor/fn_simpleRotorTorque.sqf`, or `rotor/fn_rotor.sqf` with the BET model). |
 | `bmkhs_rtrThrust` | array of numbers, per rotor, N | net on change | Rotor thrust. Only written by the BET rotor model (`bmkhs_rotorModel` = 1). With the Simple model (default) it stays 0 (set in `rotor/fn_rotor.sqf`). |
 
@@ -1715,7 +1798,7 @@ Pressure (hPa) and density altitude are computed in `fn_environment.sqf` but not
 
 | Variable | Type / units | Net | Meaning |
 |---|---|---|---|
-| `bmkhs_gwt` | Number, kg | 10 Hz | Gross mass: empty mass (or matching `EmptyMassVariants` entry), occupied seats, fitted equipment, internal fuel, internal magazine rounds, and wing-station stores and external fuel. Written only by the owner. When the CBA test-GWT option is on, replaced by that weight clamped between empty and `maxGrossMass`. All contributors come from config. (set in `mass/fn_massUpdate.sqf`) |
+| `bmkhs_gwt` | Number, kg | 10 Hz | Gross mass: empty mass (or matching `EmptyMassVariants` entry), occupied seats, fitted equipment, internal fuel, internal magazine rounds (every turret's, the driver's included), and wing-station stores and external fuel. Written only by the owner. When the CBA test-GWT option is on, replaced by that weight clamped between empty and `maxGrossMass`. All contributors come from config. (set in `mass/fn_massUpdate.sqf`) |
 | `bmkhs_cg` | Number, metres, longitudinal only | 10 Hz | Longitudinal CG: total forward moment / mass, in the same frame as the config arms (H-60 config: arm = {right, forward, up} m; larger = further forward). Compare directly with `bmkhs_fwdCgLimit` / `bmkhs_aftCgLimit`. Not a fuselage station; convert with `bmkhs_fsDatum` if needed. In test-GWT mode it is real moments divided by the test mass. Lateral CG is not published. (set in `mass/fn_massUpdate.sqf`) |
 | `bmkhs_fwdCgLimit` | Number, metres, same frame as `bmkhs_cg` | local (owner only) | Forward CG limit, read from config `fwdCgLimit`. Static. (set in `mass/fn_massVariables.sqf`) |
 | `bmkhs_aftCgLimit` | Number, metres, same frame as `bmkhs_cg` | local (owner only) | Aft CG limit, read from config `aftCgLimit`. Static. (set in `mass/fn_massVariables.sqf`) |
@@ -1744,24 +1827,30 @@ Fuselage and airfoil folders publish no designer-facing values.
 | `bmkhs_fdTgt_<target>` | Number, m / m/s / deg | net on change | Flight director target, clamped or wrapped and snapped to its declared step. (set in `fmc/fn_fmcFdTarget.sqf`) |
 | `bmkhs_fdWptBearing`, `bmkhs_fdWptDistance` | Number, deg / m, -1 with no waypoint | net on change | To `bmkhs_fdWaypoint`. NAV flies the bearing. (set in `fmc/fn_fmcFlightDirector.sqf`) |
 | `bmkhs_fdWaypoint` | Array posASL, or [] | input | The aircraft's active waypoint. The aircraft writes it; seeded [] locally if unset. |
-| `bmkhs_fmcTrimOn` | Bool, default true | net | Trim channel flag. Core stores it but never reads it, so it changes nothing in Core. A pack can use it as a switch state. (set in `fmc/fn_fmcVariables.sqf`, `fmc/fn_fmcSetChannel.sqf`) |
-| `bmkhs_forceTrimInterupted` | Bool | net | True while the force-trim (trim release) button is held. While true, attitude hold does nothing and heading hold drops out. On release it goes false and new hold references are captured. Note the spelling ("Interupted"). (set in `fmc/fn_fmcForceTrimHold.sqf`, `fmc/fn_fmcForceTrimRelease.sqf`) |
+| `bmkhs_fmcTrimOn` | Bool, default true | net | The force trim switch. Off, the trim positions are held at 0, the force trim button does nothing and beep does nothing. Back on, the trim is set to where the controls are. (set in `fmc/fn_fmcVariables.sqf`, `fmc/fn_fmcSetChannel.sqf`, read in `trim/fn_trimUpdate.sqf`) |
+| `bmkhs_trimOn` | Bool | local | Force trim is working: `bmkhs_fmcTrimOn`. (set in `trim/fn_trimUpdate.sqf`) |
+| `bmkhs_trimBeepDelta` | Array [pitch, roll], trim fraction | local | The beep's stick travel this frame, 0 when not beeping. An attitude hold with `trimGain[]` moves its reference by it. (set in `trim/fn_trimUpdate.sqf`, read in `fmc/fn_fmcAttitudeHold.sqf`) |
+| `bmkhs_trimBeepFd` | Array [pitch, roll], trim fraction | local | The beep's travel this frame for a press made on a flight director axis - it moves that director's target, not the stick. (set in `trim/fn_trimUpdate.sqf`, read in `fmc/fn_fmcFlightDirector.sqf`) |
+| `bmkhs_forceTrimInterupted` | Bool | net | True while the force-trim (trim release) button is held. While true, attitude hold does nothing and heading hold drops out. On release it goes false and new hold references are captured. Note the spelling ("Interupted"). (set in `trim/fn_trimForceHold.sqf`, `trim/fn_trimForceRelease.sqf`) |
 | `bmkhs_attHoldActive` | Bool | net | Attitude/position/velocity hold engaged. Toggled by the `bmkhs_holdModeAttitude` key. Cleared by `bmkhs_holdModesOff`. This is the mode state only. It stays true even when the pitch/roll channel is off or the hold's `gate[]` is shut, and both of those zero the output. (set in `fmc/fn_fmcAttitudeHoldEnable.sqf`, `fmc/fn_fmcHoldModesDisable.sqf`) |
-| `bmkhs_attHoldSubMode` | String `"pos"` / `"vel"` / `"att"` | net | Which attitude hold law applies. Chosen every frame from ground speed, even when the hold is off: `pos` at `posBelowKts` GS or less; `vel` up to `velBelowKts` accelerating, `att` above it until back below `attBelowKts` decelerating (`class FMC >> AttitudeHold`). (set in `fmc/fn_fmcAttitudeHold.sqf`, `fmc/fn_fmcAttitudeHoldEnable.sqf`) |
-| `bmkhs_attHoldDesiredPos` | Array `getPos` [x,y,z], m | net | Position hold reference. Captured on engage in `pos`, and again on force-trim release. (set in `fmc/fn_fmcAttitudeHoldEnable.sqf`, `fmc/fn_fmcForceTrimRelease.sqf`) |
-| `bmkhs_attHoldDesiredVel` | Array [x, y], m/s, body axes | net | Velocity hold reference. x is the NEGATED model-space lateral velocity, so + = left. y is forward velocity, + = forward. Reset to [0,0] by hold-modes-off. (set in `fmc/fn_fmcAttitudeHoldEnable.sqf`, `fmc/fn_fmcForceTrimRelease.sqf`, `fmc/fn_fmcHoldModesDisable.sqf`) |
-| `bmkhs_attHoldDesiredAtt` | Array [pitch, bank], deg | net | Attitude hold reference, as returned by `BIS_fnc_getPitchBank`. When turn coordination ends, heading hold sets bank to 0. (set in `fmc/fn_fmcAttitudeHoldEnable.sqf`, `fmc/fn_fmcForceTrimRelease.sqf`, `fmc/fn_fmcHeadingHold.sqf`, `fmc/fn_fmcHoldModesDisable.sqf`) |
+| `bmkhs_attHoldSubMode` | String `"pos"` / `"vel"` / `"att"` | net | Which attitude hold law applies. Chosen every frame from ground speed, even when the hold is off: `pos` at `posBelowKts` GS or less; `vel` up to `velBelowKts` accelerating, `att` above it until back below `attBelowKts` decelerating (`class FMC >> AttitudeHold`). Only sub-modes in `subModes[]`; where speed picks an undeclared one, the nearest declared applies. (set in `fmc/fn_fmcAttitudeHold.sqf`, `fmc/fn_fmcAttitudeHoldEnable.sqf`) |
+| `bmkhs_attHoldDesiredPos` | Array `getPos` [x,y,z], m | net | Position hold reference. Captured on engage in `pos`, and again on force-trim release. (set in `fmc/fn_fmcAttitudeHoldEnable.sqf`, `trim/fn_trimForceRelease.sqf`) |
+| `bmkhs_attHoldDesiredVel` | Array [x, y], m/s, body axes | net | Velocity hold reference. x is the NEGATED model-space lateral velocity, so + = left. y is forward velocity, + = forward. Reset to [0,0] by hold-modes-off. (set in `fmc/fn_fmcAttitudeHoldEnable.sqf`, `trim/fn_trimForceRelease.sqf`, `fmc/fn_fmcHoldModesDisable.sqf`) |
+| `bmkhs_attHoldDesiredAtt` | Array [pitch, bank], deg | net | Attitude hold reference, as returned by `BIS_fnc_getPitchBank`. When turn coordination ends, heading hold sets bank to 0. (set in `fmc/fn_fmcAttitudeHoldEnable.sqf`, `trim/fn_trimForceRelease.sqf`, `fmc/fn_fmcHeadingHold.sqf`, `fmc/fn_fmcHoldModesDisable.sqf`) |
 | `bmkhs_altHoldActive` | Bool | net | Altitude hold engaged. Toggled by the `bmkhs_holdModeAltitude` key, which only engages within `engageFpm` of level. It drops out on its own when collective moves more than `collBand` from `altHoldCollRef`, or when the highest engine torque (`bmkhs_engPctTq`) reaches `dropAboveTq` (`class FMC >> AltitudeHold`). (set in `fmc/fn_fmcAltitudeHold.sqf`, `fmc/fn_fmcAltitudeHoldEnable.sqf`, `fmc/fn_fmcHoldModesDisable.sqf`) |
 | `bmkhs_altHoldSubMode` | String `"rad"` / `"bar"` | net | Radar or barometric altitude hold. While engaged it is `rad` below `radBelowFt` AGL and under `radBelowKts` GS, and `bar` otherwise. It is only re-evaluated while the hold is engaged. (set in `fmc/fn_fmcAltitudeHold.sqf`, `fmc/fn_fmcAltitudeHoldEnable.sqf`) |
 | `bmkhs_altHoldDesiredAlt` | Number, m (AGL in `rad`, ASL in `bar`) | net | Altitude hold reference, rounded to the metre on engage. It is 0 when the hold is off. Engage chooses AGL or ASL once. The sub-mode can switch later without the reference being re-captured. (set in `fmc/fn_fmcAltitudeHoldEnable.sqf`, `fmc/fn_fmcHoldModesDisable.sqf`) |
 | `bmkhs_altHoldCollRef` | Number 0..1 (collective) | net | Collective position captured when altitude hold engaged. Used for the `collBand` disengage band. (set in `fmc/fn_fmcAltitudeHoldEnable.sqf`) |
+| `bmkhs_hydBoost`, `bmkhs_hydBoostGate` | Bool, array | local | `class HydraulicBoost` declared in the flight controls config, and its `gate[]`. For aircraft without an FMC: while boost is on (`bmkhs_hydBoostOn`) and the gate holds, every axis skips the `inputLagValue` lag, as SAS does. (set in `actuator/fn_actuatorVariables.sqf`, read in `actuator/fn_actuator.sqf`) |
+| `bmkhs_hydBoostOn` | Bool, default true | net | The hydraulic boost switch. Off, a boosted aircraft's controls take the `inputLagValue` lag. |
 | `bmkhs_hdgHoldActive` | Bool | net | Heading hold engaged. There is no button for it. It is true whenever the aircraft is off the ground, force trim is not held, and pedal input is inside the breakout (`class FMC >> HeadingHold >> breakout[]`, by the attitude hold sub-mode, `pos` / `vel` / `att`). The heading is re-captured each time it re-engages. (set in `fmc/fn_fmcHeadingHold.sqf`) |
 | `bmkhs_hdgHoldSubMode` | String `"hdg"` / `"trn"` / `"yaw"` / `"aut"` | net | Heading hold law, only updated while engaged. `hdg` = hold heading, below `hdgBelowKts` GS. `trn` = turn coordination: attitude hold on and bank over 7° (drops at under 3°). `yaw` = ball-centring yaw damping. `aut` = the auto-pedal assist owns the yaw axis. (set in `fmc/fn_fmcHeadingHold.sqf`) |
-| `bmkhs_hdgHoldDesiredHdg` | Number, deg 0..360 (`getDir`) | net | Heading hold reference. Captured when the hold engages, when it re-enters `hdg`, and on force-trim release. (set in `fmc/fn_fmcHeadingHold.sqf`, `fmc/fn_fmcForceTrimRelease.sqf`) |
-| `bmkhs_hdgHoldDesiredSideslip` | Number, lateral g | net | Sideslip (ball) reference. Core always sets it to 0. (set in `fmc/fn_fmcForceTrimRelease.sqf`) |
+| `bmkhs_hdgHoldDesiredHdg` | Number, deg 0..360 (`getDir`) | net | Heading hold reference. Captured when the hold engages, when it re-enters `hdg`, and on force-trim release. (set in `fmc/fn_fmcHeadingHold.sqf`, `trim/fn_trimForceRelease.sqf`) |
+| `bmkhs_hdgHoldDesiredSideslip` | Number, lateral g | net | Sideslip (ball) reference. Core always sets it to 0. (set in `trim/fn_trimForceRelease.sqf`) |
 | `bmkhs_mixPitchOut` | Number, cyclic fraction, + = forward | local (owner only) | Sum of the aircraft's `ControlMixing` mixes targeting pitch, added to the cyclic pitch at the rotor. 0 with no mixes, while a mix's gate is shut, or outside REALISTIC. (set in `fmc/fn_fmc.sqf`, from `fmc/fn_fmcControlMixing.sqf`) |
 | `bmkhs_mixRollOut` | Number, cyclic fraction, + = left | local (owner only) | As above, for roll. |
 | `bmkhs_mixYawOut` | Number, pedal fraction, + = right | local (owner only) | As above, for the pedals. |
+| `bmkhs_mixCollOut` | Number, collective fraction, + = up | local (owner only) | As above, for the collective - added to the collective the rotor gets. |
 | `bmkhs_fmcSasPitchOut` | Number, ±0.2 cyclic fraction | local (owner only) | Pitch SAS rate-damping command added to the cyclic pitch. Same sign as `cyclicFwdAft`. Zero if the channel is off or the SAS `gate[]` is shut. (set in `fmc/fn_fmc.sqf`) |
 | `bmkhs_fmcSasRollOut` | Number, ±0.1 cyclic fraction | local (owner only) | Roll SAS command added to the cyclic roll. Same sign as `cyclicLeftRight`. (set in `fmc/fn_fmc.sqf`) |
 | `bmkhs_fmcSasYawOut` | Number, ±0.1 pedal fraction | local (owner only) | Yaw SAS command added to the pedals. Same sign as `pedalLeftRight`. (set in `fmc/fn_fmc.sqf`) |
@@ -1778,9 +1867,9 @@ Fuselage and airfoil folders publish no designer-facing values.
 | `bmkhs_cyclicLeftRight` | Number -1..1, + = LEFT | local (pilot's machine) | Pilot cyclic roll, worked out the same way as pitch. Calculated as left minus right. (set in `input/fn_inputUpdate.sqf`) |
 | `bmkhs_pedalLeftRight` | Number -1..1, + = right pedal | local (pilot's machine) | Pilot pedal after actuator lag. It holds its last value when the tail rotor is unpowered or undriven (`bmkhs_tailRtrSupplied` / `bmkhs_tailRtrDriven` false). It is 0 when flight-control hydraulics are lost. (set in `input/fn_inputUpdate.sqf`) |
 | `bmkhs_collectiveOutput` | Number 0..1, 0 = full down | local (pilot's machine) | Pilot collective position after actuator lag. It holds its last value while flight-control hydraulics are lost, unless emergency hydraulics are on, and while the game is not focused or a dialog is open. (set in `input/fn_inputUpdate.sqf`) |
-| `bmkhs_forceTrimPosPitch` | Number -1..1, + = forward | 10 Hz | Cyclic pitch trim position: where the stick rests. Set on force-trim release. Zeroed by force-trim reset. The auto attitude assist writes it every frame. In springless/sticky-keyboard mode it is held at 0. (set in `fmc/fn_fmcForceTrimSet.sqf`, `fmc/fn_fmcForceTrimReset.sqf`, `input/fn_inputAutoAttitude.sqf`) |
-| `bmkhs_forceTrimPosRoll` | Number -1..1, + = left | 10 Hz | Cyclic roll trim position. Same rules as pitch. (set in `fmc/fn_fmcForceTrimSet.sqf`, `fmc/fn_fmcForceTrimReset.sqf`) |
-| `bmkhs_forceTrimPosYaw` | Number -1..1, + = right | 10 Hz | Pedal trim position. When auto pedal is on, auto pedal writes it every frame. (set in `fmc/fn_fmcForceTrimSet.sqf`, `fmc/fn_fmcForceTrimReset.sqf`, `input/fn_inputAutoPedal.sqf`) |
+| `bmkhs_forceTrimPosPitch` | Number -1..1, + = forward | 10 Hz | Cyclic pitch trim position: where the stick rests. Set on force-trim release, moved by beep trim while held. Zeroed by force-trim reset and held at 0 while force trim is off. The auto attitude assist writes it every frame. In springless/sticky-keyboard mode it is held at 0. (set in `trim/fn_trimForceSet.sqf`, `trim/fn_trimForceReset.sqf`, `input/fn_inputAutoAttitude.sqf`) |
+| `bmkhs_forceTrimPosRoll` | Number -1..1, + = left | 10 Hz | Cyclic roll trim position. Same rules as pitch. (set in `trim/fn_trimForceSet.sqf`, `trim/fn_trimForceReset.sqf`) |
+| `bmkhs_forceTrimPosYaw` | Number -1..1, + = right | 10 Hz | Pedal trim position. When auto pedal is on, auto pedal writes it every frame. (set in `trim/fn_trimForceSet.sqf`, `trim/fn_trimForceReset.sqf`, `input/fn_inputAutoPedal.sqf`) |
 | `bmkhs_autoAttCycRollOut` | Number, ±0.8 cyclic fraction | net | Roll command from the casual-mode auto attitude assist, added to cyclic roll at the rotor. It is 0 unless the auto-roll setting is on and realism is not REALISTIC. (set in `input/fn_inputAutoAttitude.sqf`) |
 | `bmkhs_flightControlLockOut` | Bool | local (pilot's machine) | Only used with the center-trim mode settings. It is true after a force-trim release while the controls are off centre, and pilot cyclic/pedal input is ignored until they come back within ±0.05. A pack could show a "centre controls" cue from it. (set in `input/fn_inputCenterTrimMode.sqf`, `input/fn_inputUpdate.sqf`) |
 
@@ -1788,7 +1877,7 @@ The control position the rotor actually usesis not stored anywhere. `rotor/fn_ro
   - pitch = `inputGetInterp(cyclicFwdAft, forceTrimPosPitch) + fmcSasPitchOut + fmcAttHoldCycPitchOut + mixPitchOut`, clamped to -1..1
   - roll = `inputGetInterp(cyclicLeftRight, forceTrimPosRoll) + fmcSasRollOut + fmcAttHoldCycRollOut + autoAttCycRollOut + mixRollOut`, clamped to -1..1
   - yaw = `inputGetInterp(pedalLeftRight, forceTrimPosYaw) + fmcSasYawOut + fmcHdgHoldPedalYawOut + mixYawOut`, clamped to -1..1
-  - collective = `collectiveOutput + fmcAltHoldCollOut`
+  - collective = `collectiveOutput + fmcAltHoldCollOut + mixCollOut`
   
   `inputGetInterp(stick, trim)` = `trim + (±1 - trim) * |stick|`. With the stick centred, the result is the trim position. To drive a control position indicator, a pack has to repeat this sum, and it can only do so on the owner/pilot machine. `ctrlVis/fn_ctrlVisUpdate.sqf` is a working example of reading these values.
 
@@ -1807,10 +1896,10 @@ Registered in `event/fn_eventPreInit.sqf`. These are missionNamespace globals, n
 |---|---|---|---|
 | `bmkhs_helisimRealismSetting` | Number, 0 = CASUAL, 2 = REALISTIC | CBA setting | Realism level. |
 | `bmkhs_helisimEnvironment` | Number 0..6 (ISA_STD, EUROPE_SUMMER, EUROPE_WINTER, MIDDLE_EAST, CENTRAL_ASIA_SUMMER, CENTRAL_ASIA_WINTER, ASIA) | CBA setting | Environment preset. |
-| `bmkhs_rotorModel` | Number, 0 = Simple, 1 = BET | CBA setting | Rotor model. |
+| `bmkhs_rotorModel` | Number, 0 = Simple, 1 = BET | CBA setting | Rotor model. BET is listed as INOP; Simple is the default and the one the packs are fitted to. |
 | `bmkhs_vrsWarning` | Bool | CBA setting | VRS warning on. |
 | `bmkhs_sysDebug` / `bmkhs_fmDebug` / `bmkhs_engDisplay` / `bmkhs_forcesDebug` | Bool | CBA setting | Debug displays on. |
-| `bmkhs_flightLog` | Bool | CBA setting | Writes the flight to the RPT at 10 Hz - `BMKHSLOG` lines under a `BMKHSLOG_HDR` header naming the columns (`debug/fn_debugFlightLog.sqf`). `python/dev/flightlog.py` reads them back. |
+| `bmkhs_flightLog` | Bool | CBA setting | Writes the flight to the RPT at 10 Hz - `BMKHSLOG` lines under a `BMKHSLOG_HDR` header naming the columns (`debug/fn_debugFlightLog.sqf`). `python/dev/flightlog.py` reads them back. `forces` carries every force generator's force and moment that frame - `name:Fx|Fy|Fz|Mx|My|Mz`, model space, N and Nm about the CoM, `;` between generators (rotors by index: `main0`, `tail1`) - and `stabDeg` the stabilator angle; with these the rig is compared against the game force by force. |
 | `bmkhs_cyclicCenterTrimMode`, `bmkhs_pedalCenterTrimMode`, `bmkhs_springlessCyclic`, `bmkhs_springlessPedals`, `bmkhs_keyboardStickyPitch/Roll/Yaw`, `bmkhs_autoPedal`, `bmkhs_autoPitch`, `bmkhs_autoRoll`, `bmkhs_mouseAsJoystick` | Bool | CBA setting | Input options. |
 | `bmkhs_mouseSense` | Number 0.1..1.0 | CBA setting | Mouse sensitivity. |
 | `bmkhs_testGwtEnabled` / `bmkhs_testGwtLbs` | Bool / String (lb) | CBA setting | Fixed test gross weight. |
@@ -1981,10 +2070,10 @@ Working state, solver bookkeeping, filters and debug. These change without notic
 - `bmkhs_autoAttLevelPitch`, `bmkhs_autoAttRollLimit`: config copy for assist.
 - `bmkhs_autoAttRollTarget`: assist roll setpoint, deg.
 - `bmkhs_autoPedalHdg`: auto-pedal heading setpoint (networked).
-- `bmkhs_autoPedalRegime`, `bmkhs_autoPedalRegimeWgt`: auto-pedal regime, weight always 1.
-- `bmkhs_autoPedalHdgErr`, `bmkhs_autoPedalNttErr`, `bmkhs_autoPedalAeroErr`: auto-pedal loop errors.
-- `bmkhs_autoPedalOut`: auto-pedal output; see forceTrimPosYaw.
-- `bmkhs_kbPedalLeftRight`: auto-pedal keyboard lerp state.
+- `bmkhs_autoPedalRegime`: auto-pedal regime, hdg / ntt / aero.
+- `bmkhs_autoPedalPos`, `bmkhs_autoPedalVel`: the auto-pedal foot, position and speed; it writes forceTrimPosYaw.
+- `bmkhs_autoPedalTrim`, `bmkhs_autoPedalHdgSet`: pedal before the pilot's turn; hover heading captured.
+- `bmkhs_autoPedalRawPrev`, `bmkhs_autoPedalSprung`: pilot's raw pedal last frame; analog spring-back seen as a release.
 - `bmkhs_cyclicPitchValue`, `bmkhs_cyclicRollValue`, `bmkhs_pedalYawValue`: sticky-keyboard accumulators.
 - `bmkhs_prevCyclicPitchValue`, `bmkhs_prevCyclicRollValue`, `bmkhs_prevPedalYawValue`: sticky-keyboard shadow values.
 - `bmkhs_kbStickyInterupt`: sticky interrupt key held.

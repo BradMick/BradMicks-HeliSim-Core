@@ -120,10 +120,10 @@ private _fuelNames = _fuelTanks apply {_x get "varName"};
 
     private _feedsIdx = _fuelNames find ("bmkhs_" + _feedsName);
     if (_feedsIdx < 0) then {
-        diag_log text format [
+        (format [
             "[BMKHS] FUEL CONFIG ERROR: AuxTank%1 feedsTank '%2' matches no fuel tank variableName. This tank will not transfer.",
             _forEachIndex + 1, _feedsName
-        ];
+        ]) call bmkhs_fnc_utilConfigError;
     };
     _tank set ["feedsIdx", _feedsIdx];
 
@@ -132,10 +132,10 @@ private _fuelNames = _fuelTanks apply {_x get "varName"};
     if (_requiresName != "") then {
         _requiresIdx = _auxNames find ("bmkhs_" + _requiresName);
         if (_requiresIdx < 0) then {
-            diag_log text format [
+            (format [
                 "[BMKHS] FUEL CONFIG ERROR: AuxTank%1 requires '%2' matches no aux tank variableName. Treating it as having no prerequisite.",
                 _forEachIndex + 1, _requiresName
-            ];
+            ]) call bmkhs_fnc_utilConfigError;
         };
     };
     _tank set ["requires", _requiresIdx];
@@ -167,10 +167,10 @@ private _flowVar  = {
         private _dstName = getText (_x >> "tank");
         private _dstIdx  = _fuelNames find ("bmkhs_" + _dstName);
         if (_dstIdx < 0) then {
-            diag_log text format [
+            (format [
                 "[BMKHS] FUEL CONFIG ERROR: %1 output '%2' names tank '%3', which matches no fuel tank variableName. This output will not transfer.",
                 _tank get "varName", configName _x, _dstName
-            ];
+            ]) call bmkhs_fnc_utilConfigError;
         } else {
             _outputs pushBack [_dstIdx, [getText (_x >> "flowingVar")] call _flowVar];
         };
@@ -200,10 +200,10 @@ private _tankRef = {
     if ((toLower _name) in ["off", ""]) exitWith {""};
     private _var = "bmkhs_" + _name;
     if !(_var in _fuelNames) exitWith {
-        diag_log text format [
+        (format [
             "[BMKHS] FUEL CONFIG ERROR: %1 names tank '%2', which matches no fuel tank variableName. It will have no fuel.",
             _who, _name
-        ];
+        ]) call bmkhs_fnc_utilConfigError;
         ""
     };
     _var

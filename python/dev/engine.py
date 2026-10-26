@@ -41,6 +41,8 @@ GT_TGT_LIMIT_BAND = 40.0
 GT_NG_LIMIT_BAND = 0.030
 GT_LIMIT_GAIN = 16.0
 GT_LIMIT_TRACK = 1.02
+GT_NG_LEAD = 0.4       # s - the Ng limiter acts on Ng this far ahead at its present rate (engine.hpp)
+GT_NG_RATE_TAU = 0.1   # s - filter on that rate
 GT_GAMMA_COLD = 1.40
 GT_CP_COLD = 1.005
 GT_GAMMA_HOT = 1.33
@@ -52,9 +54,18 @@ GT_TGT_HEAT_RATE = 0.30
 GT_TGT_COOL_RATE = 0.70
 GT_TGT_STILL_AIR = 0.0012
 GT_TGT_RAM_AIR = 0.00065
+GT_PT_STALL_TQ = 2.5
 GT_SPOOL_UNIT_LOAD = 2.91244
 #rotor.hpp
-MAIN, TAIL = 0, 1
+MAIN, TAIL, PROPELLER, PROPROTOR = 0, 1, 2, 3
+
+
+def rotor_type(name):
+    """fn_simpleRotorVariables - the type by name, main when not one of them."""
+    names = ['main', 'tail', 'propeller', 'proprotor']
+    return names.index(name.lower()) if name.lower() in names else MAIN
+
+
 CCW, CW = 0, 1
 
 
@@ -195,7 +206,7 @@ def pid_reset(pid):
 # Init - fn_environmentVariables, fn_engineVariables, fn_simpleRotorVariables
 # ---------------------------------------------------------------------------------------------
 
-NUM_FIELDS = ['designRpm', 'npFly', 'maxFuelFlow', 'powerKw', 'maxNg', 'maxNp']
+NUM_FIELDS = ['designRpm', 'npFly', 'maxFuelFlow', 'powerKw', 'maxNg']
 SECTION_FIELDS = [
     ('Compressor', ['pressureRatio', 'massFlow', 'inletDiameter', 'ramRecovery', 'compDrag', 'compDragFloor',
                     'lightOffNg', 'selfSustNg', 'idleNg', 'ngLimitMax', 'ngLimitBase', 'ngLimitSlope']),
@@ -255,6 +266,9 @@ def engine_variables(H, cfg, overrides=None):
         eng['starterGates'] = e['Starter']['gate']
         eng['governorGates'] = e['Governor']['gate']
         eng['refTq'] = (eng['powerKw'] * 1000) / (eng['designRpm'] * eng['npFly'] * 0.10472)
+        eng['ngOvrspdProt'] = e.get('ngOvrspdProt', eng['maxNg'])
+        eng['maxNp'] = e.get('maxNp', 0.0)
+        eng['npOvrspdProt'] = e.get('npOvrspdProt', eng['maxNp'])
         eng['compressorMap'] = e['Compressor'].get('compressorMap') or COMPRESSOR_MAP
         eng['airflowTable'] = e['Compressor']['airflowTable']
         eng.update(overrides or {})
@@ -282,6 +296,8 @@ def engine_variables(H, cfg, overrides=None):
     H['bmkhs_engTgt'] = [H['bmkhs_fat'], H['bmkhs_fat']]
     H['bmkhs_engResidualHeat'] = [1.0, 1.0]
     H['bmkhs_engNpRef'] = [-1.0, -1.0]
+    H['bmkhs_engNgPrev'] = [0.0, 0.0]
+    H['bmkhs_engNgRate'] = [0.0, 0.0]
     H['bmkhs_engPrevLever'] = ['OFF', 'OFF']
 
 
@@ -290,13 +306,14 @@ def simple_rotor_variables(H, cfg):
     for i in range(1, int(cfg['numSimpleRotors']) + 1):
         r = cfg['SimpleRotors']['SimpleRotor%02d' % i]
         rot = {k: r[k] for k in ROTOR_NUM_FIELDS}
-        rot['type'] = TAIL if r['type'].lower() == 'tail' else MAIN
+        rot['type'] = rotor_type(r['type'])
         rot['dir'] = CW if r['direction'].lower() == 'cw' else CCW
         rot['dragCoefTable'] = math_build_interp_grid(r['dragCoefTable'])
         rot['liftCoefTable'] = math_build_interp_grid(r['liftCoefTable'])
         rot['controlMap'] = r.get('controlMap', [])
         rotors.append(rot)
     H['bmkhs_simpleRotors'] = rotors
+    H['bmkhs_drivetrainDrag'] = float(CFG.get('drivetrainDrag', 0.0))
     H['bmkhs_reqEngTorque'] = [0.0, 0.0]
     H['bmkhs_rtrMoi'] = [0.0, 0.0]
 
@@ -331,6 +348,11 @@ def environment(H):
 def engine_governor(H, i, eng, ng, np_, tgt, lever, fat, dt):
     idleNg = eng['idleNg']
 
+    #Ng's rate of change, filtered - what the Ng limiter anticipates with.
+    raw = (ng - H['bmkhs_engNgPrev'][i]) / dt if dt > 0 else 0.0
+    H['bmkhs_engNgRate'][i] += (raw - H['bmkhs_engNgRate'][i]) * (1.0 - math.exp(-dt / GT_NG_RATE_TAU))
+    H['bmkhs_engNgPrev'][i] = ng
+
     tqs = H['bmkhs_engPctTq']
     H['bmkhs_isSingleEng'] = any(t < max(tqs) * GT_SINGLE_ENG_TQ_RATIO for t in tqs)
     target = {'FLY': eng['fuelFly'], 'IDLE': eng['fuelIdle']}.get(lever, 0.0)
@@ -359,7 +381,8 @@ def engine_governor(H, i, eng, ng, np_, tgt, lever, fat, dt):
         govFuel = pid_run(pid, dt, npTarget, np_) + coll * eng['ffwdGain']
         tgtLim = eng['maxTgtSe'] if H['bmkhs_isSingleEng'] else eng['maxTgt']
         ngLim = min(eng['ngLimitMax'], eng['ngLimitBase'] + eng['ngLimitSlope'] * fat)
-        err = min((tgtLim - tgt) / GT_TGT_LIMIT_BAND, (ngLim - ng) / GT_NG_LIMIT_BAND)
+        ngAhead = ng + H['bmkhs_engNgRate'][i] * GT_NG_LEAD
+        err = min((tgtLim - tgt) / GT_TGT_LIMIT_BAND, (ngLim - ngAhead) / GT_NG_LIMIT_BAND)
         lim = H['bmkhs_engLimFuel'][i] + GT_LIMIT_GAIN * err * dt
         lim = min(lim, min(sched, max(govFuel, 0.0)) * GT_LIMIT_TRACK)
         lim = min(max(lim, eng['fuelIdle']), eng['fuelFly'])
@@ -458,7 +481,7 @@ def gas_turbine_compressor_turbine(eng, ng, tgt, t4, p3, mDot, compPower, ctExpa
     t45 = t4 - ctPower / (m * GT_CP_HOT)
     drag = (eng['compDrag'] * ng * ng + eng['compDragFloor']) if spooling else 0.0
     ngDot = ((ctPower - compPower) / eng['spoolUnitKw'] + starterTq - drag) / eng['spoolInertia']
-    ngNew = clamp(ng + ngDot * dt, 0.0, 1.1)
+    ngNew = clamp(ng + ngDot * dt, 0.0, eng['maxNg'])
     currentHeat = 1.0 + (residualHeat - 1.0) * max(1.0 - ngNew / eng['idleNg'], 0.0)
     tgtHot = fat + currentHeat * (t45 - DEG_C_TO_KELVIN - fat) if running else fat
     coolRate = GT_TGT_COOL_RATE * (ngNew + GT_TGT_STILL_AIR + max(velY, 0.0) * GT_TGT_RAM_AIR)
@@ -473,7 +496,7 @@ def turbo_shaft_power_turbine(eng, t45, p45, p2, mDot, running, np_, nrFrac, dt)
         xh = (GT_GAMMA_HOT - 1) / GT_GAMMA_HOT
         t5 = t45 * (1 - eng['ptEfficiency'] * (1 - (p2 / p45) ** xh))
         ptPower = max(mDot, 0.0) * GT_CP_HOT * (t45 - t5)
-    shaftTq = ptPower / eng['powerKw'] * refTq
+    shaftTq = min((ptPower / eng['powerKw']) / max(np_, 1.0 / GT_PT_STALL_TQ), GT_PT_STALL_TQ) * refTq
     npDrag = eng['ptDrag'] * np_ * np_ + (eng['ptDragFloor'] if shaftTq <= 0.0 else 0.0)
     npDot = ((shaftTq / refTq) - npDrag) / eng['ptInertia']
     npFree = max(np_ + npDot * dt, 0.0)
@@ -501,7 +524,7 @@ def turbo_shaft_engine(H, i, eng):
         H['bmkhs_engPrevLever'][i] = lever
 
     tripped = H['bmkhs_engineOverspeed'][i]
-    if not tripped and (ng >= eng['maxNg'] or np_ >= eng['maxNp']):
+    if not tripped and ((eng['ngOvrspdProt'] > 0 and ng >= eng['ngOvrspdProt']) or (eng['npOvrspdProt'] > 0 and np_ >= eng['npOvrspdProt'])):
         tripped = True
         H['bmkhs_engineOverspeed'][i] = True
 
@@ -591,6 +614,10 @@ def transmission_update(H):
     outputRpm = H['bmkhs_xmsnOutputRpm']
     totTq = sum(H['bmkhs_reqEngTorque'])
     engInputTq = sum(tq for k, tq in enumerate(H['bmkhs_engOutputTq']) if H['bmkhs_engClutch'][k])
+    dragTq = sum(e['refTq'] for e in H['bmkhs_engines']) * H.get('bmkhs_drivetrainDrag', 0.0)
+    if outputRpm <= 0.0:
+        dragTq = min(dragTq, max(engInputTq - totTq, 0.0))
+    totTq += dragTq
     dt = H['bmkhs_deltaTime']
     alpha = 0.0 if jEng == 0.0 else (engInputTq - totTq) / jEng
     deltaRpm = alpha * dt * (60.0 / (2.0 * math.pi))

@@ -1,8 +1,10 @@
-params ["_heli"];
+params ["_heli", ["_byPilot", false]];
 #include "\bmkhs_helisim\functions\core\core.hpp"
 
 private _att = (_heli getVariable "bmkhs_fmc") getOrDefault ["AttitudeHold", createHashMap];
 if (count _att == 0) exitWith {};
+//Always on - the pilot's keys neither engage nor release it
+if (_byPilot && {(_att get "alwaysOn") == 1}) exitWith {};
 
 if (_heli getVariable "bmkhs_attHoldActive" == false) then {
     //References for the sub-mode fn_fmcAttitudeHold has already chosen - one rule for both
@@ -19,6 +21,14 @@ if (_heli getVariable "bmkhs_attHoldActive" == false) then {
             (_heli call BIS_fnc_getPitchBank)
                 params ["_curPitch", "_curRoll"];
             _heli setVariable ["bmkhs_attHoldDesiredAtt", [_curPitch, _curRoll], true];
+        };
+        case "spd": {
+            (_heli call BIS_fnc_getPitchBank)
+                params ["_curPitch", "_curRoll"];
+            _heli setVariable ["bmkhs_attHoldDesiredAtt", [_curPitch, _curRoll], true];
+            //The speed now
+            _heli setVariable ["bmkhs_attHoldDesiredSpd", (_heli getVariable "bmkhs_velModelSpace") # 1, true];
+            _heli setVariable ["bmkhs_attHoldSpdPending", false];
         };
     };
 

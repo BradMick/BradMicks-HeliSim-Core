@@ -41,8 +41,9 @@ def read_ratings(path):
     for line in open(path):
         line = line.split('#')[0].split()
         if line:
-            name, fat, ng, tgt, tq = line
-            out.append((name, float(fat), float(ng), float(tgt), float(tq)))
+            name, fat, ng, tgt, tq = line[:5]
+            eff = float(line[5]) if len(line) > 5 else None
+            out.append((name, float(fat), float(ng), float(tgt), float(tq), eff))
     return sorted(out, key=lambda r: r[2])
 
 
@@ -55,21 +56,26 @@ def engine_spec():
 
 
 def scaled_t700_row(row, pr):
-    """A T700 row with its compressor turbine column in this engine's pressure ratio: the turbine
-    takes the same share of what the compressor makes, held below the first fitted row."""
+    """A T700 row in this engine's pressure ratio. The pressure ratio keeps the T700's share of its
+    design ratio in log terms - 1.0 at standstill, this engine's ratio at 100%. The turbine takes
+    the same share of what the compressor makes, held below the first fitted row."""
     base = E.COMPRESSOR_MAP
+    prFrac = pr ** (math.log(T700_PR * row[1]) / math.log(T700_PR)) / pr
     _, prs, _, _, ct = E.math_linear_interp(base, max(row[0], 0.6173))
     share = math.log(T700_PR ** ct) / math.log(T700_PR * prs)
-    return [row[0], row[1], row[2], row[3], math.log((pr * prs) ** share) / math.log(pr)]
+    prsHeld = pr ** (math.log(T700_PR * prs) / math.log(T700_PR))
+    return [row[0], prFrac, row[2], row[3], math.log(prsHeld ** share) / math.log(pr)]
 
 
-def solve(spec, base, fat, ng, tgt, tq):
+def solve(spec, base, fat, ng, tgt, tq, effGiven=None):
     """One rating, steady state at sea level: TGT fixes the compressor turbine expansion,
-    torque fixes the airflow. PR and efficiency come from the base map."""
+    torque fixes the airflow. PR comes from the base map, efficiency too unless the rating gives it."""
     t2 = fat + E.DEG_C_TO_KELVIN
     theta = t2 / E.GT_STD_TEMP_K
     x = ng / math.sqrt(theta) / spec['maxNg']
     _, prf, _, eff, _ = E.math_linear_interp(base, x)
+    if effGiven is not None:
+        eff = effGiven
     pr = spec['pr'] * prf
     t3 = t2 * (1 + (pr ** XC - 1) / eff)
     w = E.GT_CP_COLD * (t3 - t2) / E.GT_CP_HOT
@@ -87,7 +93,7 @@ def solve(spec, base, fat, ng, tgt, tq):
 
 def build(spec, ratings):
     base = [scaled_t700_row(r, spec['pr']) for r in E.COMPRESSOR_MAP]
-    fitted = [solve(spec, base, fat, ng, tgt, tq) for _, fat, ng, tgt, tq in ratings]
+    fitted = [solve(spec, base, fat, ng, tgt, tq, eff) for _, fat, ng, tgt, tq, eff in ratings]
     rows = [r for r in base if r[0] <= fitted[0][0] - BLEND_GAP]
     rows += fitted
     if len(fitted) > 1:
@@ -153,7 +159,7 @@ if __name__ == '__main__':
 
     use(rows)
     print('\nCheck - each rating flown in the rig, governed to its torque (target in brackets):')
-    for name, fat, ng, tgt, tq in ratings:
+    for name, fat, ng, tgt, tq, _ in ratings:
         a = governed_at(fat, tq)
         print('  %-6s %3.0f C  torque %5.1f %% (%5.1f)  N1 %.4f (%.3f)  T45 %4.0f (%4.0f)'
               % (name, fat, a.tq() * 100, tq * 100, a.ng(), ng, a.tgt(), tgt))

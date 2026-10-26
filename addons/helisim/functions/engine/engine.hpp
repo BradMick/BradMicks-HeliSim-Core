@@ -8,6 +8,11 @@
 #define GT_NG_LIMIT_BAND    0.030   //Ng fraction below the ceiling over which it closes
 #define GT_LIMIT_GAIN       16.0    //fuel per second per unit of limiter error
 #define GT_LIMIT_TRACK      1.02    //how far above the governor's demand the allowance rides
+//The Ng limiter anticipates: it acts on Ng this far ahead at its present (filtered) rate, so a
+//fast approach is caught before the line instead of overshooting and hunting round it. Steady,
+//the rate is zero and the setpoint is the same.
+#define GT_NG_LEAD          0.4     //s
+#define GT_NG_RATE_TAU      0.1     //s, filter on that rate
 
 //Oil pressure at 100% Ng, as a gauge fraction. The pump is on the gas generator shaft, so
 //pressure tracks Ng rather than torque.
@@ -37,6 +42,10 @@
 #define GT_TGT_COOL_RATE    0.70
 #define GT_TGT_STILL_AIR    0.0012
 #define GT_TGT_RAM_AIR      0.00065
+
+//Free turbine stall torque, as a multiple of 100% torque - power over shaft speed runs to
+//infinity as Np falls to zero, and a real turbine's does not.
+#define GT_PT_STALL_TQ      2.5
 
 //Compressor power at Ng 1.0, ISA, in spool units - the spool's torque scale.
 #define GT_SPOOL_UNIT_LOAD  2.91244

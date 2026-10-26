@@ -45,6 +45,7 @@ _sin, _cos = FO._sin, FO._cos
 MPS_TO_KNOTS = 1.94384
 KNOTS_TO_MPS = 0.51444
 FT = E.FEET_TO_METERS
+BLADE_PITCH_RANGE = 10.0  # rotor.hpp
 
 
 def _norm(v):
@@ -115,12 +116,14 @@ def density(paFt, fat):
 def simple_rotor(r, ctl, vel, rho, xmsnRpm, com):
     """One rotor: total force and moment about com (model space, N and Nm, no dt) and its shaft
     torque (Nm at the rotor, as fn_simpleRotor sums it). vel is bmkhs_velModelSpace."""
-    pitchOutput, rollOutput, collOutput = ctl
+    pitchOutput, rollOutput, collOutput, tandemPitch, tandemYaw, lct = ctl
     isTail = r['type'].lower() == 'tail'
     isCw = r['direction'].lower() == 'cw'
 
-    flapLon = FO.math_linear_interp_from_center(-1, 1, pitchOutput, r['pitchFlapMin'], r['pitchFlapMid'], r['pitchFlapMax'])
+    #LCT is longitudinal cyclic - - forward, as rotation[]
+    flapLon = FO.math_linear_interp_from_center(-1, 1, pitchOutput, r['pitchFlapMin'], r['pitchFlapMid'], r['pitchFlapMax']) - lct
     flapLat = FO.math_linear_interp_from_center(-1, 1, rollOutput, r['rollFlapMin'], r['rollFlapMid'], r['rollFlapMax'])
+    flapLat += FO.math_linear_interp_from_center(-1, 1, tandemYaw, r['rollFlapMin'], r['rollFlapMid'], r['rollFlapMax'])
     p, rr, y = r['rotation']
     fVec = FO.math_vector_rotate([0.0, 1.0, 0.0], p, rr, y)
     rVec = FO.math_vector_rotate([1.0, 0.0, 0.0], p, rr, y)
@@ -139,14 +142,11 @@ def simple_rotor(r, ctl, vel, rho, xmsnRpm, com):
     collCone = collOutput * r['coneAngle']
     tableKey = E.simple_rotor_table_key(r, collOutput)
 
-    advanceRatio = velXY / tipVel if tipVel > 1.0 else 0.0
-    windAzimuth = _atan2(velX, velY) if velXY > 0.01 else 0.0
-    fbRollAngle = r['flapBackRollMax'] * advanceRatio
-    fbPitchAngle = r['flapBackPitchMax'] * advanceRatio
-
     liftGrid = E.math_build_interp_grid(r['liftCoefTable'])
     dragGrid = E.math_build_interp_grid(r['dragCoefTable'])
-    liftCoef = E.math_linear_interp_2d(liftGrid, tableKey, velXY)
+    #Air down through a lifting rotor's disc costs angle of attack, off the collective
+    liftKey = tableKey - ((math.degrees(max(velZ, 0.0) / bladeVel75) / BLADE_PITCH_RANGE) if (not isTail and bladeVel75 > 1.0) else 0.0)
+    liftCoef = E.math_linear_interp_2d(liftGrid, liftKey, velXY)
     axialVel = velZ * (-1.0 if liftCoef < 0 else 1.0)
     viDenom = E.linear_conversion(-7.62, -19.30, axialVel, E.VEL_VRS, E.VEL_VRS * 0.1, True)
     torqueSign = -1.0 if isCw else 1.0
@@ -154,33 +154,67 @@ def simple_rotor(r, ctl, vel, rho, xmsnRpm, com):
     bladeScalar = r['numBlades'] / 4
     dragCoef = E.math_linear_interp_2d(dragGrid, tableKey, velXY)
 
+    if axialVel < -E.VEL_VRS and velXY < E.VEL_ETL:
+        viScalar = 0.0
+    else:
+        viScalar = 1 - ((axialVel if isTail else min(axialVel, 0.0)) / viDenom)
+
+    #Flap back - main rotors only, realistic
+    lonTilt, latTilt = flapLon, flapLat
+    if r['type'].lower() == 'main' and tipVel > 1.0:
+        mu = velXY / tipVel
+        windAzimuth = _atan2(velX, velY) if velXY > 0.01 else 0.0
+        thrust = abs(4.0 * liftCoef * q * bladeScalar * viScalar)
+        vi = 0.0
+        if thrust > 0.0:
+            vh2 = thrust / (2.0 * rho * math.pi * r['bladeRadius'] ** 2)
+            vi = math.sqrt(vh2)
+            for _ in range(30):
+                vt = math.sqrt(velXY * velXY + (velZ + vi) ** 2)
+                vi = 0.5 * vi + 0.5 * (vh2 / max(vt, 0.5))
+        lam = (velZ + vi) / tipVel
+        theta0 = math.radians(collOutput * BLADE_PITCH_RANGE)
+        a1 = math.degrees(mu * ((8.0 / 3.0) * theta0 - 2.0 * lam) / (1.0 - 0.5 * mu * mu))
+        b1 = ((4.0 / 3.0) * mu * collCone / (1.0 + 0.5 * mu * mu)) * (-1.0 if isCw else 1.0)
+        lonTilt += b1 * _sin(windAzimuth) - a1 * _cos(windAzimuth)
+        latTilt += b1 * _cos(windAzimuth) + a1 * _sin(windAzimuth)
+
+    rot = FO.math_vector_rotate_around_axis
+    discUVec = rot(uVec, rVec, lonTilt)
+    discFVec = rot(fVec, rVec, lonTilt)
+    discUVec = rot(discUVec, discFVec, latTilt)
+    discRVec = rot(rVec, discFVec, latTilt)
+
+    #Per-blade inflow - each blade's axial flow along its own lift, average held to the hub's
+    thrustSign = -1.0 if liftCoef < 0 else 1.0
+    frames, inflow = [], []
+    for i in range(4):
+        lf = rot(discFVec, discUVec, i * 90.0)
+        ld = rot(discUVec, lf, collCone)
+        frames.append((rot(discRVec, discUVec, i * 90.0), lf, ld))
+        inflow.append(-((_dot(vel, ld) * thrustSign) - axialVel) / E.VEL_VRS)
+    inflowMean = sum(inflow) / 4
+
     F, M, rotorTorque = [0.0, 0.0, 0.0], [0.0, 0.0, 0.0], 0.0
     for i in range(4):
         psi = i * 90.0
-        locRVec = FO.math_vector_rotate_around_axis(rVec, uVec, psi)
-        locFVec = FO.math_vector_rotate_around_axis(fVec, uVec, psi)
-        fbRoll = fbRollAngle * _cos(psi - windAzimuth) * (-1.0 if isCw else 1.0)
-        fbPitch = fbPitchAngle * _sin(psi - windAzimuth)
-        bladeFlap = collCone + (flapLat * _cos(psi)) + fbRoll + (flapLon * _sin(psi)) + fbPitch
+        locRVec, locFVec, liftDir = frames[i]
+        bladeFlap = collCone
         bladeOffset = FO.math_vector_rotate_around_axis(_mul(locRVec, r['bladeRadius']), locFVec, bladeFlap)
         bladeThrustPos = _add(pos, _mul(bladeOffset, 0.75))
 
         bladeLift = liftCoef * q * bladeScalar
-        liftCoefDelta = (rollOutput * _cos(psi) * r['rollLiftCoef']) + (pitchOutput * _sin(psi) * r['pitchLiftCoef'])
+        liftCoefDelta = sum(FO.simple_rotor_get_lift_coef_delta(r, psi, ctl, liftCoef))
         bladeLiftDelta = liftCoefDelta * q * bladeScalar
         bladeDrag = dragCoef * q * bladeScalar
         rotorTorque += bladeDrag * bladeRad75
         if not isTail:
             rotorTorque -= r['autoTorque'] * max(-velZ, 0.0) * (1.0 - collOutput) * bladeScalar
 
-        if axialVel < -E.VEL_VRS and velXY < E.VEL_ETL:
-            viScalar = 0.0
-        else:
-            viScalar = 1 - (axialVel / viDenom)
         gndEffScalar = 1.0  # out of ground effect
 
-        bladeLift = (bladeLift * viScalar * gndEffScalar) + bladeLiftDelta
-        liftVec = FO.math_vector_rotate_around_axis(_mul(uVec, bladeLift), locFVec, bladeFlap)
+        bladeLift = (bladeLift * (viScalar + inflow[i] - inflowMean) * gndEffScalar) + bladeLiftDelta
+        liftVec = _mul(liftDir, bladeLift)
         dragVec = _mul(locFVec, -bladeDrag * torqueSign * r['reacTqScalar'])
 
         arm = _sub(bladeThrustPos, com)
@@ -338,9 +372,10 @@ class Airframe:
         out = {}
         tq = 0.0
         for r in self.rotors:
-            t = FO.TAIL if r['type'].lower() == 'tail' else FO.MAIN
-            f, m, rt = simple_rotor(r, FO.simple_rotor_control(t, pitch, roll, yaw, coll), vel, rho, self.rpm, self.cg)
-            out[r['type'] + ' rotor'] = (f, m)
+            ctl = FO.simple_rotor_control(r, pitch, roll, yaw, coll, math.hypot(vel[0], vel[1]) * MPS_TO_KNOTS, paFt)
+            f, m, rt = simple_rotor(r, ctl, vel, rho, self.rpm, self.cg)
+            #A tandem has two main rotors - the position keeps their keys apart.
+            out[r['type'] + ' rotor' + (' ' + r['position'] if r.get('position') else '')] = (f, m)
             tq += rt / r['gearRatio']
         out['fuse front'] = fuselage_front(self.fus['fuselageFront'], vel, rho, paFt, self.cg)
         out['fuse top'] = _lifting_panels(self.fus['fuselageTop'], vel, rho, self.cg, False)
@@ -350,7 +385,8 @@ class Airframe:
         F, M = [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]
         for f, m in out.values():
             F, M = _add(F, f), _add(M, m)
-        gauge = tq / (self.numEngines * self.refTq)
+        #The drivetrain's constant drag rides on the rotors' at the gauge.
+        gauge = tq / (self.numEngines * self.refTq) + float(E.CFG.get('drivetrainDrag', 0.0))
         return (F, M, gauge, out) if parts else (F, M, gauge)
 
 

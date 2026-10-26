@@ -4,8 +4,9 @@ Function: bmkhs_fnc_repair
 Description:
     Restores the state that goes with a repaired component.
 
-    Runs when a HandleDamage event saw a hitpoint go DOWN - a repair announces
-    itself, so there is nothing to poll for.
+    Runs when a hitpoint has gone DOWN since the last read, about once a second
+    on the owning machine. Scripted damage (setHitPointDamage, setDamage, Zeus,
+    ACE) fires no event, so the hitpoints are read rather than waited on.
 
     Walks the components the aircraft declared rather than naming any, so an
     airframe with three generators or no accumulator gets what it actually has.
@@ -26,6 +27,19 @@ Author:
     BradMick
 ---------------------------------------------------------------------------- */
 params ["_heli"];
+
+//Any hitpoint lower than at the last read is a repair
+if (CBA_missionTime >= (_heli getVariable ["bmkhs_repairReadT", -1]) + 1) then {
+    _heli setVariable ["bmkhs_repairReadT", CBA_missionTime];
+    private _now  = (getAllHitPointsDamage _heli) param [2, []];
+    private _last = _heli getVariable ["bmkhs_repairLastDmg", _now];
+    if (count _last == count _now) then {
+        {
+            if (_x < ((_last select _forEachIndex) - 0.0001)) exitWith { _heli setVariable ["bmkhs_repairPending", true] };
+        } forEach _now;
+    };
+    _heli setVariable ["bmkhs_repairLastDmg", _now];
+};
 
 if !(_heli getVariable "bmkhs_repairPending") exitWith {};
 _heli setVariable ["bmkhs_repairPending", false];
