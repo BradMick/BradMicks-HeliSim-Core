@@ -2,6 +2,67 @@
 
 ## 1.4.0.0
 
+**Update every HeliSim aircraft with this release.** Packs built for 1.3 misread 1.4's
+flight-control gains and rotor config; use the matching pack versions (EC665 1.2.0,
+Bo 105 1.1.0).
+
+### Flight model
+- **The rotor disc tilts as one.** Cyclic tilts the whole disc, and every blade's lift
+  with it.
+- **Flap back from physics.** The disc blows back with speed and leans with coning from
+  the rotor's own advance ratio, inflow, coning and blade pitch - no tuned value.
+- **Per-blade inflow.** Each blade's lift reads the air through its own part of the
+  tilted disc: the forward blade lifts more than the aft, and holding the nose takes
+  forward cyclic as speed builds.
+- **Inflow costs angle of attack.** Air coming down through the disc in a climb or at
+  speed takes lift away the way it does on a real blade, and collective brings it back.
+  The VRS behaviour in a descent is unchanged.
+- **Every aircraft refit** to its torque and attitude data on the new rotor.
+- **Drivetrain drag** and free-turbine torque at the actual Np; the Ng limit follows each
+  engine's own maximum, with optional overspeed trips and no hunting at the limit.
+
+### Tandem rotors
+- Fore/aft stick moves lift between the rotors; pedal tilts the discs opposite ways.
+- **LCT**: longitudinal cyclic on a schedule of airspeed and altitude, at the actuator's
+  rate, back to GND on the ground.
+
+### Flight controls
+- **Holds rebuilt.** Attitude hold with position, velocity, attitude and airspeed modes;
+  heading hold that holds heading in the hover and centres the ball at speed, giving way
+  to the pilot and coming back once settled; flight director RALT / ALT / IAS / HDG / HVR
+  on aircraft that have one.
+- **Cyclic fly-through**: move past the breakout and the hold steps aside on that axis;
+  come back inside it and it resumes.
+- **Trim**: beep trim moves at a rate while held; the force trim switch is honoured.
+- **Altitude beep**: new keys Altitude Beep Up / Down - a tap steps, held climbs or
+  descends the altitude hold.
+- **Auto pedal** works like a pilot's foot, with smooth hand-offs between regimes.
+- **Barometric altitude hold** now has the same authority as radar altitude hold
+  (aircraft packs).
+
+### Fixes
+- **Repairs restore systems.** Fluids, engine failures and gearbox damage now reset on
+  any repair - script, Zeus or ACE.
+- **Getting out of a starting or running aircraft** no longer leaves the rotor behind:
+  it keeps spooling with the engines, so getting back in no longer overtorques it.
+- **Aircraft without systems** keep running when everyone gets out, and Engine off from
+  the action menu now actually shuts the engines down.
+- The control input visualiser closes when you leave the aircraft.
+- Rotor sound controllers moved to 32 / 31.
+- Rotor Model setting: BET is marked INOP; Simple is the default.
+
+### Flight log
+- Every force generator's force and moment, the stabilator angle, LCT position, mass,
+  centre of mass and bounding centre, aircraft type, and raw pedal inputs.
+
+### For pack authors
+- `flapBackRollMax` / `flapBackPitchMax` are gone - remove them.
+- FMC and flight-control PID gains are declared per pilot unit (deg/s, kt, ft, fpm); the
+  4th value is the integral limit in output units. Defaults live in `fmc.hpp`.
+- `lctSchedule[]` is degrees of longitudinal cyclic, - forward, + aft.
+- `rotortables.py` raises drag for any short column, skips unreachable ones, and stops
+  when the cruise attitude is out of reach; `python/dev/fits/` keeps every aircraft's fit.
+
 ### Tools
 - **The aerosurface generator places the model.** `fm_generateAeroSurfacePoints.py`
   takes `--turn` (180 deg about vertical) and `--forward` / `--down` / `--right`
