@@ -1,7 +1,8 @@
 params ["_heli"];
 #include "\bmkhs_helisim\functions\core\core.hpp"
 
-if (currentPilot _heli != player || !local _heli) exitWith {};
+//The owner runs it, crewed or not - an empty aircraft finishes spooling up or down
+if (!local _heli) exitWith {};
 
 private _mainRotorGearRatio = ((_heli getVariable "bmkhs_simpleRotors") select 0) get "gearRatio";
 

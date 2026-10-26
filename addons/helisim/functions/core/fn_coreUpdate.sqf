@@ -105,11 +105,11 @@ if (isMultiplayer && {(_heli getVariable "bmkhs_lastTimePropagated") + 0.1 < CBA
 //Repair
 [_heli] call bmkhs_fnc_repair;
 
+//Flight log - to the RPT, for analysis. Before the readout, which clears the force rows.
+[_heli] call bmkhs_fnc_debugFlightLog;
+
 //Forces and moments readout. Runs after every contributor has published its row.
 [_heli] call bmkhs_fnc_fmDebugUpdate;
-
-//Flight log - to the RPT, for analysis
-[_heli] call bmkhs_fnc_debugFlightLog;
 
 //The systems display owns the hint while it is up - both use hintSilent, and this one
 //runs last, so it would simply overwrite the other.

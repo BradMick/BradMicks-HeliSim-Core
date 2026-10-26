@@ -164,7 +164,7 @@ if (_nr > 0.01 && {_nr < _nrLow}) then { _warn pushBack "LOW RTR" };
 if (_nr >= _nrHighRtr) then           { _warn pushBack "HIGH RTR" };
 if ((fuel _heli) < ED_FUEL_LOW) then      { _caut pushBack "FUEL LOW" };
 
-//Hold modes - the AH-64D WCA short forms, unpadded.
+//Hold modes - default WCA labels, unpadded.
 if (_heli getVariable ["bmkhs_attHoldActive", false]) then {
     _advs pushBack "ATT HOLD";
 

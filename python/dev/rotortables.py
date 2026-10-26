@@ -95,7 +95,7 @@ def top_scale(curve, tq_peak):
     """The last point's drag scale, first guess: the stall caps every column's torque at what its
     drag gives at the peak collective, so the top of the curve needs at least its torque over the
     peak's, with TOP_MARGIN - and never less than the hover's. In forward flight the stall comes a
-    little before the peak collective, so main() raises it if the top column still falls short."""
+    little before the peak collective, so main() raises any column that still falls short."""
     return max(1.0, TOP_MARGIN * curve[-1][1] / tq_peak)
 
 
@@ -376,10 +376,13 @@ def main():
                                    'drag gives at the peak collective' % (tq * 100))
         return with_(hi), tq, None
 
+    #Columns proven out of reach - not solved again until their drag scale changes
+    unreachable = {}
+
     def solve_columns(x):
         """(columns, {index: (why, torque)} for those that missed). One line per column on the
         first pass, so a slow one shows; a column that cannot reach its target is said so at
-        once and left out of the later passes, not ground on."""
+        once and left out of the later passes and later solves, not ground on."""
         bad = {}
 
         def miss(i, tq, why):
@@ -387,6 +390,9 @@ def main():
             print('  column %5.1f kt MISSED: %s' % (curve[i][0], why), flush=True)
 
         for i in range(1, n):
+            if i in unreachable:
+                bad[i] = unreachable[i]
+                continue
             G[i] = G[i - 1]
             t0 = time.time()
             x, tq, why = solve_column(x, i, True)
@@ -408,20 +414,24 @@ def main():
                 break
         else:
             problem('the columns did not settle in 20 passes (largest change %.6f)' % moved)
+        unreachable.update(bad)
         return x, bad
 
     def solve_all(x):
-        """solve_columns, raising the top drag scale while the last column falls short of the
-        stall (at most 4 times, each said), then any column still missing is a problem."""
-        nonlocal top
+        """solve_columns, raising the drag scale of the first column that falls short of the
+        stall, and every column above it, by its shortfall (at most 4 times, each said), then any
+        column still missing is a problem."""
         for _ in range(4):
             x, bad = solve_columns(x)
-            last = n - 1
-            if last not in bad or bad[last][1] is None or bad[last][1] >= curve[last][1]:
+            short = [i for i, (_, tq) in sorted(bad.items()) if tq is not None and tq < curve[i][1]]
+            if not short:
                 break
-            top *= (curve[last][1] / bad[last][1]) * 1.01
-            sd[:] = drag_scales(curve, a.mr, a.etl_drop, top)
-            print('  the top of the curve is past the stall: raising its drag scale to %.4f and solving again' % top, flush=True)
+            i0 = short[0]
+            k = (curve[i0][1] / bad[i0][1]) * TOP_MARGIN
+            for i in range(i0, n):
+                sd[i] *= k
+                unreachable.pop(i, None)
+            print('  %.0f kt is past the stall: raising its drag scale and above by %.4f and solving again' % (curve[i0][0], k), flush=True)
         for i, (why, _) in sorted(bad.items()):
             problem('%.0f kt column, target %.0f%%: %s' % (curve[i][0], curve[i][1] * 100, why))
         return x
@@ -438,7 +448,10 @@ def main():
 
     def cruise_pitch(cd, x):
         set_front(cd)
-        x, _ = solve_columns(x)
+        x, bad = solve_columns(x)
+        if ic in bad:
+            raise SystemExit('front drag %.4f: the %.0f kt cruise column cannot reach its torque - '
+                             '%s; --cruise-pitch %+.1f is out of reach' % (cd, ckt, bad[ic][0], a.cruise_pitch))
         fit.set_tables(lrows, lift, drows, drag, cols, x, sd)
         t = fit.level(ckt, wmid, G[ic])
         print('front drag %.4f: %.1f kt trims at %+.2f deg' % (cd, ckt, t['pitch']), flush=True)

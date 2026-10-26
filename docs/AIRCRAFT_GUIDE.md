@@ -685,6 +685,18 @@ the control itself, not the mapped key.
 **Inflow is read along the thrust.** The descent and VRS law takes the rotor's axial speed in
 the direction it is actually pushing. A main rotor always pushes up its mast; a tail rotor
 pushes either way with the pedal, and its sideslip is read against whichever way that is.
+Air coming down through a main rotor's disc - a climb, or the disc tilted into the wind - costs
+the blades angle of attack: it comes off the collective the lift table is read at, so the pilot
+pulls collective to get the lift back. The descent and VRS factor acts only in descent. A tail
+rotor takes both through the factor.
+
+**The disc tilts as one.** Cyclic tilts the whole disc and every blade's lift with it. Flap back
+comes from the rotor's own state, with nothing to declare: the disc tilts aft with speed and
+sideways with coning (a counter-clockwise rotor left, a clockwise one right), taking blade pitch
+as collective times 10 deg for every rotor. Each blade's own inflow, read along its lift in the
+tilted, coned disc, changes its lift - the forward blade lifts more than the aft - and the pilot
+holds forward cyclic against it. A tandem's `lctSchedule[]` is longitudinal cyclic on that disc,
+deg, - forward, + aft; the masts stay where `rotation[]` puts them.
 
 Outside REALISTIC Core sets every tail rotor upright - pitch 0, roll 90 - so a canted tail rotor
 yaws without pitching or rolling the aircraft. Nothing to declare.
@@ -718,8 +730,7 @@ out of ground effect:
 
 Every aerodynamic value that sets these trims is solved for them together - the rotor tables,
 the front fuselage drag and the stabilator schedule - not one at a time. Values Core takes as a
-convention stay as Core has them: `flapBackPitchMax` and the other flap values keep their sign
-and are not fitting variables.
+convention stay as Core has them: the flap values keep their sign and are not fitting variables.
 
 **2. Mass and centre of mass.** Load the aircraft to the target weight from its own
 `helisim_mass.hpp`, the way `fn_massUpdate` does:
@@ -966,6 +977,13 @@ reach its torque, a secant out of steps, a written point or hover off by more th
 a hover) - prints `FAILED:` at once with what it got. The run ends with either `Fit OK` or a list
 of every problem and exit code 1; do not paste tables from a run that ends in problems. Every
 loop is bounded, so it cannot sit there indefinitely.
+
+A column that falls short of its torque at the stall edge has its drag raised, with every column
+above it, by its shortfall and the top margin, then solved again (at most 4 times). A column
+proven out of reach is not solved again until its drag changes. With `--cruise-pitch`, if the
+cruise column itself cannot reach its torque the run stops there and says the attitude is out of
+reach. "At the stall edge" means the trim stopped converging - check the collective before
+reading it as blade stall.
 
 A plain fit takes under a minute (the AH-64D's, 58 s, including one raise of `top`).
 `--hover-coll` reruns the hover column for each peak it tries, and `--cruise-pitch` reruns the
@@ -1421,7 +1439,7 @@ Core raises events to the handler your pack registers for its base class, in
 it; another pack's aircraft never reach it.
 
 **Core drives two sound controllers** for the translational lift, high speed and VRS
-effects: `CustomSoundController64` (intensity) and `CustomSoundController63` (blend, 0
+effects: `CustomSoundController32` (intensity) and `CustomSoundController31` (blend, 0
 outside every band). Use them in your sound config for those effects; leave them free
 for anything else.
 
@@ -1878,10 +1896,10 @@ Registered in `event/fn_eventPreInit.sqf`. These are missionNamespace globals, n
 |---|---|---|---|
 | `bmkhs_helisimRealismSetting` | Number, 0 = CASUAL, 2 = REALISTIC | CBA setting | Realism level. |
 | `bmkhs_helisimEnvironment` | Number 0..6 (ISA_STD, EUROPE_SUMMER, EUROPE_WINTER, MIDDLE_EAST, CENTRAL_ASIA_SUMMER, CENTRAL_ASIA_WINTER, ASIA) | CBA setting | Environment preset. |
-| `bmkhs_rotorModel` | Number, 0 = Simple, 1 = BET | CBA setting | Rotor model. |
+| `bmkhs_rotorModel` | Number, 0 = Simple, 1 = BET | CBA setting | Rotor model. BET is listed as INOP; Simple is the default and the one the packs are fitted to. |
 | `bmkhs_vrsWarning` | Bool | CBA setting | VRS warning on. |
 | `bmkhs_sysDebug` / `bmkhs_fmDebug` / `bmkhs_engDisplay` / `bmkhs_forcesDebug` | Bool | CBA setting | Debug displays on. |
-| `bmkhs_flightLog` | Bool | CBA setting | Writes the flight to the RPT at 10 Hz - `BMKHSLOG` lines under a `BMKHSLOG_HDR` header naming the columns (`debug/fn_debugFlightLog.sqf`). `python/dev/flightlog.py` reads them back. |
+| `bmkhs_flightLog` | Bool | CBA setting | Writes the flight to the RPT at 10 Hz - `BMKHSLOG` lines under a `BMKHSLOG_HDR` header naming the columns (`debug/fn_debugFlightLog.sqf`). `python/dev/flightlog.py` reads them back. `forces` carries every force generator's force and moment that frame - `name:Fx|Fy|Fz|Mx|My|Mz`, model space, N and Nm about the CoM, `;` between generators (rotors by index: `main0`, `tail1`) - and `stabDeg` the stabilator angle; with these the rig is compared against the game force by force. |
 | `bmkhs_cyclicCenterTrimMode`, `bmkhs_pedalCenterTrimMode`, `bmkhs_springlessCyclic`, `bmkhs_springlessPedals`, `bmkhs_keyboardStickyPitch/Roll/Yaw`, `bmkhs_autoPedal`, `bmkhs_autoPitch`, `bmkhs_autoRoll`, `bmkhs_mouseAsJoystick` | Bool | CBA setting | Input options. |
 | `bmkhs_mouseSense` | Number 0.1..1.0 | CBA setting | Mouse sensitivity. |
 | `bmkhs_testGwtEnabled` / `bmkhs_testGwtLbs` | Bool / String (lb) | CBA setting | Fixed test gross weight. |

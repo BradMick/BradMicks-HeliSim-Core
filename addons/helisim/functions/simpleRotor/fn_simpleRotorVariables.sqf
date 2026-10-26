@@ -44,8 +44,6 @@ private _numFields = [
    ,  "rollFlapMid"
    ,  "rollFlapMax"
    , "coneAngle"
-   , "flapBackRollMax"
-   , "flapBackPitchMax"
    , "rollLiftCoef"
    , "pitchLiftCoef"
    , "gndEffValue"

@@ -11,7 +11,7 @@ What it answers: at each collective, in a hover out of ground effect at 100% Nr,
 cyclic that null the pitch, roll and yaw moments. Those trims, less their value at the bottom of
 the collective, are the control mixing a pack declares in ControlMixing (helisim_flightControls).
 
-Not ported: fuselage and wings (no forces in a hover), ground effect, flapback and the induced
+Not ported: fuselage and wings (no forces in a hover), ground effect and the induced
 velocity terms (all inert at zero airspeed, zero vertical speed, out of ground effect).
 
 If this file and the SQF ever disagree, the SQF is right and this file is the bug.
@@ -92,16 +92,16 @@ def simple_rotor_control(r, pitch, roll, yaw, coll, kts=0.0, paFt=0.0):
         #Stick moves lift between the rotors; pedal is lateral cyclic on each rotor, opposite ways
         pos = str(r.get('position', '')).lower()
         sign = -1.0 if pos == 'front' else (1.0 if pos == 'rear' else 0.0)
-        lct = r.get('lctSchedule')
-        mast = -E.math_linear_interp_2d(E.math_build_interp_grid(lct), kts, paFt) if lct else 0.0
-        return 0.0, roll, E.clamp(coll, 0.0, 1.0), sign * pitch, sign * yaw, mast
+        sched = r.get('lctSchedule')
+        lct = E.math_linear_interp_2d(E.math_build_interp_grid(sched), kts, paFt) if sched else 0.0
+        return 0.0, roll, E.clamp(coll, 0.0, 1.0), sign * pitch, sign * yaw, lct
     return 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
 
 
 def simple_rotor_get_lift_coef_delta(r, psi, ctl, liftCoef):
     """fn_simpleRotorGetLiftCoefDelta - one blade's lift coefficient change, mixed for the control
     scheme into a roll and a pitch part."""
-    pitchOutput, rollOutput, collOutput, tandemPitch, tandemYaw, mastPitch = ctl
+    pitchOutput, rollOutput, collOutput, tandemPitch, tandemYaw, lct = ctl
     scheme = control_scheme()
     if scheme == CONVENTIONAL:
         return rollOutput * _cos(psi) * r['rollLiftCoef'], pitchOutput * _sin(psi) * r['pitchLiftCoef']
@@ -117,15 +117,15 @@ def simple_rotor_forces(r, ctl, rho, xmsnRpm, com):
     """One rotor's total force and moment about com, model space, N and Nm - the sum of the
     four blades' lift and drag vectors fn_simpleRotor hands to addForce, without the frame's dt.
     Hover: zero velocity, out of ground effect."""
-    pitchOutput, rollOutput, collOutput, tandemPitch, tandemYaw, mastPitch = ctl
+    pitchOutput, rollOutput, collOutput, tandemPitch, tandemYaw, lct = ctl
     rotorType = E.rotor_type(r['type'])
     torqueSign = -1.0 if r['direction'].lower() == 'cw' else 1.0
 
-    flapLon = math_linear_interp_from_center(-1, 1, pitchOutput, r['pitchFlapMin'], r['pitchFlapMid'], r['pitchFlapMax'])
+    #LCT is longitudinal cyclic - - forward, as rotation[]
+    flapLon = math_linear_interp_from_center(-1, 1, pitchOutput, r['pitchFlapMin'], r['pitchFlapMid'], r['pitchFlapMax']) - lct
     flapLat = math_linear_interp_from_center(-1, 1, rollOutput, r['rollFlapMin'], r['rollFlapMid'], r['rollFlapMax'])
     flapLat += math_linear_interp_from_center(-1, 1, tandemYaw, r['rollFlapMin'], r['rollFlapMid'], r['rollFlapMax'])
     p, rr, y = r['rotation']
-    p += mastPitch
     fVec = math_vector_rotate([0.0, 1.0, 0.0], p, rr, y)
     rVec = math_vector_rotate([1.0, 0.0, 0.0], p, rr, y)
     uVec = math_vector_rotate([0.0, 0.0, 1.0], p, rr, y)
@@ -143,15 +143,18 @@ def simple_rotor_forces(r, ctl, rho, xmsnRpm, com):
     dragGrid = E.math_build_interp_grid(r['dragCoefTable'])
     tableKey = E.simple_rotor_table_key(r, collOutput)
 
+    rot = math_vector_rotate_around_axis
+    discUVec = rot(uVec, rVec, flapLon)
+    discFVec = rot(fVec, rVec, flapLon)
+    discUVec = rot(discUVec, discFVec, flapLat)
+    discRVec = rot(rVec, discFVec, flapLat)
+
     F, M = [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]
     for i in range(4):
         psi = i * 90.0
-        locRVec = math_vector_rotate_around_axis(rVec, uVec, psi)
-        locFVec = math_vector_rotate_around_axis(fVec, uVec, psi)
-        #No flapback in a hover - advance ratio 0
-        rollFlap = flapLat * _cos(psi)
-        pitchFlap = flapLon * _sin(psi)
-        bladeFlap = collCone + rollFlap + pitchFlap
+        locRVec = rot(discRVec, discUVec, psi)
+        locFVec = rot(discFVec, discUVec, psi)
+        bladeFlap = collCone
         bladeOffset = math_vector_rotate_around_axis(_mul(locRVec, r['bladeRadius']), locFVec, bladeFlap)
         bladeThrustPos = _add(pos, _mul(bladeOffset, 0.75))
 
@@ -162,9 +165,9 @@ def simple_rotor_forces(r, ctl, rho, xmsnRpm, com):
         dragCoef = E.math_linear_interp_2d(dragGrid, tableKey, 0.0)
         bladeDrag = dragCoef * q * bladeScalar
 
-        #viScalar 1 (no vertical speed), gndEffScalar 1 (out of ground effect)
+        #viScalar 1 on every blade (no airspeed or vertical speed), gndEffScalar 1 (out of ground effect)
         bladeLift = bladeLift + bladeLiftDelta
-        liftVec = math_vector_rotate_around_axis(_mul(uVec, bladeLift), locFVec, bladeFlap)
+        liftVec = rot(_mul(discUVec, bladeLift), locFVec, bladeFlap)
         dragVec = _mul(locFVec, -bladeDrag * torqueSign * r['reacTqScalar'])
 
         arm = _sub(bladeThrustPos, com)

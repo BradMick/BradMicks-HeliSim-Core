@@ -23,3 +23,6 @@
 #define BOTTOM 5
 
 #define RTR_DMG_THRESH 0.95
+
+//Blade pitch at full collective, deg - every rotor, for flap back
+#define BLADE_PITCH_RANGE 10.0

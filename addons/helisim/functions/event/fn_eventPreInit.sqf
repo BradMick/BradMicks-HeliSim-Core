@@ -214,7 +214,7 @@
     "LIST",
     ["Rotor Model", "Selects the rotor aerodynamic model. Simple is stable and performant. BET (Blade Element Theory) is higher fidelity with induced flow, dissymmetry of lift, and flapping dynamics."],
     [BMKHS_SETTINGS_CATEGORY, "Flight model"],
-    [[0, 1], ["Simple", "BET [WIP]"], 0],
+    [[0, 1], ["Simple", "BET [INOP]"], 0],
     0
 ] call CBA_fnc_addSetting;
 

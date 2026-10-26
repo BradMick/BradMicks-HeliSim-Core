@@ -37,7 +37,7 @@ private _rpm          = _xmsnRpm / _gearRatio;
 private _omega        = if (_rpm == 0.0) then { 0.0 } else { (2.0 * pi) * (_rpm / 60.0) };
 private _rotorAzimuth = (_heli animationSourcePhase _animSource) * 360.0 * (if (_dir == CW) then { 1 } else { -1 });
 
-if (_heli getHitPointDamage _hitPoint < _dmgThreshold && currentPilot _heli == player) then {
+if (_heli getHitPointDamage _hitPoint < _dmgThreshold) then {
 
 // Reset accumulators before blade loop
 [_heli, "bmkhs_rotorReactionTorque", _rotorIndex, 0.0] call bmkhs_fnc_utilSetArrayVariable;

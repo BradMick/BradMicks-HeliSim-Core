@@ -9,8 +9,8 @@ Description:
     rotor models call it the same way and neither owns the effects.
 
     Sound controllers:
-        CustomSoundController64 - intensity
-        CustomSoundController63 - blend; zero whenever no band is active
+        CustomSoundController32 - intensity
+        CustomSoundController31 - blend; zero whenever no band is active
 
 Parameters:
     _heli - The helicopter to get information from [Unit].
@@ -133,5 +133,5 @@ if (_main isNotEqualTo []) then {
     };
 };
 
-setCustomSoundController [_heli, "CustomSoundController64", _intensity];
-setCustomSoundController [_heli, "CustomSoundController63", _blend];
+setCustomSoundController [_heli, "CustomSoundController32", _intensity];
+setCustomSoundController [_heli, "CustomSoundController31", _blend];

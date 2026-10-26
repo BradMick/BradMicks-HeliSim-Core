@@ -314,7 +314,7 @@
 
 //The forces readout is its own switch, so the window can be had without the hint
 //and the 3D debug graphics that BMKHS_FM_DEBUG brings with it. Every force
-//generator tests this before publishing its row.
-#define BMKHS_FORCES_DEBUG (!isNil "bmkhs_forcesDebug" && {bmkhs_forcesDebug})
+//generator tests this before publishing its row. The flight log reads the rows too.
+#define BMKHS_FORCES_DEBUG ((!isNil "bmkhs_forcesDebug" && {bmkhs_forcesDebug}) || {!isNil "bmkhs_flightLog" && {bmkhs_flightLog}})
 
 #endif

@@ -36,8 +36,8 @@ private _collOutput 			= 0.0;
 //Tandem only - the rotor applies these through tandemPitchLiftCoef and tandemYawLiftCoef.
 private _tandemPitchOutput      = 0.0;
 private _tandemYawOutput        = 0.0;
-//Mast pitch added to the rotor's rotation[] pitch, deg - the tandem's LCT
-private _mastPitchOutput        = 0.0;
+//LCT, deg of longitudinal cyclic - the tandem's
+private _lctOutput              = 0.0;
 
 switch (_heli getVariable "bmkhs_controlScheme") do {
 	case CONVENTIONAL: {
@@ -72,7 +72,7 @@ switch (_heli getVariable "bmkhs_controlScheme") do {
 		_tandemPitchOutput = _sign * _pitchInput;
 		_tandemYawOutput   = _sign * _yawInput;
 
-		//LCT - the mast tilts on its schedule (airspeed by pressure altitude), + extends (forward).
+		//LCT - the mast tilts on its schedule (airspeed by pressure altitude), - forward, + aft.
 		//The actuator travels its full stroke in lctTime seconds. Casual and realistic alike.
 		//On the ground the proximity switches drive it to GND - 0, perpendicular to the mast.
 		private _lctSchedule = _rotor get "lctSchedule";
@@ -90,7 +90,7 @@ switch (_heli getVariable "bmkhs_controlScheme") do {
 				_lctPos = _target;
 			};
 			_rotor set ["lctPos", _lctPos];
-			_mastPitchOutput = 0 - _lctPos;
+			_lctOutput = _lctPos;
 		};
 	};
 	case COAXIAL: {
@@ -101,4 +101,4 @@ switch (_heli getVariable "bmkhs_controlScheme") do {
 	};
 };
 
-[_pitchOutput, _rollOutput, _collOutput, _tandemPitchOutput, _tandemYawOutput, _mastPitchOutput];
+[_pitchOutput, _rollOutput, _collOutput, _tandemPitchOutput, _tandemYawOutput, _lctOutput];

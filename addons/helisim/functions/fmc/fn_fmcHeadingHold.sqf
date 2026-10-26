@@ -163,7 +163,7 @@ if (_heli getVariable "bmkhs_hdgHoldActive") then {
     };
     //Ball on the pedals
     if (_subMode != "aut" && {_w > 0}) then {
-        //Right pedal moves the ball negative - flight log 2026-10-21, AH-64D
+        //Right pedal moves the ball negative
         _trnOutput = [_pidTrn, _deltaTime, _sideslipError, 0.0] call bmkhs_fnc_pidRun;
         _trnOutput = [_trnOutput, -1.0, 1.0] call BIS_fnc_clamp;
     } else {

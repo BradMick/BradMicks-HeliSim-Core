@@ -49,8 +49,6 @@ private _bladeMass        = _rotor get "bladeMass";
 private _liftCoefTable    = _rotor get "liftCoefTable";
 private _dragCoefTable    = _rotor get "dragCoefTable";
 private _reacTqScalar     = _rotor get "reacTqScalar";
-private _flapBackRollMax  = _rotor get "flapBackRollMax";
-private _flapBackPitchMax = _rotor get "flapBackPitchMax";
 private _gndEffValue      = _rotor get "gndEffValue";
 private _coneAngle        = _rotor get "coneAngle";
 private _controlMap       = _rotor get "controlMap";
@@ -66,15 +64,15 @@ _controls
 		   , "_collOutput"
 		   , "_tandemPitchOutput"
 		   , "_tandemYawOutput"
-		   , "_mastPitchOutput"];
+		   , "_lctOutput"];
 
-//Disc tilt
-private _flapLon = [-1, 1, _pitchOutput, _flapLonMin, _flapLonMid, _flapLonMax] call bmkhs_fnc_mathLinearInterpFromCenter;
+//Disc tilt - the LCT is longitudinal cyclic, - forward as rotation[]
+private _flapLon = ([-1, 1, _pitchOutput, _flapLonMin, _flapLonMid, _flapLonMax] call bmkhs_fnc_mathLinearInterpFromCenter) - _lctOutput;
 private _flapLat = [-1, 1, _rollOutput,  _flapLatMin, _flapLatMid, _flapLatMax] call bmkhs_fnc_mathLinearInterpFromCenter;
 //Tandem yaw is lateral cyclic too - it tilts the disc through the same range, on top of roll's
 _flapLat         = _flapLat + ([-1, 1, _tandemYawOutput, _flapLatMin, _flapLatMid, _flapLatMax] call bmkhs_fnc_mathLinearInterpFromCenter);
 //Rotor orientation
-private _p              = (_rot select 0) + _mastPitchOutput;
+private _p              = _rot select 0;
 private _r              = _rot select 1;
 private _y              = _rot select 2;
 //Mast frame
@@ -128,20 +126,18 @@ private _tableKey       = if (_controlMap isEqualTo []) then { _collOutput } els
 };
 
 //Dissymetry of lift - casual has none, the disc does not tilt with speed
-if (bmkhs_helisimRealismSetting != REALISTIC) then {
-    _flapBackRollMax  = 0.0;
-    _flapBackPitchMax = 0.0;
-    _reacTqScalar     = 0.0;
+private _realistic      = bmkhs_helisimRealismSetting == REALISTIC;
+if (!_realistic) then {
+    _reacTqScalar       = 0.0;
 };
 
-//"Flapback" a.k.a. "Blow Back"
-private _advanceRatio       = if (_tipVel > 1.0) then { _velXY / _tipVel } else { 0.0; };
-private _windAzimuth        = if (_velXY > 0.01) then { _velX atan2 _velY } else { 0.0 };
-private _flapBackRollAngle  = _flapBackRollMax  * _advanceRatio;
-private _flapBackPitchAngle = _flapBackPitchMax * _advanceRatio;
-
-//Blade lift coefficient - the same at all four positions
-private _liftCoef       = [_liftCoefTable, _tableKey, _velXY] call bmkhs_fnc_mathLinearInterp2D;
+//Blade lift coefficient - the same at all four positions. Air down through a lifting rotor's disc
+//costs angle of attack, taken off the collective at the blade pitch range.
+private _liftKey        = _tableKey;
+if (_type != TAIL && {_bladeVel_75 > 1.0}) then {
+    _liftKey            = _tableKey - ((deg ((_velZ max 0.0) / _bladeVel_75)) / BLADE_PITCH_RANGE);
+};
+private _liftCoef       = [_liftCoefTable, _liftKey, _velXY] call bmkhs_fnc_mathLinearInterp2D;
 //Axial speed along the thrust actually produced - a tail rotor's reverses with pedal
 private _axialVel       = _velZ * ([1.0, -1.0] select (_liftCoef < 0));
 
@@ -150,39 +146,91 @@ private _viScalarDenom  = linearConversion [-7.62, -19.30, _axialVel, VEL_VRS, V
 private _rotorTorque    = 0.0;
 private _torqueSign     = [1.0, -1.0] select (_dir == CW);
 
+//Induced velocity factor - the hub's. A lifting rotor's climb inflow is in the lift key above, so
+//only descent and VRS act here; a tail rotor takes both.
+private _viAxial        = if (_type == TAIL) then { _axialVel } else { _axialVel min 0.0 };
+private _viScalar       = if (_axialVel < -VEL_VRS && _velXY < VEL_ETL) then { 0.0 } else { 1 - (_viAxial / _viScalarDenom) };
+
+//Because the model is 4 fixed points, we have to scale based on the number of blades
+private _bladeScalar    = _numBlades / 4;
+//Dynamic pressure on a blade, at 75% radius, times its area
+private _bladeDynPressure = 0.5 * _dryAirDensity * _bladeArea * (_bladeVel_75 * _bladeVel_75);
+
+//Flap back - the disc tilts aft with speed and sideways with coning, main rotors only
+private _lonTilt        = _flapLon;
+private _latTilt        = _flapLat;
+if (_realistic && {_type == MAIN} && {_tipVel > 1.0}) then {
+    private _mu          = _velXY / _tipVel;
+    private _windAzimuth = if (_velXY > 0.01) then { _velX atan2 _velY } else { 0.0 };
+    //Induced velocity - momentum theory on this rotor's thrust
+    private _thrust      = abs (4.0 * _liftCoef * _bladeDynPressure * _bladeScalar * _viScalar);
+    private _vi          = 0.0;
+    if (_thrust > 0.0) then {
+        private _vh2     = _thrust / (2.0 * _dryAirDensity * _rotorArea);
+        _vi              = sqrt _vh2;
+        for "_n" from 1 to 30 do {
+            private _vt  = sqrt ((_velXY * _velXY) + ((_velZ + _vi) * (_velZ + _vi)));
+            _vi          = (0.5 * _vi) + (0.5 * (_vh2 / (_vt max 0.5)));
+        };
+    };
+    private _lambda      = (_velZ + _vi) / _tipVel;
+    private _theta0      = rad (_collOutput * BLADE_PITCH_RANGE);
+    //Aft, away from the relative wind
+    private _a1          = deg (_mu * (((8.0 / 3.0) * _theta0) - (2.0 * _lambda)) / (1.0 - (0.5 * _mu * _mu)));
+    //Lateral - follows the advancing side, so a clockwise rotor's is mirrored
+    private _b1          = ((4.0 / 3.0) * _mu * _collCone / (1.0 + (0.5 * _mu * _mu))) * ([1.0, -1.0] select (_dir == CW));
+    _lonTilt             = _lonTilt + (_b1 * (sin _windAzimuth)) - (_a1 * (cos _windAzimuth));
+    _latTilt             = _latTilt + (_b1 * (cos _windAzimuth)) + (_a1 * (sin _windAzimuth));
+};
+
+//Disc frame - the whole disc tilts: longitudinal about the lateral axis, then lateral about
+//the tilted forward axis
+private _discUVec       = [_uVec, _rVec, _lonTilt] call bmkhs_fnc_mathVectorRotateAroundAxis;
+private _discFVec       = [_fVec, _rVec, _lonTilt] call bmkhs_fnc_mathVectorRotateAroundAxis;
+_discUVec               = [_discUVec, _discFVec, _latTilt] call bmkhs_fnc_mathVectorRotateAroundAxis;
+private _discRVec       = [_rVec, _discFVec, _latTilt] call bmkhs_fnc_mathVectorRotateAroundAxis;
+
+//Blade frames in the tilted disc, lift coned along the blade, and each blade's axial flow along
+//its own lift - per-blade inflow
+private _thrustSign     = [1.0, -1.0] select (_liftCoef < 0);
+private _bladeFrames    = [];
+private _bladeInflow    = [];
+for "_i" from 0 to 3 do {
+    private _psi        = _i * 90.0;
+    private _locRVec    = [_discRVec, _discUVec, _psi] call bmkhs_fnc_mathVectorRotateAroundAxis;
+    private _locFVec    = [_discFVec, _discUVec, _psi] call bmkhs_fnc_mathVectorRotateAroundAxis;
+    private _liftDir    = [_discUVec, _locFVec, _collCone] call bmkhs_fnc_mathVectorRotateAroundAxis;
+    _bladeFrames pushBack [_locRVec, _locFVec, _liftDir];
+    _bladeInflow pushBack ([0.0, -((((_velModel vectorDotProduct _liftDir) * _thrustSign) - _axialVel) / VEL_VRS)] select _realistic);
+};
+//Average held to the hub's
+private _inflowMean     = 0.0;
+{ _inflowMean = _inflowMean + _x; } forEach _bladeInflow;
+_inflowMean             = _inflowMean / 4;
+
 for "_i" from 0 to 3 do {
     private _psi       = _i * 90.0;
-    //Local right and forward vectors
-    private _locRVec   = [_rVec, _uVec, _psi] call bmkhs_fnc_mathVectorRotateAroundAxis;
-    private _locFVec   = [_fVec, _uVec, _psi] call bmkhs_fnc_mathVectorRotateAroundAxis;
-    //Flap back angles - the lateral tilt follows the advancing side, so a clockwise rotor's is mirrored
-    private _fbRoll    = _flapBackRollAngle  * (cos (_psi - _windAzimuth)) * ([1.0, -1.0] select (_dir == CW));
-    private _fbPitch   = _flapBackPitchAngle * (sin (_psi - _windAzimuth));
-    //Blade flap angles
-    private _rollFlap  = (_flapLat * (cos _psi)) + _fbRoll;
-    private _pitchFlap = (_flapLon * (sin _psi)) + _fbPitch;
-    private _bladeFlap = _collCone + _rollFlap + _pitchFlap;
+    (_bladeFrames select _i) params ["_locRVec", "_locFVec", "_liftDir"];
+    private _bladeFlap = _collCone;
     //Build the blade and thrust position
     private _bladeOffset       = [_locRVec vectorMultiply _bladeRadius, _locFVec, _bladeFlap] call bmkhs_fnc_mathVectorRotateAroundAxis;
     private _blade             = _pos vectorAdd _bladeOffset;
     private _bladeThrustPos    = _pos vectorAdd (_bladeOffset vectorMultiply 0.75);
 
-    //Because the model is 4 fixed points, we have to scale based on the number of blades
-    private _bladeScalar    = _numBlades / 4;
     //Blade lift
-    private _bladeLift      = _liftCoef * 0.5 * _dryAirDensity * _bladeArea * (_bladeVel_75 * _bladeVel_75);
+    private _bladeLift      = _liftCoef * _bladeDynPressure;
     _bladeLift              = _bladeLift * _bladeScalar;
 
     //Differential lift from the controls, mixed for the control scheme
     ([_heli, _rotor, _psi, _controls, _liftCoef] call bmkhs_fnc_simpleRotorGetLiftCoefDelta)
         params ["_rollLiftCoef", "_pitchLiftCoef"];
     private _liftCoefDelta  = _rollLiftCoef + _pitchLiftCoef;
-    private _bladeLiftDelta = _liftCoefDelta * 0.5 * _dryAirDensity * _bladeArea * (_bladeVel_75 * _bladeVel_75);
+    private _bladeLiftDelta = _liftCoefDelta * _bladeDynPressure;
     _bladeLiftDelta         = _bladeLiftDelta * _bladeScalar;
 
     //Blade drag
     private _dragCoef       = [_dragCoefTable, _tableKey, _velXY] call bmkhs_fnc_mathLinearInterp2D;
-    private _bladeDrag      = _dragCoef * 0.5 * _dryAirDensity * _bladeArea * (_bladeVel_75 * _bladeVel_75);
+    private _bladeDrag      = _dragCoef * _bladeDynPressure;
     _bladeDrag              = _bladeDrag * _bladeScalar;
     
     //Total rotor torque - drag brakes the rotor, upflow in a descent drives it
@@ -190,14 +238,6 @@ for "_i" from 0 to 3 do {
     if (_type == MAIN) then {
         private _upflow     = (-_velZ) max 0.0;
         _rotorTorque        = _rotorTorque - (_autoTorque * _upflow * (1.0 - _collOutput) * _bladeScalar);
-    };
-
-    //Induced velocity
-    private _viScalar = 1.0;
-    if (_axialVel < -VEL_VRS && _velXY < VEL_ETL) then {
-        _viScalar = 0.0;
-    } else {
-        _viScalar = 1 - (_axialVel / _viScalarDenom);
     };
 
     //Ground effect - strongest on the deck, gone by one rotor diameter up
@@ -208,8 +248,8 @@ for "_i" from 0 to 3 do {
     };
 
     //Build the lift vector
-    _bladeLift               = (_bladeLift * _viScalar * _gndEffScalar) + _bladeLiftDelta;
-    private _bladeLiftVector = [_uVec vectorMultiply (_bladeLift * _deltaTime), _locFVec, _bladeFlap] call bmkhs_fnc_mathVectorRotateAroundAxis;
+    _bladeLift               = (_bladeLift * (_viScalar + (_bladeInflow select _i) - _inflowMean) * _gndEffScalar) + _bladeLiftDelta;
+    private _bladeLiftVector = _liftDir vectorMultiply (_bladeLift * _deltaTime);
     //Build the drag vector
     private _bladeDragVector = _locFVec vectorMultiply (-_bladeDrag * _deltaTime * _torqueSign * _reacTqScalar);
 
@@ -226,7 +266,7 @@ for "_i" from 0 to 3 do {
 
 	if (BMKHS_FORCES_DEBUG) then {
 		private _acc = _heli getVariable "bmkhs_dbgForces";
-		_acc pushBack [format ["%1 blade %2", ["main","tail"] select (_type == TAIL), _i], _bladeLiftVector vectorAdd _bladeDragVector, _bladeThrustPos vectorDiff _heliCom];
+		_acc pushBack [format ["%1%2 blade %3", ["main","tail"] select (_type == TAIL), _rotorIndex, _i], _bladeLiftVector vectorAdd _bladeDragVector, _bladeThrustPos vectorDiff _heliCom];
 		_heli setVariable ["bmkhs_dbgForces", _acc];
 	};
 };
