@@ -343,7 +343,7 @@ Set it up in this order:
 2. **Idle.** Adjust `fuelIdle` until the engine, lever at IDLE, settles at
    `idleNg`.
 3. **Start.** `startFuelBase` sets the peak TGT, `Starter >> torque` how quickly
-   it lights, `runawayNg` where it motors with no fuel.
+   it lights, `motoringNg` where it motors with no fuel.
 4. **Max torque available.** Fly or run max power at each FAT on your Maximum
    Torque Available chart and set that row of `airflowTable` - below 1.0 where
    the engine makes too much, above where too little. Leave the 15 C row at 1.0:
@@ -377,8 +377,8 @@ It also flies every rating in its own copy of the engine and prints what it
 reached against what you asked for. Every line should land on its target.
 Rows below your lowest rating (start, idle, flat pitch) come from Core's T700
 map scaled to your pressure ratio, and rows above your highest rating carry on
-along your last two. The checks fly your `helisim_simpleRotor.hpp`, and assume
-two engines declared as `Engine01` and `Engine02`.
+along your last two. The checks fly your `helisim_simpleRotor.hpp` with every engine
+your pack declares, `Engine01` onward.
 
 **`maxNg` is also the compressor map's scale.** The map's Ng axis runs 0 to 1 as
 a fraction of it, so set it to the true mechanical maximum.

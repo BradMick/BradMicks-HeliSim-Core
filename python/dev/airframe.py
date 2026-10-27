@@ -364,7 +364,7 @@ class Airframe:
         e = E.CFG['Engines']['Engine01']
         self.rpm = e['designRpm'] * e['npFly']
         self.refTq = (e['powerKw'] * 1000) / (e['designRpm'] * e['npFly'] * 0.10472)
-        self.numEngines = 2
+        self.numEngines = E.num_engines(E.CFG)
 
     def forces(self, vel, pitch, roll, yaw, coll, rho, paFt, parts=False):
         """Sum of every aerodynamic force and moment about the CoM, model space, and the gauge

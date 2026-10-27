@@ -21,6 +21,8 @@ Returns:
 Author:
     BradMick
 ---------------------------------------------------------------------------- */
+#include "\bmkhs_helisim\functions\engine\engine.hpp"
+
 params ["_heli", "_index", "_engine", "_ng"];
 
 private _sw = _heli getVariable [format ["bmkhs_eng%1StartSwVal", _index + 1], 0];
@@ -52,5 +54,6 @@ private _supplied = true;
     if (!_ok) exitWith { _supplied = false };
 } forEach (_engine get "starterGates");
 
-//An air turbine - full torque stalled, none at its runaway speed, which is what motoring settles at.
-[0.0, (_engine get "starterTorque") * ((1.0 - (_ng / (_engine get "runawayNg"))) max 0.0)] select _supplied
+//Full torque until its power limit takes over, then power / Ng - the limit derived from motoringNg in
+//fn_engineVariables.
+[0.0, (_engine get "starterTorque") min ((_engine get "starterPower") / (_ng max GT_NG_TORQUE_FLOOR))] select _supplied

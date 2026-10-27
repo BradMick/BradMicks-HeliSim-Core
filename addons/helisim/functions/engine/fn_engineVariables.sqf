@@ -59,19 +59,19 @@ if (_numEngines == 0) then { _numEngines = getNumber (_config >> "numEngines") }
 //expansion as ln(expansion) / ln(design PR).
 private _compressorMap =
 [
-     [0.0000, 0.0588, 0.0000, 0.544, 0.4781]
-    ,[0.0500, 0.0595, 0.0116, 0.544, 0.4781]
-    ,[0.1000, 0.0618, 0.0329, 0.544, 0.4781]
-    ,[0.1500, 0.0656, 0.0604, 0.544, 0.4781]
-    ,[0.2000, 0.0712, 0.0930, 0.544, 0.4781]
-    ,[0.2500, 0.0789, 0.1300, 0.544, 0.4781]
-    ,[0.3000, 0.0891, 0.1709, 0.544, 0.4781]
-    ,[0.3500, 0.1024, 0.2153, 0.544, 0.4781]
-    ,[0.4000, 0.1194, 0.2631, 0.544, 0.4781]
-    ,[0.4500, 0.1410, 0.3139, 0.544, 0.4781]
-    ,[0.5000, 0.1683, 0.3676, 0.544, 0.4781]
-    ,[0.5500, 0.2026, 0.4241, 0.544, 0.4781]
-    ,[0.6000, 0.2456, 0.4833, 0.544, 0.4781]
+     [0.0000, 0.0588, 0.0000, 0.544, 0.0000]
+    ,[0.0500, 0.0595, 0.0116, 0.544, 0.0037]
+    ,[0.1000, 0.0618, 0.0329, 0.544, 0.0158]
+    ,[0.1500, 0.0656, 0.0604, 0.544, 0.0348]
+    ,[0.2000, 0.0712, 0.0930, 0.544, 0.0610]
+    ,[0.2500, 0.0789, 0.1300, 0.544, 0.0938]
+    ,[0.3000, 0.0891, 0.1709, 0.544, 0.1326]
+    ,[0.3500, 0.1024, 0.2153, 0.544, 0.1770]
+    ,[0.4000, 0.1194, 0.2631, 0.544, 0.2261]
+    ,[0.4500, 0.1410, 0.3139, 0.544, 0.2792]
+    ,[0.5000, 0.1683, 0.3676, 0.544, 0.3357]
+    ,[0.5500, 0.2026, 0.4241, 0.544, 0.3949]
+    ,[0.6000, 0.2456, 0.4833, 0.544, 0.4564]
     ,[0.6173, 0.2629, 0.5043, 0.544, 0.4781]
     ,[0.6768, 0.3329, 0.5891, 0.595, 0.4779]
     ,[0.7546, 0.4559, 0.7130, 0.642, 0.4882]
@@ -119,7 +119,7 @@ for "_i" from 1 to _numEngines do {
     private _s = _e >> "Starter";
     _engine set ["starterType",   toLower getText (_s >> "type")];
     _engine set ["starterTorque", getNumber (_s >> "torque")];
-    _engine set ["runawayNg",     getNumber (_s >> "runawayNg")];
+    _engine set ["motoringNg",    getNumber (_s >> "motoringNg")];
     _engine set ["starterGates",  (getArray (_s >> "gate")) apply {_x}];
 
     //What the ECU needs to keep metering fuel. Declaring none means always powered.
@@ -148,6 +148,18 @@ for "_i" from 1 to _numEngines do {
     private _t3 = GT_STD_TEMP_K * (1 + (((_pr ^ ((GT_GAMMA_COLD - 1) / GT_GAMMA_COLD)) - 1) / _eff));
     _engine set ["spoolUnitKw", (_engine get "massFlow") * _flowFrac * GT_CP_COLD * (_t3 - GT_STD_TEMP_K)
                                 / GT_SPOOL_UNIT_LOAD];
+
+    //The starter gives its full torque until its power limit takes over, then power / Ng - it keeps
+    //pushing, ever less, until selfSustNg. The power limit is solved so that power / Ng balances the
+    //unfired spool's torque - the compressor net of what its turbine recovers - at motoringNg on a
+    //standard day: where a crank with no fuel settles.
+    private _motoringNg = (_engine get "motoringNg") max GT_NG_TORQUE_FLOOR;
+    ([_engine, _motoringNg, 15, GT_STD_PRESSURE_KPA, 0] call bmkhs_fnc_gasTurbineCompressor)
+        params ["", "", "_mDotM", "_t3M", "", "_compPowerM", "_ctExpansionM"];
+    private _xh       = (GT_GAMMA_HOT - 1) / GT_GAMMA_HOT;
+    private _ctPowerM = (_mDotM max 0.001) * GT_CP_HOT * (_engine get "turbineEfficiency") * _t3M
+                      * (1 - (_ctExpansionM ^ (-_xh)));
+    _engine set ["starterPower", (_compPowerM - _ctPowerM) / (_engine get "spoolUnitKw")];
 
     _engines pushBack _engine;
 };

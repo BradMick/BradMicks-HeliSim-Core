@@ -13,6 +13,8 @@
 //the rate is zero and the setpoint is the same.
 #define GT_NG_LEAD          0.4     //s
 #define GT_NG_RATE_TAU      0.1     //s, filter on that rate
+//Ng below which power over speed is held, so a stopped spool divides by no zero.
+#define GT_NG_TORQUE_FLOOR  0.05
 
 //Oil pressure at 100% Ng, as a gauge fraction. The pump is on the gas generator shaft, so
 //pressure tracks Ng rather than torque.

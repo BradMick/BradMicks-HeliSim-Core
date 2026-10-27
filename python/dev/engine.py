@@ -43,6 +43,7 @@ GT_LIMIT_GAIN = 16.0
 GT_LIMIT_TRACK = 1.02
 GT_NG_LEAD = 0.4       # s - the Ng limiter acts on Ng this far ahead at its present rate (engine.hpp)
 GT_NG_RATE_TAU = 0.1   # s - filter on that rate
+GT_NG_TORQUE_FLOOR = 0.05   # Ng below which power over speed is held, so a stopped spool divides by no zero
 GT_GAMMA_COLD = 1.40
 GT_CP_COLD = 1.005
 GT_GAMMA_HOT = 1.33
@@ -224,19 +225,19 @@ ROTOR_NUM_FIELDS = ['numBlades', 'mastLength', 'gearRatio', 'torqueTau', 'bladeR
 #compressorMap[] of its own. Ng / maxNg (corrected), PR / design, flow / design, efficiency,
 #compressor turbine expansion as ln(expansion) / ln(design PR).
 COMPRESSOR_MAP = [
-    [0.0000, 0.0588, 0.0000, 0.544, 0.4781],
-    [0.0500, 0.0595, 0.0116, 0.544, 0.4781],
-    [0.1000, 0.0618, 0.0329, 0.544, 0.4781],
-    [0.1500, 0.0656, 0.0604, 0.544, 0.4781],
-    [0.2000, 0.0712, 0.0930, 0.544, 0.4781],
-    [0.2500, 0.0789, 0.1300, 0.544, 0.4781],
-    [0.3000, 0.0891, 0.1709, 0.544, 0.4781],
-    [0.3500, 0.1024, 0.2153, 0.544, 0.4781],
-    [0.4000, 0.1194, 0.2631, 0.544, 0.4781],
-    [0.4500, 0.1410, 0.3139, 0.544, 0.4781],
-    [0.5000, 0.1683, 0.3676, 0.544, 0.4781],
-    [0.5500, 0.2026, 0.4241, 0.544, 0.4781],
-    [0.6000, 0.2456, 0.4833, 0.544, 0.4781],
+    [0.0000, 0.0588, 0.0000, 0.544, 0.0000],
+    [0.0500, 0.0595, 0.0116, 0.544, 0.0037],
+    [0.1000, 0.0618, 0.0329, 0.544, 0.0158],
+    [0.1500, 0.0656, 0.0604, 0.544, 0.0348],
+    [0.2000, 0.0712, 0.0930, 0.544, 0.0610],
+    [0.2500, 0.0789, 0.1300, 0.544, 0.0938],
+    [0.3000, 0.0891, 0.1709, 0.544, 0.1326],
+    [0.3500, 0.1024, 0.2153, 0.544, 0.1770],
+    [0.4000, 0.1194, 0.2631, 0.544, 0.2261],
+    [0.4500, 0.1410, 0.3139, 0.544, 0.2792],
+    [0.5000, 0.1683, 0.3676, 0.544, 0.3357],
+    [0.5500, 0.2026, 0.4241, 0.544, 0.3949],
+    [0.6000, 0.2456, 0.4833, 0.544, 0.4564],
     [0.6173, 0.2629, 0.5043, 0.544, 0.4781],
     [0.6768, 0.3329, 0.5891, 0.595, 0.4779],
     [0.7546, 0.4559, 0.7130, 0.642, 0.4882],
@@ -251,9 +252,17 @@ COMPRESSOR_MAP = [
 ]
 
 
+def num_engines(cfg):
+    """The engines the pack declares - Engine01, Engine02, ... in order, as Core reads numEngines."""
+    n = 0
+    while 'Engine%02d' % (n + 1) in cfg['Engines']:
+        n += 1
+    return n
+
+
 def engine_variables(H, cfg, overrides=None):
     engines = []
-    for i in range(1, 3):
+    for i in range(1, num_engines(cfg) + 1):
         e = cfg['Engines']['Engine%02d' % i]
         eng = {k: e[k] for k in NUM_FIELDS}
         eng['name'] = e['name']
@@ -262,7 +271,7 @@ def engine_variables(H, cfg, overrides=None):
                 eng[f] = e[section][f]
         eng['pid'] = e['Governor']['pid']
         eng['starterTorque'] = e['Starter']['torque']
-        eng['runawayNg'] = e['Starter']['runawayNg']
+        eng['motoringNg'] = e['Starter']['motoringNg']
         eng['starterGates'] = e['Starter']['gate']
         eng['governorGates'] = e['Governor']['gate']
         eng['refTq'] = (eng['powerKw'] * 1000) / (eng['designRpm'] * eng['npFly'] * 0.10472)
@@ -276,29 +285,37 @@ def engine_variables(H, cfg, overrides=None):
         pr = eng['pressureRatio'] * prFrac
         t3 = GT_STD_TEMP_K * (1 + ((pr ** ((GT_GAMMA_COLD - 1) / GT_GAMMA_COLD)) - 1) / eff)
         eng['spoolUnitKw'] = eng['massFlow'] * flowFrac * GT_CP_COLD * (t3 - GT_STD_TEMP_K) / GT_SPOOL_UNIT_LOAD
+        #fn_engineVariables: the starter's power limit, solved so that power / Ng balances the unfired
+        #spool's torque - the compressor net of its turbine - at motoringNg on a standard day.
+        xh = (GT_GAMMA_HOT - 1) / GT_GAMMA_HOT
+        mN = max(eng['motoringNg'], GT_NG_TORQUE_FLOOR)
+        _, _, mDotM, t3M, _, compPowerM, ctExpansionM, _ = gas_turbine_compressor(eng, mN, 15, GT_STD_PRESSURE_KPA, 0)
+        ctPowerM = max(mDotM, 0.001) * GT_CP_HOT * eng['turbineEfficiency'] * t3M * (1 - ctExpansionM ** (-xh))
+        eng['starterPower'] = (compPowerM - ctPowerM) / eng['spoolUnitKw']
         engines.append(eng)
     H['bmkhs_engines'] = engines
-    H['bmkhs_engPowerLeverState'] = ['OFF', 'OFF']
-    H['bmkhs_engState'] = ['OFF', 'OFF']
+    n = len(engines)
+    H['bmkhs_engPowerLeverState'] = ['OFF'] * n
+    H['bmkhs_engState'] = ['OFF'] * n
     H['bmkhs_pid_engine'] = [pid_create(*eng['pid']) for eng in engines]
-    z = [0.0, 0.0]
+    z = [0.0] * n
     for k in ('bmkhs_engPctNg', 'bmkhs_engNp', 'bmkhs_engPctNp', 'bmkhs_engPctTq',
               'bmkhs_engOilPsi', 'bmkhs_engFuelFlow', 'bmkhs_engOutputTq', 'bmkhs_engLeverSched'):
         H[k] = list(z)
-    H['bmkhs_engClutch'] = [False, False]
-    H['bmkhs_engineOverspeed'] = [False, False]
+    H['bmkhs_engClutch'] = [False] * n
+    H['bmkhs_engineOverspeed'] = [False] * n
     #The rig models no damage, so these stay healthy - kept so the lines reading them match Core.
-    H['bmkhs_engOilHealth'] = [1.0, 1.0]
-    H['bmkhs_engFailed'] = [False, False]
+    H['bmkhs_engOilHealth'] = [1.0] * n
+    H['bmkhs_engFailed'] = [False] * n
     H['bmkhs_engLimFuel'] = [e['fuelFly'] for e in engines]
     H['bmkhs_engMinFuel'] = [0.0 for e in engines]
-    H['bmkhs_engClutchSlip'] = [1.0, 1.0]
-    H['bmkhs_engTgt'] = [H['bmkhs_fat'], H['bmkhs_fat']]
-    H['bmkhs_engResidualHeat'] = [1.0, 1.0]
-    H['bmkhs_engNpRef'] = [-1.0, -1.0]
-    H['bmkhs_engNgPrev'] = [0.0, 0.0]
-    H['bmkhs_engNgRate'] = [0.0, 0.0]
-    H['bmkhs_engPrevLever'] = ['OFF', 'OFF']
+    H['bmkhs_engClutchSlip'] = [1.0] * n
+    H['bmkhs_engTgt'] = [H['bmkhs_fat']] * n
+    H['bmkhs_engResidualHeat'] = [1.0] * n
+    H['bmkhs_engNpRef'] = [-1.0] * n
+    H['bmkhs_engNgPrev'] = [0.0] * n
+    H['bmkhs_engNgRate'] = [0.0] * n
+    H['bmkhs_engPrevLever'] = ['OFF'] * n
 
 
 def simple_rotor_variables(H, cfg):
@@ -314,8 +331,8 @@ def simple_rotor_variables(H, cfg):
         rotors.append(rot)
     H['bmkhs_simpleRotors'] = rotors
     H['bmkhs_drivetrainDrag'] = float(CFG.get('drivetrainDrag', 0.0))
-    H['bmkhs_reqEngTorque'] = [0.0, 0.0]
-    H['bmkhs_rtrMoi'] = [0.0, 0.0]
+    H['bmkhs_reqEngTorque'] = [0.0] * len(rotors)
+    H['bmkhs_rtrMoi'] = [0.0] * len(rotors)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -442,7 +459,7 @@ def gas_turbine_starter(H, i, eng, ng):
     if H['bmkhs_engFailed'][i]:
         return 0.0
     supplied = H['starterSupplied'][i] if eng['starterGates'] else True
-    return eng['starterTorque'] * max(1.0 - ng / eng['runawayNg'], 0.0) if supplied else 0.0
+    return min(eng['starterTorque'], eng['starterPower'] / max(ng, GT_NG_TORQUE_FLOOR)) if supplied else 0.0
 
 
 def gas_turbine_compressor(eng, ng, fat, pAmb, velFwd):
@@ -480,7 +497,10 @@ def gas_turbine_compressor_turbine(eng, ng, tgt, t4, p3, mDot, compPower, ctExpa
     ctPower = m * GT_CP_HOT * eng['turbineEfficiency'] * t4 * (1 - ctExpansion ** (-xh))
     t45 = t4 - ctPower / (m * GT_CP_HOT)
     drag = (eng['compDrag'] * ng * ng + eng['compDragFloor']) if spooling else 0.0
-    ngDot = ((ctPower - compPower) / eng['spoolUnitKw'] + starterTq - drag) / eng['spoolInertia']
+    #Power over speed: the turbines' surplus as a torque, in the same units as the starter and the drag.
+    #Unchanged at Ng 1.0; below it the same surplus turns the spool harder, as torque does.
+    ngDot = (((ctPower - compPower) / eng['spoolUnitKw']) / max(ng, GT_NG_TORQUE_FLOOR)
+             + starterTq - drag) / eng['spoolInertia']
     ngNew = clamp(ng + ngDot * dt, 0.0, eng['maxNg'])
     currentHeat = 1.0 + (residualHeat - 1.0) * max(1.0 - ngNew / eng['idleNg'], 0.0)
     tgtHot = fat + currentHeat * (t45 - DEG_C_TO_KELVIN - fat) if running else fat
@@ -576,7 +596,8 @@ def turbo_shaft_engine(H, i, eng):
 def engine_controller(H, cfg):
     """fn_engineUpdate, useSystems path."""
     engState = list(H['bmkhs_engState'])
-    for e in (0, 1):
+    engs = range(len(H['bmkhs_engines']))
+    for e in engs:
         st = engState[e]
         sw = H['startSw'][e]
         lvr = H['pwrLvr'][e]
@@ -590,12 +611,12 @@ def engine_controller(H, cfg):
             if want == 'OFF' and st == 'ON':
                 H['bmkhs_engState'][e] = 'OFF'
     if not H['pneuAvail']:
-        for e in (0, 1):
+        for e in engs:
             if engState[e] == 'STARTING':
                 H['bmkhs_engState'][e] = 'OFF'
     for e, eng in enumerate(H['bmkhs_engines']):
         turbo_shaft_engine(H, e, eng)
-    for e in (0, 1):
+    for e in engs:
         if not H['fuelAvail'][e]:
             H['bmkhs_engState'][e] = 'OFF'
 
@@ -722,13 +743,14 @@ class Heli:
         H['bmkhs_velModelSpace'] = [0.0, 0.0, 0.0]
         H['hubVelXY'] = H['hubVelZ'] = 0.0
         H['pedal'] = 0.0
-        H['startSw'] = [0, 0]
-        H['pwrLvr'] = [0.0, 0.0]
+        n = len(H['bmkhs_engines'])
+        H['startSw'] = [0] * n
+        H['pwrLvr'] = [0.0] * n
         H['pneuAvail'] = True
-        H['starterSupplied'] = [True, True]
-        H['governorPowered'] = [True, True]
-        H['fuelAvail'] = [True, True]
-        H['diag'] = [{}, {}]
+        H['starterSupplied'] = [True] * n
+        H['governorPowered'] = [True] * n
+        H['fuelAvail'] = [True] * n
+        H['diag'] = [{} for _ in range(n)]
         self.t = 0.0
 
     def frame(self, dt, coll=None, pedal=None, velXY=None, velZ=None, baroAltM=None):
@@ -766,7 +788,10 @@ class Heli:
 
     def demand(self):
         """Rotor demand per engine, as a fraction of refTq."""
-        return sum(self.H['bmkhs_reqEngTorque']) / 2.0 / self.H['bmkhs_engines'][0]['refTq']
+        return sum(self.H['bmkhs_reqEngTorque']) / len(self.H['bmkhs_engines']) / self.H['bmkhs_engines'][0]['refTq']
+
+    def all_engines(self):
+        return tuple(range(len(self.H['bmkhs_engines'])))
 
 
 # ---------------------------------------------------------------------------------------------
@@ -818,7 +843,7 @@ def run_until(a, until, dt=DT, jitter=0.0, each=None, **kw):
 # ---- the acceptance bench ------------------------------------------------------------------
 
 EXPECTED = dict(light=2.6, cutout=5.5, peakLo=646.0, peakHi=661.0, stop=9.5, below80=6.6,
-                motorNg=0.420, hoverTq=0.94, hoverNr=1.01)
+                motorNg=0.250, hoverTq=0.94, hoverNr=1.01)   #motorNg: AH-64D dry crank, 25% (user, 2026-10-27)
 
 
 def cold_start(tgt0=None, secs=40.0):
@@ -1391,7 +1416,7 @@ def envelope_report():
 
 def pulled(pa, fat, single=False, coll=1.0, secs=100.0):
     """One engine's state settled at collective coll, at pressure altitude pa (ft) and FAT (C).
-    Single engine: engine 2 lever OFF before the pull."""
+    Single engine: engine 2 lever OFF before the pull, on an aircraft that has one."""
     global BASE_FAT
     saved = BASE_FAT
     #The environment lapses 2 C per 1,000 ft from its base, so the base that lands on fat.
@@ -1399,10 +1424,10 @@ def pulled(pa, fat, single=False, coll=1.0, secs=100.0):
     try:
         alt = pa * FEET_TO_METERS
         a = Heli(baroAltM=alt)
-        start_to(a, (0, 1), 'IDLE', 30.0, ARMA_DT, JITTER, baroAltM=alt)
-        a.H['pwrLvr'] = [FLY, FLY]
+        start_to(a, a.all_engines(), 'IDLE', 30.0, ARMA_DT, JITTER, baroAltM=alt)
+        a.H['pwrLvr'] = [FLY] * len(a.all_engines())
         run_until(a, 40.0, ARMA_DT, JITTER, baroAltM=alt)
-        if single:
+        if single and len(a.all_engines()) > 1:
             a.H['pwrLvr'][1] = 0.0
         run_until(a, 45.0, ARMA_DT, JITTER, baroAltM=alt)
         run_until(a, secs, ARMA_DT, JITTER,

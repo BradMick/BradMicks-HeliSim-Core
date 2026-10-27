@@ -41,7 +41,10 @@ private _t45     = _t4 - (_ctPower / (_m * GT_CP_HOT));
 
 //Spooling down, the unfired compressor's drag is what stops it; the floor finishes the stop.
 private _drag  = [0.0, ((_engine get "compDrag") * _ng * _ng) + (_engine get "compDragFloor")] select _spooling;
-private _ngDot = (((_ctPower - _compPower) / (_engine get "spoolUnitKw")) + _starterTq - _drag) / (_engine get "spoolInertia");
+//Power over speed: the turbines' surplus as a torque, in the same units as the starter and the drag.
+//Unchanged at Ng 1.0; below it the same surplus turns the spool harder, as torque does.
+private _ngDot = ((((_ctPower - _compPower) / (_engine get "spoolUnitKw")) / (_ng max GT_NG_TORQUE_FLOOR))
+                 + _starterTq - _drag) / (_engine get "spoolInertia");
 //No higher than the engine's own mechanical maximum - the fly-weight trip shuts it down there.
 private _ngNew = [_ng + (_ngDot * _deltaTime), 0.0, _engine get "maxNg"] call BIS_fnc_clamp;
 
