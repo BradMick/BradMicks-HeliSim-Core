@@ -58,13 +58,14 @@ def engine_spec():
 def scaled_t700_row(row, pr):
     """A T700 row in this engine's pressure ratio. The pressure ratio keeps the T700's share of its
     design ratio in log terms - 1.0 at standstill, this engine's ratio at 100%. The turbine takes
-    the same share of what the compressor makes, held below the first fitted row."""
+    the same share of what the compressor makes - the share held below the first fitted row, taken
+    of this row's own pressure ratio. Holding the expansion instead leaves the compressor turbine
+    taking more than the compressor makes at low Ng, so the power turbine turns nothing until idle."""
     base = E.COMPRESSOR_MAP
     prFrac = pr ** (math.log(T700_PR * row[1]) / math.log(T700_PR)) / pr
     _, prs, _, _, ct = E.math_linear_interp(base, max(row[0], 0.6173))
     share = math.log(T700_PR ** ct) / math.log(T700_PR * prs)
-    prsHeld = pr ** (math.log(T700_PR * prs) / math.log(T700_PR))
-    return [row[0], prFrac, row[2], row[3], math.log(prsHeld ** share) / math.log(pr)]
+    return [row[0], prFrac, row[2], row[3], max(share * math.log(pr * prFrac) / math.log(pr), 0.0)]
 
 
 def solve(spec, base, fat, ng, tgt, tq, effGiven=None):
@@ -130,7 +131,7 @@ def fuel_idle():
     def idle(fuel):
         E.OVERRIDES['fuelIdle'] = fuel
         a = E.Heli()
-        E.start_to(a, (0, 1), 'IDLE', 80.0, E.ARMA_DT, E.JITTER)
+        E.start_to(a, a.all_engines(), 'IDLE', 80.0, E.ARMA_DT, E.JITTER)
         return a
 
     for _ in range(16):

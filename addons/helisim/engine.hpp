@@ -96,7 +96,7 @@
 //            class Starter {
 //                type      = "pneumatic";
 //                torque    = 0.45;
-//                runawayNg = 0.25;
+//                motoringNg = 0.25;
 //                gate[]    = {{"PNEU", 0.85}};
 //            };
 //        };
@@ -182,9 +182,11 @@
 //
 //STARTER
 //  type                "pneumatic" | "electric".
-//  torque              Stalled torque on the spool, normalised.
-//  runawayNg           Ng at which it has no torque left - an air turbine's torque falls with
-//                      speed. With no fuel, motoring settles here.
+//  torque              Maximum torque on the spool, normalised - what it gives until its power
+//                      limit takes over, and then power / Ng until selfSustNg.
+//  motoringNg          Ng a crank with no fuel settles at - the starter alone against the
+//                      unfired spool, standard day. Core solves the starter's power limit from
+//                      it, so in a start the starter keeps pushing, ever less, until selfSustNg.
 //  gate[]              What it needs available. Empty = always supplied.
 //
 /////////////////////////////////////////////////////////////////////////////////////////////
@@ -194,7 +196,7 @@
 //1. Spec numbers first: pressureRatio, massFlow, powerKw, designRpm, the limits.
 //2. Idle: fuelIdle until a lever-at-IDLE engine settles at idleNg.
 //3. Start: startFuelBase for the peak TGT, Starter >> torque for the time to light-off,
-//   runawayNg for the motoring speed.
+//   motoringNg for the motoring speed.
 //4. Max torque available: on a standard day (15 C) max power is the untrimmed engine. On
 //   every other FAT, set that airflowTable row so max torque matches the Maximum Torque
 //   Available chart - less air where the engine makes too much, more where too little. The

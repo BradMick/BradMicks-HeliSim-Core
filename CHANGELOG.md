@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.4.2.0
+
+**Update every HeliSim aircraft with this release.** The starter's `runawayNg` is replaced by
+`motoringNg`; a pack that still declares `runawayNg` has no starter power. Use the matching
+pack versions.
+
+### Engine
+- **Starts come out of the physics.** The spool's torque balance takes the turbines' power
+  over speed, so the turbine, the compressor, the starter and the drag all act as torques. A
+  start now takes the time a real engine does; idle and every steady state are unchanged.
+- **The starter.** Full torque until its power limit, then power over speed - it keeps
+  pushing, ever less, until self-sustaining. `motoringNg` is where a crank with no fuel
+  settles; Core solves the starter's power limit from it.
+- **The rotor turns as Ng rises.** The default T700 compressor map below idle had the
+  compressor turbine taking more expansion than the compressor made, so the power turbine
+  turned nothing until idle.
+- **Engine display**: an engine with no Np overspeed trip (`npOvrspdProt = 0`) no longer
+  stops the display with a zero divisor.
+
+### Tools
+- **The rig runs the engines a pack declares** - single-engine aircraft no longer need a
+  second engine to fit.
+- **`compressor_map.py`**: rows below the first rating keep the compressor turbine's share
+  of each row's own pressure ratio, so the power turbine turns during a start.
+- **The bench's dry-crank target is 25%** (it was an unsourced 42%).
+
 ## 1.4.1.0
 
 ### Flight controls

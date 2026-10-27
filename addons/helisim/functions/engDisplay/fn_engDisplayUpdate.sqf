@@ -121,6 +121,8 @@ private _colour = {
 //Full scales from engine 1, so the tapes line up.
 private _tgtRed = ([_engines # 0, _tgtKey] call _band) # 1;
 private _npOvsp = (_engines # 0) get "npOvrspdProt";
+//An engine with no overspeed trip (0) scales to its top Np limit instead.
+if (_npOvsp <= 0) then { _npOvsp = ([_engines # 0, "npLimits"] call _band) # 1 };
 
 //Full scale sits above the top limit so the red band has somewhere to be drawn.
 private _tqFs  = ED_TQ_FULL_SCALE;
