@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.4.3.0
+
+### Engine
+- **Starts no longer overtemp off sea level.** Below FLY the fuel control meters as Wf/P3 on
+  corrected Ng - fuel follows the inlet's pressure - so a start or ground idle keeps its
+  fuel-air ratio in thin air. Before, the same fuel met less air at altitude, and a start in
+  the Asia or Central Asia environments ran past `startTgt` and destroyed the engine. A
+  standard day meters exactly as before; FLY is unchanged, so power available is too.
+
+### Tools
+- **The rig carries Core's environments** - `ENVIRONMENTS` holds each setting's base altitude
+  and FAT, as fn_environment, so a test runs where the game does.
+
 ## 1.4.2.0
 
 **Update every HeliSim aircraft with this release.** The starter's `runawayNg` is replaced by

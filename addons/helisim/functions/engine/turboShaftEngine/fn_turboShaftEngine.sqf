@@ -77,7 +77,16 @@ private _refTq = _engine get "refTq";
 ([_engine, _ng, _fat, _p2, _velY] call bmkhs_fnc_gasTurbineCompressor)
     params ["_nc", "_pr", "_mDot", "_t3", "_p3", "_compPower", "_ctExpansion", "_inletVel"];
 
-private _t4 = [_engine, _t3, _mDot, _fuelCmd, _running] call bmkhs_fnc_gasTurbineCombustor;
+//Below FLY the fuel control meters open loop, as Wf/P3 - fuel per unit of compressor delivery
+//pressure, scheduled on corrected Ng - so a start or ground idle keeps its fuel-air ratio when the
+//air is thin. On corrected Ng that comes out as the inlet's pressure over standard (P3 / PR), so a
+//standard day meters as scheduled. FLY is governed on Np and held by its limiters, so it meters
+//as commanded.
+if (_lever != "FLY") then {
+    _fuelCmd = _fuelCmd * (_p3 / _pr) / GT_STD_PRESSURE_KPA;
+};
+
+private _t4= [_engine, _t3, _mDot, _fuelCmd, _running] call bmkhs_fnc_gasTurbineCombustor;
 
 ([_engine, _ng, _tgt, _t4, _p3, _mDot, _compPower, _ctExpansion, _starterTq, _residualHeat, _fat, _velY,
     _running, _spooling, _deltaTime] call bmkhs_fnc_gasTurbineCompressorTurbine)

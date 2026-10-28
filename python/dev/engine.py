@@ -336,16 +336,26 @@ def simple_rotor_variables(H, cfg):
 
 
 # ---------------------------------------------------------------------------------------------
-# fn_environment - ISA_STD base
+# fn_environment
 # ---------------------------------------------------------------------------------------------
 
-#Sea-level temperature; 15 is ISA and what Core's environment uses.
-BASE_FAT = 15.0
+#The CBA environment setting - {name: (base altitude ft, base FAT C)}, as fn_environment's switch.
+ENVIRONMENTS = {
+    'ISA_STD': (0, 15.0),
+    'EUROPE_SUMMER': (800, 20.0),
+    'EUROPE_WINTER': (800, 0.0),
+    'MIDDLE_EAST': (1800, 30.0),
+    'CENTRAL_ASIA_SUMMER': (5000, 30.0),
+    'CENTRAL_ASIA_WINTER': (5000, -5.0),
+    'ASIA': (3100, 25.0),
+}
+#The base in use; ISA_STD unless a scenario sets another.
+BASE_ALT, BASE_FAT = ENVIRONMENTS['ISA_STD']
 
 
 def environment(H):
     baroAlt = H['baroAltM'] * METERS_TO_FEET
-    baseAlt, baseFAT = 0, BASE_FAT
+    baseAlt, baseFAT = BASE_ALT, BASE_FAT
     altitude = baseAlt + baroAlt                     # exact, as fn_environment
     altimeter = 29.92
     temperature = baseFAT - ((baroAlt / 1000) * 2)
@@ -560,7 +570,10 @@ def turbo_shaft_engine(H, i, eng):
     refTq = eng['refTq']
 
     nc, pr, mDot, t3, p3, compPower, ctExpansion, inletVel = gas_turbine_compressor(eng, ng, fat, p2, velY)
-    t4 = gas_turbine_combustor(eng, t3, mDot, fuelCmd, running)
+    #Below FLY the fuel control meters open loop, as Wf/P3 on corrected Ng - the inlet's pressure over standard.
+    if lever != 'FLY':
+        fuelCmd = fuelCmd * (p3 / pr) / GT_STD_PRESSURE_KPA
+    t4 =gas_turbine_combustor(eng, t3, mDot, fuelCmd, running)
     ngNew, tgt, t45, p45 = gas_turbine_compressor_turbine(
         eng, ng, tgt, t4, p3, mDot, compPower, ctExpansion, starterTq, residualHeat, fat, velY,
         running, spooling, dt)
