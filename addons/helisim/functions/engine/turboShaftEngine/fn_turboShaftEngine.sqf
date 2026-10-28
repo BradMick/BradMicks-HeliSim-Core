@@ -3,7 +3,7 @@ Function: bmkhs_fnc_turboShaftEngine
 
 Description:
     One turboshaft engine, one frame. Wires the modules together and owns the
-    call order: starter -> governor -> compressor -> combustor -> compressor
+    call order: starter -> compressor -> governor -> combustor -> compressor
     turbine -> power turbine. Config names this assembly, so a new engine type is a folder and a
     config string rather than a switch in the controller.
 
@@ -69,21 +69,23 @@ private _starterTq = [_heli, _index, _engine, _ng] call bmkhs_fnc_gasTurbineStar
 private _cranking  = _starterTq > 0.0;
 private _spooling  = !_running && {!_cranking};
 
-([_heli, _index, _engine, _ng, _np, _tgt, _lever, _fat, _deltaTime] call bmkhs_fnc_engineGovernor)
+//The compressor reads only the spool and the air, so it runs first - the governor schedules on its corrected Ng.
+([_engine, _ng, _fat, _p2, _velY] call bmkhs_fnc_gasTurbineCompressor)
+    params ["_nc", "_pr", "_mDot", "_t3", "_p3", "_compPower", "_ctExpansion", "_inletVel", "_theta"];
+
+([_heli, _index, _engine, _ng, _nc, _np, _tgt, _lever, _fat, _deltaTime] call bmkhs_fnc_engineGovernor)
     params ["_fuelCmd", "_engineLoadShareTq"];
 
 private _refTq = _engine get "refTq";
 
-([_engine, _ng, _fat, _p2, _velY] call bmkhs_fnc_gasTurbineCompressor)
-    params ["_nc", "_pr", "_mDot", "_t3", "_p3", "_compPower", "_ctExpansion", "_inletVel"];
-
-//Below FLY the fuel control meters open loop, as Wf/P3 - fuel per unit of compressor delivery
-//pressure, scheduled on corrected Ng - so a start or ground idle keeps its fuel-air ratio when the
-//air is thin. On corrected Ng that comes out as the inlet's pressure over standard (P3 / PR), so a
-//standard day meters as scheduled. FLY is governed on Np and held by its limiters, so it meters
-//as commanded.
+//Below FLY the fuel control meters open loop, in corrected fuel flow - the inlet's pressure over
+//standard (P3 / PR), times root theta - on corrected Ng, with the air the engine passes
+//(airflowTable). The start and ground idle then run the same corrected line on any day: idle
+//holds its corrected Ng, a little higher on a hot day as a real engine's does. A standard day
+//meters as scheduled. FLY is governed on Np and held by its limiters, so it meters as commanded.
 if (_lever != "FLY") then {
-    _fuelCmd = _fuelCmd * (_p3 / _pr) / GT_STD_PRESSURE_KPA;
+    private _airflow = ([_engine get "airflowTable", _fat] call bmkhs_fnc_mathLinearInterp) select 1;
+    _fuelCmd = _fuelCmd * ((_p3 / _pr) / GT_STD_PRESSURE_KPA) * (sqrt _theta) * _airflow;
 };
 
 private _t4= [_engine, _t3, _mDot, _fuelCmd, _running] call bmkhs_fnc_gasTurbineCombustor;

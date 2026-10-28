@@ -289,7 +289,7 @@ def engine_variables(H, cfg, overrides=None):
         #spool's torque - the compressor net of its turbine - at motoringNg on a standard day.
         xh = (GT_GAMMA_HOT - 1) / GT_GAMMA_HOT
         mN = max(eng['motoringNg'], GT_NG_TORQUE_FLOOR)
-        _, _, mDotM, t3M, _, compPowerM, ctExpansionM, _ = gas_turbine_compressor(eng, mN, 15, GT_STD_PRESSURE_KPA, 0)
+        _, _, mDotM, t3M, _, compPowerM, ctExpansionM, _, _ = gas_turbine_compressor(eng, mN, 15, GT_STD_PRESSURE_KPA, 0)
         ctPowerM = max(mDotM, 0.001) * GT_CP_HOT * eng['turbineEfficiency'] * t3M * (1 - ctExpansionM ** (-xh))
         eng['starterPower'] = (compPowerM - ctPowerM) / eng['spoolUnitKw']
         engines.append(eng)
@@ -372,7 +372,7 @@ def environment(H):
 # Engine - fn_engineGovernor, gasTurbine/*, turboShaftEngine/*
 # ---------------------------------------------------------------------------------------------
 
-def engine_governor(H, i, eng, ng, np_, tgt, lever, fat, dt):
+def engine_governor(H, i, eng, ng, nc, np_, tgt, lever, fat, dt):
     idleNg = eng['idleNg']
 
     #Ng's rate of change, filtered - what the Ng limiter anticipates with.
@@ -443,9 +443,9 @@ def engine_governor(H, i, eng, ng, np_, tgt, lever, fat, dt):
     H['bmkhs_engNpRef'][i] = npRef
 
     fuelCmd = orifice
-    if ng < idleNg:
+    if nc < idleNg:
         base = eng['startFuelBase']
-        fuelCmd = fuelCmd * min(base + (1.0 - base) * ng / idleNg, 1.0)
+        fuelCmd = fuelCmd * min(base + (1.0 - base) * nc / idleNg, 1.0)
 
     rotorTq = sum(H['bmkhs_reqEngTorque'])
     lvrState = H['bmkhs_engPowerLeverState']
@@ -490,7 +490,7 @@ def gas_turbine_compressor(eng, ng, fat, pAmb, velFwd):
     compPower = mDot * GT_CP_COLD * (t3 - t2)
     inletArea = math.pi * (eng['inletDiameter'] / 2) ** 2
     inletVel = mDot / inletArea / (p2 / (GT_R_AIR * t2))
-    return nc, pr, mDot, t3, p2 * pr, compPower, designPr ** ctFrac, inletVel
+    return nc, pr, mDot, t3, p2 * pr, compPower, designPr ** ctFrac, inletVel, theta
 
 
 def gas_turbine_combustor(eng, t3, mDot, fuelCmd, running):
@@ -566,13 +566,16 @@ def turbo_shaft_engine(H, i, eng):
     cranking = starterTq > 0.0
     spooling = not running and not cranking
 
-    fuelCmd, share, orifice = engine_governor(H, i, eng, ng, np_, tgt, lever, fat, dt)
+    nc, pr, mDot, t3, p3, compPower, ctExpansion, inletVel, theta = gas_turbine_compressor(eng, ng, fat, p2, velY)
+
+    fuelCmd, share, orifice = engine_governor(H, i, eng, ng, nc, np_, tgt, lever, fat, dt)
     refTq = eng['refTq']
 
-    nc, pr, mDot, t3, p3, compPower, ctExpansion, inletVel = gas_turbine_compressor(eng, ng, fat, p2, velY)
-    #Below FLY the fuel control meters open loop, as Wf/P3 on corrected Ng - the inlet's pressure over standard.
+    #Below FLY the fuel control meters open loop, in corrected fuel flow on corrected Ng, with the
+    #air the engine passes - the same fuel-air on any day.
     if lever != 'FLY':
-        fuelCmd = fuelCmd * (p3 / pr) / GT_STD_PRESSURE_KPA
+        airflow = math_linear_interp(eng['airflowTable'], fat)[1]
+        fuelCmd = fuelCmd * ((p3 / pr) / GT_STD_PRESSURE_KPA) * math.sqrt(theta) * airflow
     t4 =gas_turbine_combustor(eng, t3, mDot, fuelCmd, running)
     ngNew, tgt, t45, p45 = gas_turbine_compressor_turbine(
         eng, ng, tgt, t4, p3, mDot, compPower, ctExpansion, starterTq, residualHeat, fat, velY,

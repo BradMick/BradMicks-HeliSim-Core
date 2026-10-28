@@ -12,9 +12,9 @@ Parameters:
     _velFwd - Airspeed into the inlet, m/s [Number]
 
 Returns:
-    [_nc, _pr, _mDot, _t3, _p3, _compPower, _ctExpansion, _inletVel] - corrected Ng,
+    [_nc, _pr, _mDot, _t3, _p3, _compPower, _ctExpansion, _inletVel, _theta] - corrected Ng,
     pressure ratio, airflow kg/s, T3 K, P3 kPa, compressor power kW, the compressor
-    turbine's expansion ratio, inlet velocity m/s [Array]
+    turbine's expansion ratio, inlet velocity m/s, inlet temperature over standard [Array]
 
 Author:
     BradMick
@@ -51,4 +51,4 @@ private _compPower = _mDot * GT_CP_COLD * (_t3 - _t2);
 private _inletArea = pi * (((_engine get "inletDiameter") / 2) ^ 2);
 private _inletVel  = _mDot / _inletArea / (_p2 / (GT_R_AIR * _t2));
 
-[_nc, _pr, _mDot, _t3, _p2 * _pr, _compPower, _designPr ^ _ctFrac, _inletVel]
+[_nc, _pr, _mDot, _t3, _p2 * _pr, _compPower, _designPr ^ _ctFrac, _inletVel, _theta]
