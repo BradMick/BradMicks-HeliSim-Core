@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.4.4.0
+
+### Engine
+- **Ground idle holds on hot days.** Below FLY the fuel control now meters in corrected fuel
+  flow on corrected Ng, with the air the engine passes (`airflowTable`). In 1.4.3.0 fuel
+  followed only the inlet's pressure, so on a hot day idle Ng sagged - as low as 51% on the
+  Bo 105 in the Middle East - and the start dragged. Every aircraft now idles at its corrected
+  idle Ng in every environment, a little higher on a hot day as a real engine does, and a
+  start takes the same time on any day. Standard day and FLY are unchanged, so power
+  available is too.
+- **The start fuel schedule reads corrected Ng.**
+
 ## 1.4.3.0
 
 ### Engine

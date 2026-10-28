@@ -10,7 +10,8 @@ Parameters:
     _index     - Which engine [Number]
     _engine    - That engine's config [HashMap]
     _ng        - Spool speed at the top of the frame [Number]
-    _np        - Np at the top of the frame, normalised [Number]
+    _nc        - That speed corrected to the inlet's temperature [Number]
+    _np      - Np at the top of the frame, normalised [Number]
     _tgt       - TGT at the top of the frame, deg C [Number]
     _lever     - Power lever position, OFF / IDLE / FLY [String]
     _fat       - Free air temperature, deg C [Number]
@@ -25,7 +26,7 @@ Author:
 ---------------------------------------------------------------------------- */
 #include "\bmkhs_helisim\functions\engine\engine.hpp"
 
-params ["_heli", "_index", "_engine", "_ng", "_np", "_tgt", "_lever", "_fat", "_deltaTime"];
+params ["_heli", "_index", "_engine", "_ng", "_nc", "_np", "_tgt", "_lever", "_fat", "_deltaTime"];
 
 private _idleNg = _engine get "idleNg";
 
@@ -151,11 +152,12 @@ if (_lever == "FLY" && {_govPowered}) then {
 [_heli, "bmkhs_engNpRef", _index, _npRef] call bmkhs_fnc_utilSetArrayVariable;
 
 //Below idle Ng fuel is metered, which is what makes TGT peak above idle during a start and
-//fall back as the compressor catches up. Above it this is a no-op.
+//fall back as the compressor catches up. Above it this is a no-op. On corrected Ng, as the
+//fuel control schedules it, so the start runs the same on any day.
 private _fuelCmd = _orifice;
-if (_ng < _idleNg) then {
+if (_nc < _idleNg) then {
     private _base = _engine get "startFuelBase";
-    _fuelCmd = _fuelCmd * ((_base + ((1.0 - _base) * _ng / _idleNg)) min 1.0);
+    _fuelCmd = _fuelCmd * ((_base + ((1.0 - _base) * _nc / _idleNg)) min 1.0);
 };
 
 //reqEngTorque is indexed by ROTOR, so it is summed. Shared by capacity, and only among
