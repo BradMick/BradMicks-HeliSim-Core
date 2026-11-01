@@ -18,7 +18,14 @@
   transmission takes the rotors with it. The time to that comes from Nr², not from a clock.
 - **Showing it**: a pack declares `class DamageParts` - its function and a selection per part
   name - and Core calls it as parts go. A pack that declares none still loses the part.
-  A full repair puts everything back.
+  A full repair puts everything back - Core holds a marker on the tail rotor hitpoint so a
+  repair is seen even when nothing else was hit.
+- **A repair of a shut-down aircraft is seen as it happens.** The repair poll ran after the
+  idle gate, so with nobody aboard and everything off it never ran at all; it now runs
+  whenever the pack ticks the aircraft.
+- **A repair is no longer seen on every engine start.** The rotor lock writes the main rotor
+  hitpoint 0.9 and back, which the repair poll read as a repair; a drop while the lock held it
+  is now the lock releasing, and any other drop is still a repair.
 
 ### State
 - **`bmkhs_loadFactor`**, the g at the centre of mass, replaces each pack's own g-meter maths.

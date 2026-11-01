@@ -33,6 +33,9 @@ if (!local _heli) exitWith {
     [_heli] call bmkhs_fnc_damageEffects;
 };
 
+//Repair - before the idle gate: a shut-down aircraft is repaired with nobody aboard
+[_heli] call bmkhs_fnc_repair;
+
 //Idle gate - no player aboard and nothing left running
 if (((crew _heli) findIf {isPlayer _x}) < 0
     //AI pilot - enable with Preston
@@ -106,9 +109,6 @@ if (isMultiplayer && {(_heli getVariable "bmkhs_lastTimePropagated") + 0.1 < CBA
 
 //Engine display
 [_heli] call bmkhs_fnc_engDisplayUpdate;
-
-//Repair
-[_heli] call bmkhs_fnc_repair;
 
 //Flight log - to the RPT, for analysis. Before the readout, which clears the force rows.
 [_heli] call bmkhs_fnc_debugFlightLog;

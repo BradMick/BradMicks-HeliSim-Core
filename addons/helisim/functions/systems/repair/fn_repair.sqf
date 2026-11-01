@@ -27,19 +27,36 @@ Author:
     BradMick
 ---------------------------------------------------------------------------- */
 params ["_heli"];
+#include "\bmkhs_helisim\functions\core\core.hpp"
 #include "\bmkhs_helisim\functions\damage\gStress.hpp"
+
+//The main rotor's hitpoint doubles as the rotor lock (fn_engineUpdate), held at 0.9 while
+//bmkhs_shiftLocked. Its drop is a repair only when the lock was not holding it at the last read.
+private _rotorHp = ((_heli getVariable "bmkhs_damagePoints") getOrDefault ["mainRotor", []]) apply { toLower _x };
+private _locked  = _heli getVariable ["bmkhs_shiftLocked", false];
 
 //Any hitpoint lower than at the last read is a repair
 if (CBA_missionTime >= (_heli getVariable ["bmkhs_repairReadT", -1]) + 1) then {
     _heli setVariable ["bmkhs_repairReadT", CBA_missionTime];
-    private _now  = (getAllHitPointsDamage _heli) param [2, []];
-    private _last = _heli getVariable ["bmkhs_repairLastDmg", _now];
+    (getAllHitPointsDamage _heli) params [["_names", []], "", ["_now", []]];
+    private _last       = _heli getVariable ["bmkhs_repairLastDmg", _now];
+    private _lastLocked = _heli getVariable ["bmkhs_repairLastLocked", _locked];
     if (count _last == count _now) then {
         {
-            if (_x < ((_last select _forEachIndex) - 0.0001)) exitWith { _heli setVariable ["bmkhs_repairPending", true] };
+            private _heldByLock = _lastLocked && {(toLower (_names select _forEachIndex)) in _rotorHp};
+            if (!_heldByLock && {_x < ((_last select _forEachIndex) - 0.0001)}) exitWith {
+                _heli setVariable ["bmkhs_repairPending", true];
+                diag_log text format ["[BMKHS] repair seen on %1: %2 %3 -> %4", typeOf _heli, _names select _forEachIndex, _last select _forEachIndex, _x];
+            };
         } forEach _now;
     };
     _heli setVariable ["bmkhs_repairLastDmg", _now];
+    _heli setVariable ["bmkhs_repairLastLocked", _locked];
+
+    //The repair marker - a repair zeroes it, which is the drop above; it goes straight back
+    if (([_heli, "tailRotor"] call bmkhs_fnc_damageGet) == 0) then {
+        [_heli, "tailRotor", GSTRESS_REPAIR_MARK] call bmkhs_fnc_damageSet;
+    };
 };
 
 if !(_heli getVariable "bmkhs_repairPending") exitWith {};
@@ -55,7 +72,7 @@ _heli setVariable ["bmkhs_repairPending", false];
     if (_fill) then {
         _heli setVariable [(_x get "varName") + "Charge", 1.0, true];
         if (_role != "") then {
-            [_heli, _role, 0.000001, _index] call bmkhs_fnc_damageSet;
+            [_heli, _role, EPSILON, _index] call bmkhs_fnc_damageSet;
         };
     };
 } forEach (_heli getVariable ["bmkhs_sysStorage", []]);
@@ -65,7 +82,7 @@ _heli setVariable ["bmkhs_repairPending", false];
 {
     private _role = _x get "damageRole";
     if (_role != "" && {([_heli, _role, _x get "index"] call bmkhs_fnc_damageGet) == 0}) then {
-        [_heli, _role, 0.000001, _x get "index"] call bmkhs_fnc_damageSet;
+        [_heli, _role, EPSILON, _x get "index"] call bmkhs_fnc_damageSet;
     };
 } forEach ((_heli getVariable ["bmkhs_sysProducers", []]) + (_heli getVariable ["bmkhs_sysConverters", []]));
 
@@ -87,12 +104,19 @@ for "_i" from 0 to (_engines - 1) do {
         [_heli, "bmkhs_engOilPsiLow",     _i, false, true] call bmkhs_fnc_utilSetArrayVariable;
         [_heli, "bmkhs_engOilHealth",     _i, 1.0] call bmkhs_fnc_utilSetArrayVariable;
         if ((_heli getVariable "bmkhs_engFailureResult") == _i) then { _heli setVariable ["bmkhs_engFailureResult", -1] };
-        [_heli, "engines", 0.000001, _i] call bmkhs_fnc_damageSet;
+        [_heli, "engines", EPSILON, _i] call bmkhs_fnc_damageSet;
     };
 };
 
 //G-stress - only a full repair replaces the structure
-if (((getAllHitPointsDamage _heli) param [2, []]) findIf {_x > 0.001} < 0) then {
+(getAllHitPointsDamage _heli) params [["_names", []], "", ["_dmg", []]];
+private _full = true;
+{
+    private _heldByLock = _locked && {(toLower (_names select _forEachIndex)) in _rotorHp};
+    if (!_heldByLock && {_x > GSTRESS_REPAIR_MARK}) exitWith { _full = false };
+} forEach _dmg;
+diag_log text format ["[BMKHS] repair on %1: full %2, fatigue %3", typeOf _heli, _full, _heli getVariable "bmkhs_gFatigue"];
+if (_full) then {
     private _fn   = _heli getVariable "bmkhs_partFunction";
     private _sels = _heli getVariable "bmkhs_partSelections";
     private _parts = +(_heli getVariable "bmkhs_partsLost");

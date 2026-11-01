@@ -31,6 +31,9 @@
 //Chance per unit of that damage that another blade lets go
 #define GSTRESS_SHED_SCALE      0.5
 
+//Held on the tailRotor hitpoint so a repair shows as a drop - above fn_repair's 0.0001 margin
+#define GSTRESS_REPAIR_MARK     0.001
+
 //Fatigue at which the tail structure fails
 #define GSTRESS_STAB_FAIL       0.60
 #define GSTRESS_FIN_FAIL        0.75

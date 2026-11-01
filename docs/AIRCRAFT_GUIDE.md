@@ -1914,7 +1914,7 @@ Fuel inputs Core seeds or reads (the aircraft writes these):
 
 Damage is read through `bmkhs_fnc_damageGet` (see Read functions), by role - not by hitpoint name.
 
-`systems/repair/fn_repair.sqf` runs on the owner, after a HandleDamage event shows a hitpoint going down. It writes no new outputs. It does these things:
+`systems/repair/fn_repair.sqf` runs on the owner every frame `coreUpdate` is ticked - before the idle gate, since a shut-down aircraft is repaired with nobody aboard - and acts after a hitpoint reads lower than it did a second earlier. On a systems aircraft the `mainRotor` hitpoint doubles as the rotor lock, held at 0.9 while `bmkhs_shiftLocked` (`engine/fn_engineUpdate.sqf`); its drop counts as a repair only when the lock was not holding it at the previous read, so a no-systems aircraft's rotor repair is seen like any other. The poll holds the `tailRotor` hitpoint at `GSTRESS_REPAIR_MARK` (`gStress.hpp`), putting it back whenever it reads 0, so a repair of an otherwise undamaged aircraft is still seen; each repair seen, and whether it was full, is logged to the RPT as `[BMKHS] repair`; a full repair (every other hitpoint at or below the mark) also resets the g-stress state. It writes no new outputs. It does these things:
 
 | Variable | Type / units | Net | Meaning |
 |---|---|---|---|
@@ -2132,8 +2132,6 @@ Behaviour a designer will otherwise trip over. Each is a Core item, not a pack o
 - `bmkhs_prestonActive` is always false - the Preston AI is disabled.
 - `bmkhs_fmcTrimOn` is stored but nothing in Core reads it.
 - The control position the rotor uses is not published; a pack must rebuild it (Pilot inputs).
-- G-stress damage touches no hitpoint, so a repair is only noticed when some hitpoint goes
-  down. An aircraft with fatigue or lost parts and no hitpoint damage is not reset by a repair.
 
 
 ### Internal - do not read
