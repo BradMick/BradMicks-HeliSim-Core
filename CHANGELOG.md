@@ -12,7 +12,8 @@
   1/rev.
 - **The tail structure lets go** - stabilator, then vertical fin, then the whole boom, which
   takes the other two and the tail rotor with it. A lost surface makes nothing and the CG
-  moves forward.
+  moves forward. Core goes by wing name: `stabilator` or `horizontalStabilizer` with the
+  end plates `leftVerticalFin` / `rightVerticalFin`, and `verticalFin`. No pack changes.
 - **A separated blade's imbalance** is applied at the hub as the force it is, `m r ω²`. Past
   the mounts' rating it tears the transmission apart and sheds further blades, and at 1.0 the
   transmission takes the rotors with it. The time to that comes from Nr², not from a clock.

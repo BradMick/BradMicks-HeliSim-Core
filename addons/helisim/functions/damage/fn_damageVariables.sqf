@@ -85,9 +85,13 @@ _heli setVariable ["bmkhs_damagePoints", _damage];
 _heli setVariable ["bmkhs_gFatigue",  0.0];
 _heli setVariable ["bmkhs_partsLost", []];
 
-//The aircraft's function that shows a part lost, and the selection for each part
+//The aircraft's function that shows a part lost, and the selection for each part - optional
 private _parts = _config >> "DamageParts";
-_heli setVariable ["bmkhs_partFunction",   getText (_parts >> "function")];
-_heli setVariable ["bmkhs_partSelections", createHashMapFromArray (
-    (configProperties [_parts, "isText _x && {configName _x != 'function'}", true]) apply { [toLower configName _x, getText _x] }
-)];
+_heli setVariable ["bmkhs_partFunction",   ""];
+_heli setVariable ["bmkhs_partSelections", createHashMap];
+if (isClass _parts) then {
+    _heli setVariable ["bmkhs_partFunction",   getText (_parts >> "function")];
+    _heli setVariable ["bmkhs_partSelections", createHashMapFromArray (
+        (configProperties [_parts, "isText _x && {configName _x != 'function'}", true]) apply { [toLower configName _x, getText _x] }
+    )];
+};

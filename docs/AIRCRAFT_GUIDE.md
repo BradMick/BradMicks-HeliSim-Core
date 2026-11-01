@@ -1443,8 +1443,10 @@ class DamageParts {
 };
 ```
 
-The surfaces Core zeroes are the wings named `stabilator` and `verticalFin`; a tail rotor
-stops with the fin or the boom. A pack that declares no `DamageParts` loses the part but
+Core zeroes surfaces by wing name: a lost stabilator takes `stabilator` or
+`horizontalStabilizer` and the end plates `leftVerticalFin` / `rightVerticalFin`; a lost fin
+takes `verticalFin`; the boom takes all of them, and a tail rotor stops with the fin or the
+boom. A pack that declares no `DamageParts` loses the part but
 does not show it.
 
 ---
@@ -1927,7 +1929,7 @@ G-stress (`damage/fn_damageGStress.sqf`) runs on the owner every frame and publi
 | Variable | Type / units | Net | Meaning |
 |---|---|---|---|
 | `bmkhs_gFatigue` | Number, 0..1 | 10 Hz | Airframe fatigue from positive g above 3.5. Never decreases in flight; 0 after a full repair. |
-| `bmkhs_partsLost` | Array of String | 10 Hz | Tail structure gone: any of `"stabilator"`, `"verticalFin"`, `"tailboom"`. The wings of those names make nothing, a tail rotor stops with the fin or boom, and the CG moves forward (`gStress.hpp`). |
+| `bmkhs_partsLost` | Array of String | 10 Hz | Tail structure gone: any of `"stabilator"`, `"verticalFin"`, `"tailboom"`. The wings they take (`GSTRESS_WINGS_*`, `gStress.hpp`) make nothing, a tail rotor stops with the fin or boom, and the CG moves forward. |
 | `bmkhs_bladeState` | Array per simple rotor of Array per blade `[mode, track]` | 10 Hz | Main rotor blade failures: mode 0 ok, 1 out of track, 2 tip cap lost, 3 PC link snapped, 4 separated (`gStress.hpp`); track is the lift error of a blade out of track. A tail rotor's list is empty. |
 
 A separated blade's centrifugal pull (`m × r × ω²`) is applied at the hub, turning with the rotor, and past `GSTRESS_MOUNT_RATING` it accrues `transmission` damage at `(F − rating) / GSTRESS_MOUNT_DIVISOR` per second, and rolls the same amount × `GSTRESS_SHED_SCALE` for another blade to let go. At 1.0 the transmission's `breaksOnFailure` takes the rotors with it, so the rotor stops: the time to that falls out of Nr², blade mass and how many blades are gone.

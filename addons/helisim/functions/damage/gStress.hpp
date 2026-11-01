@@ -34,6 +34,10 @@
 //Held on the tailRotor hitpoint so a repair shows as a drop - above fn_repair's 0.0001 margin
 #define GSTRESS_REPAIR_MARK     0.001
 
+//Wing names (lower case) each lost part takes with it - end plates sit on the horizontal tail
+#define GSTRESS_WINGS_STABILATOR ["stabilator", "horizontalstabilizer", "leftverticalfin", "rightverticalfin"]
+#define GSTRESS_WINGS_FIN        ["verticalfin"]
+
 //Fatigue at which the tail structure fails
 #define GSTRESS_STAB_FAIL       0.60
 #define GSTRESS_FIN_FAIL        0.75
