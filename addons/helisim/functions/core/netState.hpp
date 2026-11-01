@@ -54,5 +54,9 @@
     "bmkhs_shiftLocked", \
     "bmkhs_xmsnOutputRpm", \
     "bmkhs_xmsnDeltaRpm", \
-    "bmkhs_reqEngTorque" \
+    "bmkhs_reqEngTorque", \
+    "bmkhs_loadFactor", \
+    "bmkhs_gFatigue", \
+    "bmkhs_bladeState", \
+    "bmkhs_partsLost" \
 ]

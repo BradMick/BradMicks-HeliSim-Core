@@ -72,6 +72,7 @@ class CfgFunctions
             class damageApply {R;};
             class damageCount {R;};
             class damageGet {R;};
+            class damageGStress {R;};
             class damageSet {R;};
             class damageVariables {R;};
         };
@@ -251,6 +252,7 @@ class CfgFunctions
         class effects {
             file = "\bmkhs_helisim\functions\effects";
             class rotorEffects {R;};
+            class damageEffects {R;};
         };
         class simpleRotor {
             file = "\bmkhs_helisim\functions\simpleRotor";

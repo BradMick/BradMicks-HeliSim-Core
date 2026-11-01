@@ -30,7 +30,11 @@ if (!local _heli) exitWith {
     //Its pack set it up on the machine that owns it; this one may never have built the config.
     if !(_heli getVariable ["bmkhs_configured", false]) then { [_heli] call bmkhs_fnc_coreConfig };
     [_heli] call bmkhs_fnc_coreNetReceive;
+    [_heli] call bmkhs_fnc_damageEffects;
 };
+
+//Repair - before the idle gate: a shut-down aircraft is repaired with nobody aboard
+[_heli] call bmkhs_fnc_repair;
 
 //Idle gate - no player aboard and nothing left running
 if (((crew _heli) findIf {isPlayer _x}) < 0
@@ -56,6 +60,9 @@ if (isAutoHoverOn _heli) then {
 [_heli] call bmkhs_fnc_stateVelocities;
 [_heli] call bmkhs_fnc_stateAccelerations;
 [_heli] call bmkhs_fnc_stateAltitude;
+
+//G-stress fatigue
+[_heli] call bmkhs_fnc_damageGStress;
 
 //Input
 [_heli] call bmkhs_fnc_trimUpdate;
@@ -89,6 +96,7 @@ if (isAutoHoverOn _heli) then {
 
 //Flight Model
 [_heli] call bmkhs_fnc_coreUpdateFlightModel;
+[_heli] call bmkhs_fnc_damageEffects;
 
 //The running state, packed, for everyone else - after the flight model, so it is all one frame
 if (isMultiplayer && {(_heli getVariable "bmkhs_lastTimePropagated") + 0.1 < CBA_missionTime}) then {
@@ -101,9 +109,6 @@ if (isMultiplayer && {(_heli getVariable "bmkhs_lastTimePropagated") + 0.1 < CBA
 
 //Engine display
 [_heli] call bmkhs_fnc_engDisplayUpdate;
-
-//Repair
-[_heli] call bmkhs_fnc_repair;
 
 //Flight log - to the RPT, for analysis. Before the readout, which clears the force rows.
 [_heli] call bmkhs_fnc_debugFlightLog;

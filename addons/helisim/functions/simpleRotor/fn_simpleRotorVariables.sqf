@@ -114,3 +114,13 @@ _heli setVariable ["bmkhs_drivetrainDrag",  getNumber (_config >> "drivetrainDra
 _heli setVariable ["bmkhs_reqEngTorque",   [0.0, 0.0]];
 _heli setVariable ["bmkhs_rtrThrust",      [0.0, 0.0]];
 _heli setVariable ["bmkhs_rtrMoi",         [0.0, 0.0]];
+_heli setVariable ["bmkhs_rtrAzimuth",     _rotors apply { 0.0 }];
+_heli setVariable ["bmkhs_rtrImbalance",   _rotors apply { 0.0 }];
+//Per main rotor blade: [failure mode, track error]
+_heli setVariable ["bmkhs_bladeState",     _rotors apply {
+    private _blades = [];
+    if ((_x get "type") == MAIN) then {
+        for "_b" from 1 to (_x get "numBlades") do { _blades pushBack [0, 0.0] };
+    };
+    _blades
+}];

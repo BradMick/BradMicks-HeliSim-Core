@@ -422,7 +422,9 @@ It is never loaded or referenced in game - it is only read by the tool.
   a binarized p3d. Your build packs it into the PBO like any other file in the
   folder; that is harmless, nothing uses the packed copy.
 - **One LOD.** Everything goes in the first resolution LOD, `0.000`. The tool
-  reads only that LOD. No Memory LOD, no named points.
+  reads only that LOD. No Memory LOD. Named selections that hold points but no
+  face - the datum, the CG limits, the rotor pivots and masts (section 8) - are
+  references: the tool passes over them, and you read them yourself.
 - **Same space as your aircraft.** Build the faces over your aircraft's model -
   in your modeller of choice, from the model or from blueprints - and import them
   into fm.p3d, so they sit on the airframe in Object Builder where they act. The
@@ -650,6 +652,123 @@ It counts from what is loaded. Re-enter the aircraft before pasting it again.
 
 The tool carries no comments: a debug console that does not strip them fails on the
 first one past the start of the code ("Invalid number in expression").
+
+#### 8. Reference points - datum, CG limits and rotors
+
+Put the aircraft's other reference positions in fm.p3d too, as named selections of
+points with no face, in the same LOD as the quads. The generator does not write
+them, but they sit in the same frame as the surfaces and take the same placement, so
+there is one source for every position and nothing is measured twice.
+
+| Selection | What it holds | Read off it |
+|---|---|---|
+| `referenceDatum` | A vertical line at FS 0 | y |
+| `fwdCgLimit`, `aftCgLimit` | A vertical line at each limit station | y |
+| `mainRotorPivot` | One point - the pivot | {x, y, z} |
+| `mainRotorMast` | Two points - the pivot and the hub | the distance between them, and its direction |
+| `tailRotorPivot`, `tailRotorMast` | As the main | as the main |
+| more rotors | Name them the same way | |
+
+**Read them with the generator's own reader.** It is the only way to get exact
+values, and it uses the same axis order as the tool. From the pack's root:
+
+    python -I -c "
+    import sys; sys.path.insert(0, r'PATH/TO/@bmkhs/python/tools')
+    import fm_generateAeroSurfacePoints as g
+    pts, faces, sels = g.read_lod0('addons/helisim/fm.p3d')
+    n = len(pts)
+    for name, data in sels:
+        if any(data[n:]): continue
+        print(name, ['{%.3f, %.3f, %.3f}' % (x, z, y) for i, (x, y, z) in enumerate(pts) if data[i]])
+    "
+
+MLOD stores points as (right, up, forward); the print turns them into Core's
+{right, forward, up}. These are **fm.p3d** values - before the placement.
+
+**Apply the placement.** If the files carry a placement (their header,
+`fmPlacement[]`), every reference point takes it exactly as the quads do, in this
+order (`build()` in the tool):
+
+1. `--turn`: x and y change sign.
+2. Rotate by pitch, roll and yaw about the fm.p3d's origin (`fn_mathVectorRotate`).
+3. Shift: **x + right, y + forward, z - down**.
+
+`--down` is a distance *down*, so `--down -1.850` **raises** everything 1.850 m. With
+no rotation, a point {x, y, z} in fm.p3d is {x + right, y + forward, z - down} in
+the model frame. Check your sign against a quad: read a corner in fm.p3d and find it
+in the written `panels[]`.
+
+**Where each one goes.** Placed values are model-frame values (the frame of the
+aircraft's own p3d, the same as `seats.sqf` reports).
+
+| Config value | Frame | From the placed reference |
+|---|---|---|
+| `fsDatum` | Model | `referenceDatum` y |
+| `fwdCgLimit`, `aftCgLimit` | Model | each line's y |
+| Tank, seat, station, magazine and equipment `arm[]` | Model | as placed; or `fsDatum - FS (m)` for y |
+| `emptyMom` | **About the datum** | `emptyMass x (fsDatum - empty CG y)` - see below |
+| Rotor `pivot[]` | **Arma** | placed pivot **minus `boundingCenter`** |
+| Rotor `mastLength` | Along the rotor's up axis | see below |
+
+Core subtracts `boundingCenter` from every panel when the aircraft starts
+(`fn_fuselageVariables`, `fn_wingVariables`), and the mass code subtracts it from the
+CG. **It does not subtract it from a rotor's `pivot[]`** (`fn_simpleRotor` uses it as
+it is), so you do. Get `boundingCenter` in game - `boundingCenter vehicle player` in the
+debug console, or the first line `seats.sqf` prints. It differs between models, so
+measure it in the variant you fly.
+
+**`mastLength` and its sign.** The hub sits at `pivot + u x mastLength`, where `u` is
+the rotor's up axis, `{0, 0, 1}` turned by `rotation[]`:
+
+    u = {sin(roll) cos(pitch),  -sin(pitch),  cos(roll) cos(pitch)}
+
+    mastLength = (hub - pivot) . u
+
+| `rotation[]` | `u` points | Hub above / right / left of the pivot |
+|---|---|---|
+| `{0, 0, 0}` | up | positive above |
+| `{p, -90, 0}` | **left** | positive to the left, negative to the right |
+| `{p, 90, 0}` | right | positive to the right |
+
+So a tail rotor on the left of the fin (OH-6A, AH-64, AH-1G) with `rotation[]` roll
+-90 takes a **positive** `mastLength`. The mast line in fm.p3d is only its length
+and direction; check the direction against the aircraft, not the line.
+
+**Every placement change moves them all.** After an `--add`, the generator rewrites
+the panels, but every reference value above is yours to redo: the datum, both CG
+limits, every arm you took from fm.p3d, and both rotor pivots. `emptyMom` does **not**
+change - it is measured from the datum, so a shift that moves the datum and the
+empty CG together leaves it as it was. `fsDatum - emptyMom / emptyMass` must still
+give the empty CG's new y.
+
+**`comCorrection` x and y stay 0.** With every arm and limit in the model frame, the
+CG Core works out is already where it belongs. Every pack's `comCorrection` is
+`{0, 0, z}` (Bo 105, EC665, OH-6A, MH-47G, AH-64D). If the nudge or the overlay seems
+to want a y offset, an arm or the datum is in the wrong frame: fix that instead. A y
+correction found while the datum was in the old frame double-counts the placement as
+soon as the datum is fixed. The z is the height Core sets the CoM at: use the z of the
+`centre of mass` line `seats.sqf` prints.
+
+**Worked example, AH-1G** (2026-10-31). fm.p3d built over image planes, placed
+`--forward -2.150 --down -1.850`; `boundingCenter` of `vn_b_air_ah1g_02` is
+`{-0.004, -1.370, 2.740}`.
+
+| Reference | fm.p3d | Placed (model) | Config |
+|---|---|---|---|
+| `referenceDatum` | y 7.460 | y 5.310 | `fsDatum = 5.310` |
+| `fwdCgLimit` | y 2.634 | y 0.484 | `fwdCgLimit = 0.484` (FS 190.0 in) |
+| `aftCgLimit` | y 2.347 | y 0.197 | `aftCgLimit = 0.197` (FS 201.3 in) |
+| `mainRotorPivot` | {0, 2.380, 1.310} | {0, 0.230, 3.160} | `pivot[] = {0.004, 1.600, 0.420}` |
+| `mainRotorMast` | up 0.55 | | `mastLength = 0.55` |
+| `tailRotorPivot` | {0, -5.770, 0.870} | {0, -7.920, 2.720} | `pivot[] = {0.004, -6.550, -0.020}` |
+| tail hub | left of the fin, 0.45 | | `rotation[] = {-1, -90, 0}`, `mastLength = 0.45` |
+
+Fuel at FS 198.1 in: y = 5.310 - 198.1 x 0.0254 = 0.278. Empty CG at FS 195.7 in with
+`emptyMass` 524: `emptyMom = 524 x 4.970 = 2604.28`, both before and after the shift.
+
+Check the rotors in game with FM debugging on: the hub is where the white blade
+lines meet. If one is off, move it with the nudge's rotor target, then put the
+change back into fm.p3d so the two agree.
 
 ### Rotor control map
 
@@ -1161,7 +1280,9 @@ If you have the empty CG as a model position instead:
     emptyMom = emptyMass x (fsDatum - empty CG model y)
 
 Check it by going back the other way: `fsDatum - emptyMom / emptyMass` must give
-the empty CG's model y. The same applies to every `EmptyMassVariants` `mass` and
+the empty CG's model y. **`emptyMom` is not `emptyMass x empty CG y`** - Core takes
+`emptyMass x fsDatum - emptyMom` as the empty airframe's moment, so a value worked
+from the y alone puts the empty CG at `fsDatum - y`, metres from where it belongs. The same applies to every `EmptyMassVariants` `mass` and
 `moment` pair.
 
 **5. Item arms.** Seats, tanks, wing stations, magazines and equipment are model
@@ -1178,6 +1299,32 @@ Sit in it, paste into the debug console and LOCAL EXEC:
   magazines, pylons and animation sources (for `Equipment`).
 
 Both write to the RPT and the clipboard.
+
+`seats.sqf` prints Arma positions with `boundingCenter` added back, so every arm it
+gives is in the **model** frame and goes into the config as it is. Its first line is
+the `boundingCenter` itself - the offset rotor pivots need (section 8 of the fuselage
+and wings). Its last line, `centre of mass`, is the CoM the game has *now*, in the
+model frame: its z is the `comCorrection` z, and its y is only the result of whatever
+config is loaded, not a value to enter. A long `dump.sqf` output is better saved to a
+file than pasted - a chat paste is cut off at about 50,000 characters.
+
+**Magazines and stores - matched by name.** `class Magazines` (rounds in the
+airframe - every turret's and the driver's) and `class Stores` (what a pylon carries)
+each give a `match` string. Core lower-cases both it and the magazine's class name
+and takes it as a **substring** (`BIS_fnc_inString`):
+
+- A magazine entry counts every loaded magazine whose name contains `match`, and all
+  of them add `rounds x massPerRound` at the entry's `arm[]`.
+- A station takes the first loaded pylon of its `pylons[]`, then the **first** store
+  whose `match` is in that magazine's name (`findIf`), and adds `launcherMass` plus
+  `rounds x massPerRound` at the station's `arm[]`. A magazine no store matches adds
+  nothing - no error.
+
+Because the first store that matches wins, a general `match` placed before a specific
+one swallows it. When the launcher's mass depends on its size, match the size:
+`m151_he_x7` and `m151_he_x19`, not `vn_rocket_ffar_m151`. Check every pylon
+magazine `dump.sqf` lists - including every preset - against the list, so none falls
+through. `massPerRound` is the real round's mass, never the magazine's Arma `mass`.
 
 **Fitted equipment.** Parts the aircraft fits and removes by showing and hiding
 them - a probe, a hoist, pylon wings, doors, seats - are declared in
@@ -1277,6 +1424,30 @@ Rules worth knowing before you write them:
 - **A gearbox per engine with no gearbox hitpoints:** declare it with no
   `damageRole` and `perEngine = 1`, and Core keeps its damage
   (`components.hpp`).
+
+### G-stress
+
+Core accrues fatigue from positive g (`damage/fn_damageGStress.sqf`, constants in
+`damage/gStress.hpp`) and fails main rotor blades and the tail structure from it. The
+rules are Core's: no pack sets or switches them. What a pack declares is how a lost part
+is shown - a function Core calls as `[_heli, selection, visible]`, and the selection for
+each of Core's part names:
+
+```cpp
+class DamageParts {
+    function      = "yourAircraft_fnc_partVisible";
+    tailboom      = "skin_tailboom";
+    verticalFin   = "skin_vtail";
+    stabilator    = "hstab";
+    rotor0_blade1 = "blade1";   // rotor<simple rotor index>_blade<n>, n from 1
+};
+```
+
+Core zeroes surfaces by wing name: a lost stabilator takes `stabilator` or
+`horizontalStabilizer` and the end plates `leftVerticalFin` / `rightVerticalFin`; a lost fin
+takes `verticalFin`; the boom takes all of them, and a tail rotor stops with the fin or the
+boom. A pack that declares no `DamageParts` loses the part but
+does not show it.
 
 ---
 
@@ -1745,13 +1916,23 @@ Fuel inputs Core seeds or reads (the aircraft writes these):
 
 Damage is read through `bmkhs_fnc_damageGet` (see Read functions), by role - not by hitpoint name.
 
-`systems/repair/fn_repair.sqf` runs on the owner, after a HandleDamage event shows a hitpoint going down. It writes no new outputs. It does these things:
+`systems/repair/fn_repair.sqf` runs on the owner every frame `coreUpdate` is ticked - before the idle gate, since a shut-down aircraft is repaired with nobody aboard - and acts after a hitpoint reads lower than it did a second earlier. On a systems aircraft the `mainRotor` hitpoint doubles as the rotor lock, held at 0.9 while `bmkhs_shiftLocked` (`engine/fn_engineUpdate.sqf`); its drop counts as a repair only when the lock was not holding it at the previous read, so a no-systems aircraft's rotor repair is seen like any other. The poll holds the `tailRotor` hitpoint at `GSTRESS_REPAIR_MARK` (`gStress.hpp`), putting it back whenever it reads 0, so a repair of an otherwise undamaged aircraft is still seen; each repair seen, and whether it was full, is logged to the RPT as `[BMKHS] repair`; a full repair (every other hitpoint at or below the mark) also resets the g-stress state. It writes no new outputs. It does these things:
 
 | Variable | Type / units | Net | Meaning |
 |---|---|---|---|
 | storage `bmkhs_<variableName>[n]` | as above | as above | An undamaged or role-less store is refilled (internal charge set to 1.0). The published value follows on the next solve. |
 | `bmkhs_engineOverspeed`, `bmkhs_engChips`, `bmkhs_engFailed`, `bmkhs_lowOilPsiFailure`, `bmkhs_engOilPsiLow` | Array of Bool per engine (engine outputs) | net | Each repaired engine (damage 0) has its entry cleared to false. These are engine-owned outputs, documented with the engine. |
 | `bmkhs_<variableName>[n]Dmg` | Number, 0..1 | local | Damage of a torque-rated part with no damage role, which Core keeps instead of a hitpoint - every useSystems = 0 drive part (`bmkhs_noseGearbox<n>Dmg`, `bmkhs_transmissionDmg`), and a declared `perEngine` gearbox. Accrued in `systems/fn_systemTorque.sqf`; set to 0 by a repair. |
+
+G-stress (`damage/fn_damageGStress.sqf`) runs on the owner every frame and publishes:
+
+| Variable | Type / units | Net | Meaning |
+|---|---|---|---|
+| `bmkhs_gFatigue` | Number, 0..1 | 10 Hz | Airframe fatigue from positive g above 3.5. Never decreases in flight; 0 after a full repair. |
+| `bmkhs_partsLost` | Array of String | 10 Hz | Tail structure gone: any of `"stabilator"`, `"verticalFin"`, `"tailboom"`. The wings they take (`GSTRESS_WINGS_*`, `gStress.hpp`) make nothing, a tail rotor stops with the fin or boom, and the CG moves forward. |
+| `bmkhs_bladeState` | Array per simple rotor of Array per blade `[mode, track]` | 10 Hz | Main rotor blade failures: mode 0 ok, 1 out of track, 2 tip cap lost, 3 PC link snapped, 4 separated (`gStress.hpp`); track is the lift error of a blade out of track. A tail rotor's list is empty. |
+
+A separated blade's centrifugal pull (`m × r × ω²`) is applied at the hub, turning with the rotor, and past `GSTRESS_MOUNT_RATING` it accrues `transmission` damage at `(F − rating) / GSTRESS_MOUNT_DIVISOR` per second, and rolls the same amount × `GSTRESS_SHED_SCALE` for another blade to let go. At 1.0 the transmission's `breaksOnFailure` takes the rotors with it, so the rotor stops: the time to that falls out of Nr², blade mass and how many blades are gone.
 
 ### State and air data
 
@@ -1770,6 +1951,7 @@ Damage is read through `bmkhs_fnc_damageGet` (see Read functions), by role - not
 | `bmkhs_worldAccel` | Array [x, y, z], m/s², world space | local (owner only) | Raw kinematic acceleration: frame difference of `bmkhs_velWorldSpaceNoWind`. Gravity not included. Not smoothed. (set in `state/fn_stateAccelerations.sqf`) |
 | `bmkhs_worldAccelFiltered` | Array [x, y, z], m/s², world space | local (owner only) | `bmkhs_worldAccel` smoothed per axis. Source for the ball terms and body accel. (set in `state/fn_stateAccelerations.sqf`) |
 | `bmkhs_bodyAccel` | Array [right, forward, up], m/s², body axes | local (owner only) | Specific force (what an accelerometer reads): filtered world accel plus 1 g up, projected onto the body right, forward and up vectors. Level and still reads about [0, 0, +9.806]. Element 0 equals `bmkhs_ballTerms # 2`. (set in `state/fn_stateAccelerations.sqf`) |
+| `bmkhs_loadFactor` | Array [right, forward, up], g | 10 Hz | `bmkhs_bodyAccel` / 9.806 - the load factor at the centre of mass. `# 2` is what a g-meter reads: about 1.0 level and still. (set in `state/fn_stateAccelerations.sqf`) |
 | `bmkhs_ballTerms` | Array [kLat, gLat, sum], m/s² | local (owner only) | Lateral ball breakdown along the body right axis. `# 0` kLat = filtered kinematic acceleration toward the right. `# 1` gLat = 9.806 × (z component of the body right vector); negative when the right side is low. `# 2` = kLat + gLat = lateral specific force, positive to the right. A physical ball deflects opposite to this: sum positive = ball LEFT, sum negative = ball RIGHT (e.g. right side low in a hover gives a negative sum, ball right). Not clamped or filtered beyond the accel smoothing. (set in `state/fn_stateAccelerations.sqf`) |
 | `bmkhs_aero_beta_g` | Number, g, clamped -1 to +1 | 10 Hz | Trim-ball value: `bmkhs_bodyAccel # 0` / 9.806, then first-order low-pass (tau 0.60 s). Positive = lateral specific force to the right, so a physical ball sits LEFT; negative = ball RIGHT. Core autopilot code relies on this raw sign; flip it only in your display. The AH-64D pack also blends the display sign with speed (`fn_avionicsSlipIndicator.sqf`). (set in `state/fn_stateAeroValues.sqf`) |
 | `bmkhs_aero_beta_deg` | Number, degrees | 10 Hz | Aerodynamic sideslip: asin(x / |v|) of `bmkhs_velModelSpace`. Positive = aircraft moving right through the air (relative wind from the right). 0 when the velocity is zero. (set in `state/fn_stateAeroValues.sqf`) |
@@ -1799,7 +1981,7 @@ Pressure (hPa) and density altitude are computed in `fn_environment.sqf` but not
 | Variable | Type / units | Net | Meaning |
 |---|---|---|---|
 | `bmkhs_gwt` | Number, kg | 10 Hz | Gross mass: empty mass (or matching `EmptyMassVariants` entry), occupied seats, fitted equipment, internal fuel, internal magazine rounds (every turret's, the driver's included), and wing-station stores and external fuel. Written only by the owner. When the CBA test-GWT option is on, replaced by that weight clamped between empty and `maxGrossMass`. All contributors come from config. (set in `mass/fn_massUpdate.sqf`) |
-| `bmkhs_cg` | Number, metres, longitudinal only | 10 Hz | Longitudinal CG: total forward moment / mass, in the same frame as the config arms (H-60 config: arm = {right, forward, up} m; larger = further forward). Compare directly with `bmkhs_fwdCgLimit` / `bmkhs_aftCgLimit`. Not a fuselage station; convert with `bmkhs_fsDatum` if needed. In test-GWT mode it is real moments divided by the test mass. Lateral CG is not published. (set in `mass/fn_massUpdate.sqf`) |
+| `bmkhs_cg` | Number, metres, longitudinal only | 10 Hz | Longitudinal CG: total forward moment / mass, in the same frame as the config arms (H-60 config: arm = {right, forward, up} m; larger = further forward). Compare directly with `bmkhs_fwdCgLimit` / `bmkhs_aftCgLimit`. Not a fuselage station; convert with `bmkhs_fsDatum` if needed. In test-GWT mode it is real moments divided by the test mass. Moved forward by the tail structure in `bmkhs_partsLost` (`gStress.hpp`). Lateral CG is not published. (set in `mass/fn_massUpdate.sqf`) |
 | `bmkhs_fwdCgLimit` | Number, metres, same frame as `bmkhs_cg` | local (owner only) | Forward CG limit, read from config `fwdCgLimit`. Static. (set in `mass/fn_massVariables.sqf`) |
 | `bmkhs_aftCgLimit` | Number, metres, same frame as `bmkhs_cg` | local (owner only) | Aft CG limit, read from config `aftCgLimit`. Static. (set in `mass/fn_massVariables.sqf`) |
 | `bmkhs_fsDatum` | Number, metres | local (owner only) | Fuselage-station 0 reference, config `fsDatum`. Empty-airframe arm = fsDatum − emptyMom/emptyMass. Static. (set in `mass/fn_massVariables.sqf`) |
@@ -1974,6 +2156,9 @@ Working state, solver bookkeeping, filters and debug. These change without notic
 - `bmkhs_engSlipWait` - clutch slip wait timer (systems).
 - `bmkhs_engSlipDepth` - clutch slip depth (systems).
 - `bmkhs_engTimer_<np|ng|tgt><engIdx>_<band>` - per-band exceedance accumulators.
+- `bmkhs_rtrAzimuth` - where each simple rotor's first blade is, for the blade failures.
+- `bmkhs_rtrImbalance` - each simple rotor's imbalance force, N, from its separated blades.
+- `bmkhs_damageEffectsGone` - parts counted at the last camera jolt.
 - `bmkhs_shiftLocked` - stops shift spinning rotor.
 - `bmkhs_lastTimePropagated` - when the packed running state was last sent (`core/fn_coreNetSend.sqf`).
 - `bmkhs_netState` - the packed running state itself; `bmkhs_netStateApplied` - the last packet unpacked.
