@@ -7,10 +7,12 @@ if (!local _heli) exitWith {};
 
 private _numRotor = _heli getVariable "bmkhs_numSimpleRotors";
 private _rotors   = _heli getVariable "bmkhs_simpleRotors";
+private _tailGone = (_heli getVariable "bmkhs_partsLost") findIf {_x in ["verticalFin", "tailboom"]} > -1;
 
 for "_rotorIndex" from 0 to (_numRotor - 1) do {
     private _rotor     = _rotors select _rotorIndex;
-    private _destroyed = ([_heli, _rotor get "damageRole"] call bmkhs_fnc_damageGet) > RTR_DMG_THRESH;
+    private _destroyed = (([_heli, _rotor get "damageRole"] call bmkhs_fnc_damageGet) > RTR_DMG_THRESH)
+                         || {_tailGone && {(_rotor get "type") == TAIL}};
 
     [_heli, _rotorIndex, _rotor, _destroyed] call bmkhs_fnc_simpleRotor;
 };

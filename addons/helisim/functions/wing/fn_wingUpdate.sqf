@@ -19,9 +19,10 @@ if (!local _heli) exitWith {};
 
 private _numWings = _heli getVariable "bmkhs_numWings";
 private _wings    = _heli getVariable "bmkhs_wings";
+private _lost     = _heli getVariable "bmkhs_partsLost";
 
 for "_i" from 0 to (_numWings - 1) do {
-    //TESTING - vertical fin skipped to see the yaw balance without its side force.
-    //if (_i == 2) then { continue };
-    [_heli, _i, _wings select _i] call bmkhs_fnc_wing;
+    private _wing = _wings select _i;
+    if ((_wing get "name") in _lost) then { continue };
+    [_heli, _i, _wing] call bmkhs_fnc_wing;
 };

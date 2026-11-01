@@ -27,6 +27,7 @@ Author:
     BradMick
 ---------------------------------------------------------------------------- */
 params ["_heli"];
+#include "\bmkhs_helisim\functions\damage\gStress.hpp"
 
 //Any hitpoint lower than at the last read is a repair
 if (CBA_missionTime >= (_heli getVariable ["bmkhs_repairReadT", -1]) + 1) then {
@@ -88,4 +89,24 @@ for "_i" from 0 to (_engines - 1) do {
         if ((_heli getVariable "bmkhs_engFailureResult") == _i) then { _heli setVariable ["bmkhs_engFailureResult", -1] };
         [_heli, "engines", 0.000001, _i] call bmkhs_fnc_damageSet;
     };
+};
+
+//G-stress - only a full repair replaces the structure
+if (((getAllHitPointsDamage _heli) param [2, []]) findIf {_x > 0.001} < 0) then {
+    private _fn   = _heli getVariable "bmkhs_partFunction";
+    private _sels = _heli getVariable "bmkhs_partSelections";
+    private _parts = +(_heli getVariable "bmkhs_partsLost");
+    {
+        private _rotorIndex = _forEachIndex;
+        { if ((_x select 0) == BLADE_SEPARATED) then { _parts pushBack format ["rotor%1_blade%2", _rotorIndex, _forEachIndex + 1] } } forEach _x;
+    } forEach (_heli getVariable "bmkhs_bladeState");
+    if (_fn != "") then {
+        {
+            private _sel = _sels getOrDefault [toLower _x, ""];
+            if (_sel != "") then { [_heli, _sel, true] call (missionNamespace getVariable [_fn, {}]) };
+        } forEach _parts;
+    };
+    _heli setVariable ["bmkhs_gFatigue",  0.0];
+    _heli setVariable ["bmkhs_partsLost", []];
+    _heli setVariable ["bmkhs_bladeState", (_heli getVariable "bmkhs_bladeState") apply { _x apply { [0, 0.0] } }];
 };

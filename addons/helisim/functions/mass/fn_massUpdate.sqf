@@ -19,6 +19,7 @@ Author:
 ---------------------------------------------------------------------------- */
 params ["_heli"];
 #include "\bmkhs_helisim\functions\core\core.hpp"
+#include "\bmkhs_helisim\functions\damage\gStress.hpp"
 
 if (!local _heli) exitWith {};
 
@@ -140,14 +141,20 @@ if (bmkhs_testGwtEnabled) then {
     };
 };
 
-private _curLongCG = _longMom / _curMass;
+//Tail structure lost to g-stress
+private _lost    = _heli getVariable "bmkhs_partsLost";
+private _cgShift = if ("tailboom" in _lost) then { GSTRESS_CG_BOOM } else {
+    ([0.0, GSTRESS_CG_FIN] select ("verticalFin" in _lost)) + ([0.0, GSTRESS_CG_STAB] select ("stabilator" in _lost))
+};
+
+private _curLongCG = (_longMom / _curMass) + _cgShift;
 private _curLatCG  = _latMom  / _curMass;
 
 //Get the bounding center
 private _comDatum = boundingCenter _heli;
 //Update the center of mass
 if (bmkhs_helisimRealismSetting != REALISTIC) then {
-    _heli setCenterOfMass _casualCom;
+    _heli setCenterOfMass (_casualCom vectorAdd [0.0, _cgShift, 0.0]);
 } else {
     _heli setCenterOfMass [
           _curLatCG  - (_comDatum select 0) + (_comCorr select 0)

@@ -85,8 +85,11 @@ private _kLat = _worldAccelF vectorDotProduct _rightB;
 private _gLat = [0.0, 0.0, GRAVITY] vectorDotProduct _rightB;
 _heli setVariable ["bmkhs_ballTerms", [_kLat, _gLat, _kLat + _gLat]];
 
-_heli setVariable ["bmkhs_bodyAccel", [
+private _bodyAccel = [
     _aWorld vectorDotProduct _rightB,
     _aWorld vectorDotProduct _dirB,
     _aWorld vectorDotProduct _upB
-]];
+];
+_heli setVariable ["bmkhs_bodyAccel", _bodyAccel];
+//Load factor at the CoM, g
+_heli setVariable ["bmkhs_loadFactor", _bodyAccel vectorMultiply (1.0 / GRAVITY)];

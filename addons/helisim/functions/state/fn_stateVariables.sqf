@@ -42,6 +42,7 @@ _heli setVariable ["bmkhs_angVelModelSpaceZ_avg", [bmkhs_movingAverageSize] call
 _heli setVariable ["bmkhs_worldAccel",        [0.0,0.0,0.0]];
 _heli setVariable ["bmkhs_ballTerms",         [0.0,0.0,0.0]];
 _heli setVariable ["bmkhs_bodyAccel",         [0.0,0.0,0.0]];
+_heli setVariable ["bmkhs_loadFactor",        [0.0,0.0,1.0]];
 _heli setVariable ["bmkhs_rtrRpm",            0.0];
 
 //Smoothed worldAccel - slip ball only.

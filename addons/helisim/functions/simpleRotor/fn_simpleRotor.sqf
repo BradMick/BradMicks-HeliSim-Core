@@ -20,6 +20,7 @@ Author:
 ---------------------------------------------------------------------------- */
 #include "\bmkhs_helisim\functions\core\core.hpp"
 #include "\bmkhs_helisim\functions\rotor\rotor.hpp"
+#include "\bmkhs_helisim\functions\damage\gStress.hpp"
 
 params ["_heli", "_rotorIndex", "_rotor", "_destroyed"];
 
@@ -153,6 +154,47 @@ private _viScalar       = if (_axialVel < -VEL_VRS && _velXY < VEL_ETL) then { 0
 
 //Because the model is 4 fixed points, we have to scale based on the number of blades
 private _bladeScalar    = _numBlades / 4;
+
+//Failed blades - each spread over the two positions it is passing. Psi runs clockwise from above.
+private _liftMults  = [1.0, 1.0, 1.0, 1.0];
+private _pcShares   = [0.0, 0.0, 0.0, 0.0];
+private _cycMults   = [1.0, 1.0, 1.0, 1.0];
+private _dragMults  = [1.0, 1.0, 1.0, 1.0];
+private _separated  = 0;
+private _blades     = (_heli getVariable "bmkhs_bladeState") select _rotorIndex;
+private _azimuth    = (((_heli getVariable "bmkhs_rtrAzimuth") select _rotorIndex)
+                       + (([-1.0, 1.0] select (_dir == CW)) * _rpm * 6.0 * _deltaTime)) mod 360.0;
+[_heli, "bmkhs_rtrAzimuth", _rotorIndex, _azimuth] call bmkhs_fnc_utilSetArrayVariable;
+if ((_blades findIf {(_x select 0) != BLADE_OK}) > -1) then {
+    private _share = 4.0 / _numBlades;
+    {
+        _x params ["_mode", "_track"];
+        if (_mode == BLADE_OK) then { continue };
+        if (_mode == BLADE_SEPARATED) then { _separated = _separated + 1 };
+        private _bladeAz = _azimuth + (_forEachIndex * 360.0 / _numBlades);
+        private _m = switch (_mode) do {
+            case BLADE_OUT_OF_TRACK: { 1.0 + _track };
+            case BLADE_TIP_CAP:      { (1.0 + _track) * BLADE_TIP_CAP_LIFT };
+            default                  { 0.0 };
+        };
+        for "_i" from 0 to 3 do {
+            private _diff = abs (((((_bladeAz - (_i * 90.0)) mod 360.0) + 540.0) mod 360.0) - 180.0);
+            private _w    = ((1.0 - (_diff / 90.0)) max 0.0) * _share;
+            if (_w == 0.0) then { continue };
+            _liftMults set [_i, (_liftMults select _i) + (_w * (_m - 1.0))];
+            if (_mode == BLADE_PC_LINK)   then { _pcShares set [_i, (_pcShares select _i) + _w] };
+            if (_mode >= BLADE_PC_LINK)   then { _cycMults set [_i, (_cycMults select _i) - _w] };
+            if (_mode == BLADE_SEPARATED) then { _dragMults set [_i, (_dragMults select _i) - _w] };
+        };
+    } forEach _blades;
+    _liftMults = _liftMults apply { _x max 0.0 };
+    _cycMults  = _cycMults  apply { _x max 0.0 };
+    _dragMults = _dragMults apply { _x max 0.0 };
+};
+//A snapped PC link flies at zero collective
+private _pcLiftCoef = if (_pcShares isEqualTo [0.0, 0.0, 0.0, 0.0]) then { 0.0 } else {
+    [_liftCoefTable, 0.0 - (_tableKey - _liftKey), _velXY] call bmkhs_fnc_mathLinearInterp2D
+};
 //Dynamic pressure on a blade, at 75% radius, times its area
 private _bladeDynPressure = 0.5 * _dryAirDensity * _bladeArea * (_bladeVel_75 * _bladeVel_75);
 
@@ -218,19 +260,19 @@ for "_i" from 0 to 3 do {
     private _bladeThrustPos    = _pos vectorAdd (_bladeOffset vectorMultiply 0.75);
 
     //Blade lift
-    private _bladeLift      = _liftCoef * _bladeDynPressure;
+    private _bladeLift      = ((_liftCoef * (_liftMults select _i)) + (_pcLiftCoef * (_pcShares select _i))) * _bladeDynPressure;
     _bladeLift              = _bladeLift * _bladeScalar;
 
     //Differential lift from the controls, mixed for the control scheme
     ([_heli, _rotor, _psi, _controls, _liftCoef] call bmkhs_fnc_simpleRotorGetLiftCoefDelta)
         params ["_rollLiftCoef", "_pitchLiftCoef"];
     private _liftCoefDelta  = _rollLiftCoef + _pitchLiftCoef;
-    private _bladeLiftDelta = _liftCoefDelta * _bladeDynPressure;
+    private _bladeLiftDelta = _liftCoefDelta * _bladeDynPressure * (_cycMults select _i);
     _bladeLiftDelta         = _bladeLiftDelta * _bladeScalar;
 
     //Blade drag
     private _dragCoef       = [_dragCoefTable, _tableKey, _velXY] call bmkhs_fnc_mathLinearInterp2D;
-    private _bladeDrag      = _dragCoef * _bladeDynPressure;
+    private _bladeDrag      = _dragCoef * _bladeDynPressure * (_dragMults select _i);
     _bladeDrag              = _bladeDrag * _bladeScalar;
     
     //Total rotor torque - drag brakes the rotor, upflow in a descent drives it
@@ -271,7 +313,26 @@ for "_i" from 0 to 3 do {
 	};
 };
 
-[_heli, _rotorIndex, _rotorTorque, _gearRatio, _numBlades, _bladeMass, _bladeRadius, _rotor get "torqueTau", _deltaTime, _destroyed] call bmkhs_fnc_simpleRotorTorque;
+//A separated blade's centrifugal pull is unopposed
+private _imbalance = [0.0, 0.0, 0.0];
+if (_separated > 0) then {
+    private _pull = _bladeMass * (_bladeRadius * BLADE_CG_FRACTION) * (_omega * _omega);
+    {
+        if ((_x select 0) == BLADE_SEPARATED) then {
+            private _radial = [_discRVec, _discUVec, _azimuth + (_forEachIndex * 360.0 / _numBlades)] call bmkhs_fnc_mathVectorRotateAroundAxis;
+            _imbalance = _imbalance vectorDiff (_radial vectorMultiply _pull);
+        };
+    } forEach _blades;
+    _heli addForce [_heli vectorModelToWorld (_imbalance vectorMultiply _deltaTime), _pos];
+    if (BMKHS_FORCES_DEBUG) then {
+        private _acc = _heli getVariable "bmkhs_dbgForces";
+        _acc pushBack [format ["%1%2 imbalance", ["main","tail"] select (_type == TAIL), _rotorIndex], _imbalance vectorMultiply _deltaTime, _pos vectorDiff _heliCom];
+        _heli setVariable ["bmkhs_dbgForces", _acc];
+    };
+};
+[_heli, "bmkhs_rtrImbalance", _rotorIndex, vectorMagnitude _imbalance] call bmkhs_fnc_utilSetArrayVariable;
+
+[_heli, _rotorIndex, _rotorTorque, _gearRatio, _numBlades - _separated, _bladeMass, _bladeRadius, _rotor get "torqueTau", _deltaTime, _destroyed] call bmkhs_fnc_simpleRotorTorque;
 
 if (BMKHS_FM_DEBUG) then {
 	[_heli, _pos, _pos vectorAdd _rVec, "red"]     call bmkhs_fnc_debugDrawLine;
