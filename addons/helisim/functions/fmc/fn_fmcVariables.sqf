@@ -142,6 +142,7 @@ _heli setVariable ["bmkhs_pid_autoAttRoll", (getArray (_config >> "pidAutoAttRol
 _heli setVariable ["bmkhs_pid_autoPedalHdg", (getArray (_config >> "pidAutoPedalHdg")) call bmkhs_fnc_pidCreate];
 _heli setVariable ["bmkhs_pid_autoPedalNtt", (getArray (_config >> "pidAutoPedalNtt")) call bmkhs_fnc_pidCreate];
 _heli setVariable ["bmkhs_pid_autoPedalAero", (getArray (_config >> "pidAutoPedalAero")) call bmkhs_fnc_pidCreate];
+_heli setVariable ["bmkhs_pid_autoPedalTaxi", (getArray (_config >> "pidAutoPedalTaxi")) call bmkhs_fnc_pidCreate];
 
 //FMC output state
 _heli setVariable ["bmkhs_fmcAttHoldCycPitchOut", 0.0];

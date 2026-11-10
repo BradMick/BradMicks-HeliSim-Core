@@ -49,9 +49,8 @@ _heli setVariable ["bmkhs_kbHeliCollectiveLowerOut", 0.0];
 _heli setVariable ["bmkhs_autoAttCycRollOut",  0.0];
 _heli setVariable ["bmkhs_autoAttRollTarget",  0.0];
 _heli setVariable ["bmkhs_autoPedalHdg",       getDir _heli];
-_heli setVariable ["bmkhs_autoPedalRegime",    "hdg"];   //hdg | ntt | aero (live regime)
+_heli setVariable ["bmkhs_autoPedalRegime",    "hdg"];   //hdg | ntt | aero | taxi (live regime)
 _heli setVariable ["bmkhs_autoPedalPos",       0.0];     //where the feet have the pedals
-_heli setVariable ["bmkhs_autoPedalVel",       0.0];     //foot speed, per s
 _heli setVariable ["bmkhs_autoPedalTrim",      0.0];     //pedal before the pilot's turn
 _heli setVariable ["bmkhs_autoPedalHdgSet",    true];    //hover heading captured
 _heli setVariable ["bmkhs_autoPedalRawPrev",   0.0];     //pilot's raw pedal, last frame

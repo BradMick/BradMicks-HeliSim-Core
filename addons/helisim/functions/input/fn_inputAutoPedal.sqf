@@ -4,15 +4,24 @@ Function: bmkhs_fnc_inputAutoPedal
 Description:
     Auto pedal - an input assist that works the pedals for the pilot, like a pilot's feet.
 
-    Three regimes, selected by hysteresis:
+    Four regimes, selected by hysteresis:
+        TAXI (on the wheels) - the nose on the direction of travel, forwards or backwards; the
+                               feet rest at neutral while stopped. In and out on the squat switch.
         HDG  (hover)        - hold HEADING (deg); the ball is meaningless without airflow
         NTT  (accel, <50ft) - NOSE-TO-TAIL: drive the ground track's angle off the nose to zero
         AERO (>50ft AGL)    - AERODYNAMIC: drive lateral accel (beta_g) to zero, ball centred
 
-    The foot is critically damped - it eases off, eases in, and never overshoots on its own.
-    On release it starts from the pilot's pedal and, in the hover, eases to the pedal that
-    stops the yaw, then holds the heading. An analog pedal springing back faster than a foot
-    moves is a release, the same as a key.
+    The foot moves at a pilot's pace - brisk for a nudge, faster the further it has to go, a
+    full stroke in about a second - and stops on the pedal without overshooting. It is the
+    pedal: while the pilot holds a key the foot strokes toward that pedal, scaled by weight on
+    wheels, and on release it strokes toward the loop's - in the hover, the pedal that stops the
+    yaw, then the heading hold. Nothing goes downstream around it; a key is 0 or 1, and it is
+    the foot that makes a stroke of it. An analog pedal springing back faster than a foot moves
+    is a release, the same as a key.
+
+    On the wheels the pilot's pedal is scaled by weight on wheels - reduced at static load for
+    steady pedal turns, full by the time the squat strut unloads - so a rolling takeoff or
+    landing hands the pedal over across the stroke, not at the switch.
 
 Parameters:
     _heli           - The helicopter [Object].
@@ -20,7 +29,7 @@ Parameters:
     _pedalLeftRight - Pilot's pedal [Number].
 
 Returns:
-    The pilot's pedal to pass downstream - zero once released [Number].
+    The pilot's pedal to pass downstream - always zero, the foot carries it [Number].
 
 Author:
     BradMick
@@ -32,10 +41,12 @@ params ["_heli", "_deltaTime", "_pedalLeftRight"];
 private _pidAutoPedalHdg  = _heli getVariable "bmkhs_pid_autoPedalHdg";
 private _pidAutoPedalNtt  = _heli getVariable "bmkhs_pid_autoPedalNtt";
 private _pidAutoPedalAero = _heli getVariable "bmkhs_pid_autoPedalAero";
+private _pidAutoPedalTaxi = _heli getVariable "bmkhs_pid_autoPedalTaxi";
 
 private _hdgOut     = 0.0;
 private _nttOut     = 0.0;
 private _aeroOut    = 0.0;
+private _taxiOut    = 0.0;
 private _curHdg     = getDir _heli;
 private _desiredHdg = _heli getVariable "bmkhs_autoPedalHdg";
 
@@ -48,12 +59,26 @@ private _velFwd = (_heli getVariable "bmkhs_velModelSpaceNoWind") select 1;
 //Regime, with hysteresis so the boundary cannot chatter. Only the active PID runs;
 //the idle ones are held reset so nothing winds up while contributing nothing.
 private _regime = _heli getVariable "bmkhs_autoPedalRegime";
+//TAXI <-> the air, on the squat switch. Weight on wheels needs wheels; a skid aircraft never taxis.
+//Off the wheels it lands in the regime the speed says - HDG from a hover lift-off, NTT from a roll.
+private _wheels   = (_heli getVariable "bmkhs_numWheels") > 0;
+private _onWheels = _wheels && {[_heli] call bmkhs_fnc_stateOnGround};
+if (_regime != "taxi" && _onWheels) then {
+    _regime = "taxi";
+    [_pidAutoPedalHdg]  call bmkhs_fnc_pidReset;
+    [_pidAutoPedalNtt]  call bmkhs_fnc_pidReset;
+    [_pidAutoPedalAero] call bmkhs_fnc_pidReset;
+};
+if (_regime == "taxi" && !_onWheels) then {
+    _regime = ["hdg", "ntt"] select (_velFwd >= AUTOPEDAL_NTT_SPD);
+    [_pidAutoPedalTaxi] call bmkhs_fnc_pidReset;
+};
 //The hover gate and the regime switch are the SAME threshold, or nothing works in between.
 if (_regime == "hdg" && _velFwd >= AUTOPEDAL_NTT_SPD) then {
     _regime = "ntt";
     [_pidAutoPedalHdg] call bmkhs_fnc_pidReset;
 };
-if (_regime != "hdg" && _velFwd < AUTOPEDAL_NTT_SPD) then {
+if (_regime in ["ntt", "aero"] && _velFwd < AUTOPEDAL_NTT_SPD) then {
     _regime = "hdg";
     [_pidAutoPedalNtt]  call bmkhs_fnc_pidReset;
     [_pidAutoPedalAero] call bmkhs_fnc_pidReset;
@@ -74,30 +99,51 @@ private _yawRate = deg ((_heli getVariable "bmkhs_angVelModelSpace") select 2);
 private _ftYaw   = _heli getVariable "bmkhs_forceTrimPosYaw";
 private _pos     = _heli getVariable "bmkhs_autoPedalPos";
 private _trim    = _heli getVariable "bmkhs_autoPedalTrim";
-private _w       = AUTOPEDAL_FOOT_95PCT / AUTOPEDAL_FOOT_TIME;
+
+//Pilot authority by weight on wheels: the squat strut's compression as a fraction of its sag,
+//1 at static load, 0 as the wheel lifts, so the scale is continuous through the switch.
+private _authority = 1.0;
+if (_wheels) then {
+    private _wheelList   = _heli getVariable "bmkhs_wheels";
+    private _compression = _heli getVariable "bmkhs_wheelCompression";
+    private _wow         = _heli getVariable "bmkhs_wheelWow";
+    //The squat-switch wheel, or the most loaded wheel when none is named
+    private _frac = 0.0;
+    {
+        if (_wow < 0 || {_forEachIndex == _wow}) then {
+            _frac = _frac max ((_compression select _forEachIndex) / (_x get "sag"));
+        };
+    } forEach _wheelList;
+    _frac      = _frac min 1.0;
+    _authority = 1.0 - (1.0 - AUTOPEDAL_TAXI_AUTHORITY) * _frac;
+};
+_pedalLeftRight = _pedalLeftRight * _authority;
 
 //On the pedals - unless the pedal is springing back faster than a foot moves
-private _raw      = abs ((_heli getVariable "bmkhs_heliRudderRightOut") - (_heli getVariable "bmkhs_heliRudderLeftOut"));
-private _rawPrev  = _heli getVariable "bmkhs_autoPedalRawPrev";
-private _onPedals = _raw > 0.01;
-private _pilot    = [_pedalLeftRight, _ftYaw] call bmkhs_fnc_inputGetInterp;
-private _sprung   = _onPedals && {_heli getVariable "bmkhs_autoPedalSprung"};
+private _raw        = abs ((_heli getVariable "bmkhs_heliRudderRightOut") - (_heli getVariable "bmkhs_heliRudderLeftOut"));
+private _rawPrev    = _heli getVariable "bmkhs_autoPedalRawPrev";
+private _sprungPrev = _heli getVariable "bmkhs_autoPedalSprung";
+private _onPedals   = _raw > 0.01;
+private _sprung     = _onPedals && _sprungPrev;
 if (_onPedals) then {
-    if (_raw > _rawPrev) then { _sprung = false };                          //pushing again
-    if (_rawPrev - _raw > _w * _deltaTime) then { _sprung = true };         //spring, not a foot
+    if (_raw > _rawPrev) then { _sprung = false };                                      //pushing again
+    if (_rawPrev - _raw > AUTOPEDAL_FOOT_RATE_MAX * _deltaTime) then { _sprung = true }; //spring, not a foot
 };
 _heli setVariable ["bmkhs_autoPedalRawPrev", _raw];
 _heli setVariable ["bmkhs_autoPedalSprung", _sprung];
-private _engaged = _onPedals && !_sprung;
+private _engaged    = _onPedals && !_sprung;
+private _wasEngaged = _rawPrev > 0.01 && !_sprungPrev;
 
 //The setpoint tracks the aircraft while the pilot is on the pedals AND at any speed above
-//the hover gate - above it the slip channels own the axis. Below it, the hover heading holds.
-if (_engaged || _velFwd > AUTOPEDAL_NTT_SPD) then {
+//the hover gate - above it the slip channels own the axis, as they do on the wheels. Below
+//it, the hover heading holds.
+if (_engaged || _velFwd > AUTOPEDAL_NTT_SPD || _regime == "taxi") then {
     _desiredHdg = getDir _heli;
     _heli setVariable ["bmkhs_autoPedalHdg", _desiredHdg];
     _heli setVariable ["bmkhs_autoPedalHdgSet", !_engaged];   //slowing into the hover holds at once
-    if (!_sprung) then {
-        _trim = _ftYaw;     //pedal before the turn
+    //The pedal before the turn: the foot, until the press is underway - the foot moves during it
+    if (!_sprung && {!_onPedals || !_wasEngaged}) then {
+        _trim = _ftYaw;
         _heli setVariable ["bmkhs_autoPedalTrim", _trim];
     };
 } else {
@@ -125,6 +171,9 @@ private _trackDeg = if (_gndVelXY > 0.0) then { asin (_gndVelX / _gndVelXY) } el
 private _hdgError  = [_curHdg - _desiredHdg] call CBA_fnc_simplifyAngle180;
 private _nttError  = 0.0 - _trackDeg;
 private _aeroError = 0.0 - _betaG;
+//On the wheels the direction of travel may be aft: the track is then held on the tail, and the
+//pedal that closes the angle is the opposite one.
+private _taxiError = _nttError * ([1, -1] select (_velFwd < 0.0));
 
 //PILOT DEADBAND. Subtracting the band rather than zeroing inside it keeps the response
 //continuous - the correction just starts from zero once the error is worth correcting.
@@ -137,6 +186,11 @@ if (abs _nttError <= AUTOPEDAL_NTT_DEADBAND_DEG) then {
     _nttError = 0.0;
 } else {
     _nttError = _nttError - (AUTOPEDAL_NTT_DEADBAND_DEG * ([1, -1] select (_nttError < 0)));
+};
+if (abs _taxiError <= AUTOPEDAL_NTT_DEADBAND_DEG) then {
+    _taxiError = 0.0;
+} else {
+    _taxiError = _taxiError - (AUTOPEDAL_NTT_DEADBAND_DEG * ([1, -1] select (_taxiError < 0)));
 };
 
 //Hand-off: a loop fresh from reset starts from the pedal the foot holds - nothing moves at the switch
@@ -172,26 +226,35 @@ switch (_regime) do {
         _aeroOut = [_pidAutoPedalAero, _deltaTime, 0.0, _aeroError] call bmkhs_fnc_pidRun;
         _aeroOut = [_aeroOut, -1.0, 1.0] call BIS_fnc_clamp;
     };
+    case "taxi": {
+        //Stopped, the feet rest at neutral; the loop waits reset so it starts from the foot when the roll begins
+        if (_gndVelXY < AUTOPEDAL_TAXI_SPD) then {
+            [_pidAutoPedalTaxi] call bmkhs_fnc_pidReset;
+        } else {
+            [_pidAutoPedalTaxi, -_taxiError] call _takeOver;
+            _taxiOut = [_pidAutoPedalTaxi, _deltaTime, 0.0, _taxiError] call bmkhs_fnc_pidRun;
+            _taxiOut = [_taxiOut, -1.0, 1.0] call BIS_fnc_clamp;
+        };
+    };
 };
 
 //Only one regime is ever active, so its output IS the pedal.
-private _yawOutput = _hdgOut + _nttOut + _aeroOut;
+private _yawOutput = _hdgOut + _nttOut + _aeroOut + _taxiOut;
 
-//The foot - critically damped: eases off, eases in, no overshoot of its own
+//The foot strokes toward the pilot's pedal while a key is held, the loop's pedal once released:
+//faster the further it has to go, between a nudge and a full stroke, and it stops on the pedal.
+private _target = [_yawOutput, _pedalLeftRight] select _engaged;
 if (_engaged) then {
     [_pidAutoPedalHdg]  call bmkhs_fnc_pidReset;
     [_pidAutoPedalNtt]  call bmkhs_fnc_pidReset;
     [_pidAutoPedalAero] call bmkhs_fnc_pidReset;
-    //Sits on the pilot's pedal, at rest - release starts from there
-    _heli setVariable ["bmkhs_autoPedalPos", _pilot];
-    _heli setVariable ["bmkhs_autoPedalVel", 0.0];
-} else {
-    private _vel = _heli getVariable "bmkhs_autoPedalVel";
-    _vel = _vel + (_w * _w * (_yawOutput - _pos) - 2.0 * _w * _vel) * _deltaTime;
-    _pos = [_pos + _vel * _deltaTime, -1.0, 1.0] call BIS_fnc_clamp;
-    _heli setVariable ["bmkhs_autoPedalPos", _pos];
-    _heli setVariable ["bmkhs_autoPedalVel", _vel];
-    _heli setVariable ["bmkhs_forceTrimPosYaw", _pos];
+    [_pidAutoPedalTaxi] call bmkhs_fnc_pidReset;
 };
+private _toGo = _target - _pos;
+private _rate = [AUTOPEDAL_FOOT_RATE_PER * abs _toGo, AUTOPEDAL_FOOT_RATE_MIN, AUTOPEDAL_FOOT_RATE_MAX] call BIS_fnc_clamp;
+_pos = _pos + (((_rate * _deltaTime) min abs _toGo) * ([1, -1] select (_toGo < 0.0)));
+_heli setVariable ["bmkhs_autoPedalPos", _pos];
+_heli setVariable ["bmkhs_forceTrimPosYaw", _pos];
 
-[_pedalLeftRight, 0.0] select _sprung
+//The foot is the pedal - nothing goes downstream around it
+0.0

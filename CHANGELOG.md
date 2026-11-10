@@ -17,6 +17,20 @@
   Aircraft without wheels keep the `isTouchingGround` / radar altitude test.
   `bmkhs_wheelCompression` rides in the net state, so the answer holds on the crew's machines.
 
+### Flight controls
+- **Auto pedal taxis.** A fourth regime, `taxi`, in and out on the squat switch. Rolling, it holds
+  the nose on the direction of travel - the tail when backing up - and stopped, the feet rest at
+  neutral. The pilot's pedal is scaled by weight on wheels, half at static load and full as the
+  squat strut unloads, so pedal turns on the ground are steady and a rolling takeoff or landing
+  hands the pedal across the stroke rather than at the switch. Leaving the wheels it drops into
+  heading hold or nose-to-tail by speed, through the same hand-off as the other regimes. Gains
+  are the aircraft's `pidAutoPedalTaxi[]`, a new required row beside the other three.
+- **Auto pedal moves like feet.** The foot's speed is set by how far it has to go - a nudge is
+  brisk, a full stroke takes about a second - fitted to measured pedal work, and it stops on the
+  pedal without overshooting. The pilot's pedal key rides the same foot, so a key press is a
+  pedal stroke rather than a step to full pedal, in every regime. The old critically damped foot
+  and its speed state are gone.
+
 ## 1.5.0.0
 
 ### Damage

@@ -2348,14 +2348,14 @@ Working state, solver bookkeeping, filters and debug. These change without notic
 - `bmkhs_fuselagePanels` - cached fuselage panel geometry.
 - `bmkhs_fmc`: the declared FMC features, their settings and PID state.
 - `bmkhs_pid_autoAttPitch`, `bmkhs_pid_autoAttRoll`: assist PID state, casual only.
-- `bmkhs_pid_autoPedalHdg`, `bmkhs_pid_autoPedalNtt`, `bmkhs_pid_autoPedalAero`: auto-pedal PID state.
+- `bmkhs_pid_autoPedalHdg`, `bmkhs_pid_autoPedalNtt`, `bmkhs_pid_autoPedalAero`, `bmkhs_pid_autoPedalTaxi`: auto-pedal PID state.
 - `bmkhs_posIntX`, `bmkhs_posIntY`: position hold integrator, clamped tiny.
 - `bmkhs_mixes`: parsed `ControlMixing` table.
 - `bmkhs_autoAttLevelPitch`, `bmkhs_autoAttRollLimit`: config copy for assist.
 - `bmkhs_autoAttRollTarget`: assist roll setpoint, deg.
 - `bmkhs_autoPedalHdg`: auto-pedal heading setpoint (networked).
-- `bmkhs_autoPedalRegime`: auto-pedal regime, hdg / ntt / aero.
-- `bmkhs_autoPedalPos`, `bmkhs_autoPedalVel`: the auto-pedal foot, position and speed; it writes forceTrimPosYaw.
+- `bmkhs_autoPedalRegime`: auto-pedal regime, taxi / hdg / ntt / aero. `taxi` is in and out on the squat switch (`bmkhs_fnc_stateOnGround`, aircraft with wheels only): the nose on the direction of travel, forwards or backwards, feet at neutral when stopped, and the pilot's pedal scaled by the squat strut's compression from `AUTOPEDAL_TAXI_AUTHORITY` at static load to full as the wheel lifts.
+- `bmkhs_autoPedalPos`: the auto-pedal foot, where it has the pedal; it writes forceTrimPosYaw every frame. The foot moves at a pilot's pace - `AUTOPEDAL_FOOT_RATE_PER` times the pedal still to go, between `AUTOPEDAL_FOOT_RATE_MIN` and `AUTOPEDAL_FOOT_RATE_MAX` per second - toward the pilot's pedal while a key is held and the loop's pedal once released, so with auto pedal on the pedal downstream is zero and the foot is the pedal.
 - `bmkhs_autoPedalTrim`, `bmkhs_autoPedalHdgSet`: pedal before the pilot's turn; hover heading captured.
 - `bmkhs_autoPedalRawPrev`, `bmkhs_autoPedalSprung`: pilot's raw pedal last frame; analog spring-back seen as a release.
 - `bmkhs_cyclicPitchValue`, `bmkhs_cyclicRollValue`, `bmkhs_pedalYawValue`: sticky-keyboard accumulators.

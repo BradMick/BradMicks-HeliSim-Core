@@ -287,11 +287,22 @@
 #define AUTOPEDAL_NTT_DEADBAND_DEG    0.750
 //Forward speed at which the pedals hand over from heading hold to nose-to-tail trim
 #define AUTOPEDAL_NTT_SPD             5.144   //10kt forward
-#define AUTOPEDAL_FOOT_TIME           1.5     //s - foot covers 95% of any move
-#define AUTOPEDAL_FOOT_95PCT          4.74    //critically damped: 95% at w*t = 4.74
-#define AUTOPEDAL_FEEL                0.01    //pedal per deg/s of yaw left - foot settles where the yaw stops
+//The foot moves like a pilot's: brisk for a nudge, faster the further it has to go, a full stroke
+//in about a second. Its speed is FOOT_RATE_PER x the pedal still to go, never below FOOT_RATE_MIN
+//nor above FOOT_RATE_MAX, and it stops on the pedal - no overshoot. Fitted to measured pedal work
+//(2026-11-10 flight log): 0.08 of pedal in 0.24 s, 0.3 in 0.47 s, 0.48 in 0.65 s. The pilot's
+//key rides the same foot - a key is 0 or 1, and it is the foot that makes a stroke of it.
+#define AUTOPEDAL_FOOT_RATE_MIN       0.2     //pedal/s - a nudge
+#define AUTOPEDAL_FOOT_RATE_PER       8.0     //pedal/s per unit of pedal still to go
+#define AUTOPEDAL_FOOT_RATE_MAX       1.0     //pedal/s - a full stroke
+#define AUTOPEDAL_FEEL               0.01    //pedal per deg/s of yaw left - foot settles where the yaw stops
 #define AUTOPEDAL_FOOT_ARRIVED        0.01    //foot this close to the pedal it eases to = turn done
 #define AUTOPEDAL_HDG_SETTLE_DPS      2.0     //deg/s - hover heading captured once the turn stops
+//Auto-pedal on the wheels (TAXI, by the squat switch): the nose on the direction of travel, forwards or
+//backwards; the feet rest at neutral below TAXI_SPD. The pilot's pedal is scaled by weight on wheels -
+//TAXI_AUTHORITY at static load, full as the squat strut unloads - so nothing steps at the switch.
+#define AUTOPEDAL_TAXI_AUTHORITY      0.5     //pilot pedal fraction at static load
+#define AUTOPEDAL_TAXI_SPD            1.0     //m/s ground speed - below it the feet rest
 
 //AUTO ATTITUDE (CASUAL + KEYBOARD). Drives the aircraft to wings level so a keyboard player is
 //not fighting the pitch-up the airframe develops with forward airspeed. There is no attitude
