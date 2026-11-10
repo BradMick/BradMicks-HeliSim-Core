@@ -45,6 +45,8 @@ if (((crew _heli) findIf {isPlayer _x}) < 0
     && {!(_heli getVariable "bmkhs_apuOn")}
     && {!(_heli getVariable "bmkhs_battBusOn")}) exitWith {
     _heli setVariable ["bmkhs_previousTime", diag_tickTime];
+    //The wheels hold a parked aircraft
+    [_heli] call bmkhs_fnc_suspensionUpdate;
 };
 
 if (isAutoHoverOn _heli) then {
@@ -96,6 +98,9 @@ if (isAutoHoverOn _heli) then {
 
 //Flight Model
 [_heli] call bmkhs_fnc_coreUpdateFlightModel;
+
+//Wheels - after the flight model's forces, before the state goes out
+[_heli] call bmkhs_fnc_suspensionUpdate;
 [_heli] call bmkhs_fnc_damageEffects;
 
 //The running state, packed, for everyone else - after the flight model, so it is all one frame

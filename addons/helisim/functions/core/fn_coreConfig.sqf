@@ -63,6 +63,8 @@ _heli setVariable ["bmkhs_useSystems",          getNumber (_config >> "useSystem
 [_heli, _config] call bmkhs_fnc_engineVariables;
 [_heli, _config] call bmkhs_fnc_fuselageVariables;
 [_heli, _config] call bmkhs_fnc_wingVariables;
+//After the controls: the brake and lock controls it names must be declared
+[_heli, _config] call bmkhs_fnc_suspensionVariables;
 [_heli] call bmkhs_fnc_transmissionVariables;
 [_heli, _config] call bmkhs_fnc_simpleRotorVariables;
 [_heli, _config] call bmkhs_fnc_rotorVariables;

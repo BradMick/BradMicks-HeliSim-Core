@@ -274,6 +274,16 @@ class CfgFunctions
             class stateVelocities {R;};
             class stateOnGround {R;};
         };
+        class suspension {
+            file = "\bmkhs_helisim\functions\suspension";
+            class suspensionCastor {R;};
+            class suspensionDebug {R;};
+            class suspensionPlace {R;};
+            class suspensionPlane {R;};
+            class suspensionUpdate {R;};
+            class suspensionVariables {R;};
+            class suspensionWheel {R;};
+        };
         class systems {
             file = "\bmkhs_helisim\functions\systems";
             class systemCircuit {R;};

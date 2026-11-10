@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.6.0.0
+
+### Wheels
+- **Suspension in Core.** An aircraft declares its wheels in `class Wheels` - any number, each an
+  axle position, radius and static sag, braked or not, castoring or not - and Core runs them: a gas
+  strut and damper per wheel, tyre grip that holds a steady force at rest, a castoring wheel that
+  trails its motion and pins when its lock is selected, and the aircraft placed on its wheels at
+  load-in and held while parked. The AH-64D's suspension, ported from its pack and made general;
+  the pack's own suspension code is gone.
+- **Brake and lock are controls.** The wheels name a declared control for the parking brake
+  (`brakeControl`) and each castoring wheel one for its lock (`lockControl`), so they bind, animate
+  and network like every other switch.
+- **Weight on wheels.** On an aircraft with wheels, `bmkhs_fnc_stateOnGround` is the squat
+  switch: true while the wheel `weightOnWheels` names is compressed, or any wheel if none is named.
+  Aircraft without wheels keep the `isTouchingGround` / radar altitude test.
+  `bmkhs_wheelCompression` rides in the net state, so the answer holds on the crew's machines.
+
 ## 1.5.0.0
 
 ### Damage

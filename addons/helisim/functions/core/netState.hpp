@@ -58,5 +58,6 @@
     "bmkhs_loadFactor", \
     "bmkhs_gFatigue", \
     "bmkhs_bladeState", \
-    "bmkhs_partsLost" \
+    "bmkhs_partsLost", \
+    "bmkhs_wheelCompression" \
 ]

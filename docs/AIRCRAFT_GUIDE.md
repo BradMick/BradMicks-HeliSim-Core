@@ -313,6 +313,7 @@ class BMKHS_HeliSim {
     #include "bmkhs_config\helisim_misc.hpp"      //the pack's own data, which Core does not read
     #include "bmkhs_config\helisim_rotor.hpp"
     #include "bmkhs_config\helisim_simpleRotor.hpp"
+    #include "bmkhs_config\helisim_wheels.hpp"    //only if it has wheels
     #include "bmkhs_config\helisim_wings.hpp"
 };
 ```
@@ -1388,6 +1389,103 @@ so `emptyMom = 6314 x 5.207 = 32877`, which puts the empty CG at model y
 6.4 - 5.207 = 1.193. CG limits FS 201 in (5.105 m) and 207 in (5.258 m) give
 `fwdCgLimit = 1.295` and `aftCgLimit = 1.142`.
 
+### Wheels and suspension
+
+`bmkhs_config/helisim_wheels.hpp`, for an aircraft on wheels. Delete the aircraft's land
+contacts: Core's wheels carry it. An aircraft on skids declares no `class Wheels`, keeps its
+land contacts and changes nothing.
+
+```cpp
+class Wheels {
+    brakeControl   = "parkBrake";   //the control whose On brakes every braked wheel
+    weightOnWheels = "left main";   //the wheel, by name, whose strut carries the squat switch
+    muRoll         = 0.015;         //along a rolling wheel
+    muBrake        = 0.8;           //along a braked wheel with the brake on
+    muSide         = 0.7;           //across a wheel that cannot swivel
+    muCastorFree   = 0.1;           //across a castoring wheel, swivelling
+    muCastorLocked = 0.8;           //across a castoring wheel, pinned
+    castorTrail    = 0.09;          //m, a castoring wheel behind its swivel axis
+    castorPinAngle = 5.0;           //deg, the lock pin drops in within this of centre
+    class Wheel01 {
+        name            = "right main";
+        position[]      = {0.998, 2.399, -1.310};   //axle at static load, model frame
+        extended[]      = {0.998, 2.654, -1.582};   //axle at full extension, model frame
+        radius          = 0.346;                    //m
+        castors         = 0;
+        braked          = 1;
+        lockControl     = "";                       //a castoring wheel's lock; "" for none
+        animationSource = "";                       //swivel angle, degrees; "" for none
+        compressionSource = "gearRight";            //strut stroke, 0 extended to 1 static; "" for none
+    };
+    class Wheel02 { /* left main */ };
+    class Wheel03 {
+        name            = "tail";
+        position[]      = {-0.002, -8.105, -1.432};
+        extended[]      = {-0.002, -8.026, -1.568};
+        radius          = 0.155;
+        castors         = 1;
+        braked          = 0;
+        lockControl     = "tailWheelLock";
+        animationSource = "tailWheelCastor";
+        compressionSource = "gearTail";
+    };
+};
+```
+
+**The gear animates from the strut, not from `altRadar`.** Each wheel's `compressionSource` is a
+user animation source Core drives with the stroke as a fraction of `sag`: 0 at full extension,
+1 at static, above 1 compressed past static, and 0 off the ground. Declare it in your
+`AnimationSources` and point the gear's `model.cfg` rotation at it (`minValue = 0`,
+`maxValue = 2`, `angle0` the extended angle, `angle1` twice the static angle). One source per
+wheel, so the model needs a selection and axis per leg for the wheels to move independently.
+
+**Any number of wheels, three at least and not in a line.** Core splits the static load across
+them from the centre of mass each frame, so a four-wheel aircraft needs no more than four
+classes. Fewer than three, or three in a row, is a WHEELS CONFIG ERROR and the suspension is off.
+
+**`position[]` is the axle at static load and `extended[]` the axle at full extension, both in
+the model frame**, like every other position (Core subtracts `boundingCenter`). `extended[]` is
+the Memory LOD axle as the p3d draws it; `position[]` is that axle swung to the gear's static
+stop about its pivot. The vector between them is the stroke: the drawn wheel and the gear
+animation follow it, and its vertical part is the strut's sag, the compression at which it
+carries the static load. The strut is soft near full extension and stiffens as it compresses.
+`extended[]` must be below `position[]`, or it is a WHEELS CONFIG ERROR and the suspension is off.
+
+**The brake and the lock are controls, declared in `class Controls` like any other** (Step 6),
+and named here by `variableName`. Core reads `bmkhs_<name>On`. A `braked` wheel with no
+`brakeControl`, or a control the aircraft does not declare, is a WHEELS CONFIG ERROR: the wheel
+rolls free, or never pins. A castoring wheel with `lockControl = ""` castors always.
+
+```cpp
+class ParkBrake {
+    variableName = "parkBrake";
+    rest         = 1;    //set, as the aircraft is shut down
+    wraps        = 1;
+    networked    = 1;
+    class Positions {
+        class Off { displayName = "Parking Brake - Off"; value = 0; };
+        class On  { displayName = "Parking Brake - On";  value = 1; };
+    };
+};
+```
+
+**What Core does.** Each wheel casts a ray from above its lowest point to its full stroke and
+is a spring and damper on the compression it finds, with tyre grip that holds a steady force at
+rest. A castoring wheel trails the direction it moves and, with its lock selected, pins once it
+swings back within `castorPinAngle` of centre; its `animationSource` is driven in degrees. At
+load-in Core sits the aircraft on its wheels - the plane through the wheel bottoms onto the
+ground under them - and holds it there through the mission's long first frames. A parked
+aircraft is held still: idle with nobody aboard, or crewed with the brake on and the collective
+down, waking when either changes, its mass changes or something moves it. The constants are
+Core's (`suspension/suspension.hpp`).
+
+**Weight on wheels.** With wheels declared, `bmkhs_fnc_stateOnGround` is the squat switch: true
+while the wheel named by `weightOnWheels` is compressed (the AH-64D's is on the left main). With
+no wheel named, any compressed wheel counts; a name that matches no wheel is a WHEELS CONFIG ERROR
+and any wheel counts. The compressions are `bmkhs_wheelCompression`, one
+value per wheel, -1 off the ground, in the net state. Without wheels it is the
+`isTouchingGround` / radar altitude test it always was.
+
 ---
 
 ## Step 4 - Declare hitpoints
@@ -1960,8 +2058,9 @@ A separated blade's centrifugal pull (`m × r × ω²`) is applied at the hub, t
 | `bmkhs_accelZ` | Number, m/s², body z (up) | local (owner only) | Same as above for the up axis. (set in `state/fn_stateAccelerations.sqf`) |
 | `bmkhs_radAlt` | Number, metres, exact | 10 Hz | Height above the ground, `getPos _heli # 2`, unrounded and unclamped. A radar altimeter's steps and range are the reader's to apply - Core publishes no display values. (set in `state/fn_stateAltitude.sqf`) |
 | `bmkhs_rtrRpm` | Number, ratio (1.0 = 100 % Nr) | local (owner only) | Rotor speed: `bmkhs_xmsnOutputRpm` / `bmkhs_engDesignRpm`. Forced to 0 when main rotor damage is 1.0. (set in `state/fn_stateRtrRpm.sqf`) |
+| `bmkhs_wheelCompression` | Array, metres, one per `Wheels` class | 10 Hz | Each wheel's strut compression, -1 while it is off the ground. Empty on an aircraft with no `class Wheels`. (set in `suspension/fn_suspensionWheel.sqf`) |
 
-Ground contact is not a variable. Call `[_heli] call bmkhs_fnc_stateOnGround`. It returns true when `isTouchingGround` is true or `bmkhs_radAlt` < 0.15 m (`state/fn_stateOnGround.sqf`). It works only where `bmkhs_radAlt` is updated (the owner).
+Ground contact is not a variable. Call `[_heli] call bmkhs_fnc_stateOnGround` (`state/fn_stateOnGround.sqf`). With `class Wheels` declared it is weight on wheels: true while the wheel named by `weightOnWheels` (any wheel, if none is named) has a `bmkhs_wheelCompression` entry of 0 or more. Without wheels it is true when `isTouchingGround` is true or `bmkhs_radAlt` < 0.15 m. Both inputs are in the net state, so it answers on the crew's machines as well as the owner's.
 
 ### Environment
 
