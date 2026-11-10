@@ -24,7 +24,8 @@
   squat strut unloads, so pedal turns on the ground are steady and a rolling takeoff or landing
   hands the pedal across the stroke rather than at the switch. Leaving the wheels it drops into
   heading hold or nose-to-tail by speed, through the same hand-off as the other regimes. Gains
-  are the aircraft's `pidAutoPedalTaxi[]`, a new required row beside the other three.
+  are the aircraft's `pidAutoPedalTaxi[]`, required when the aircraft declares wheels - a config
+  error names it when missing - and not needed otherwise.
 - **Auto pedal moves like feet.** The foot's speed is set by how far it has to go - a nudge is
   brisk, a full stroke takes about a second - fitted to measured pedal work, and it stops on the
   pedal without overshooting. The pilot's pedal key rides the same foot, so a key press is a

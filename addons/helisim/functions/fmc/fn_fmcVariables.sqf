@@ -142,7 +142,16 @@ _heli setVariable ["bmkhs_pid_autoAttRoll", (getArray (_config >> "pidAutoAttRol
 _heli setVariable ["bmkhs_pid_autoPedalHdg", (getArray (_config >> "pidAutoPedalHdg")) call bmkhs_fnc_pidCreate];
 _heli setVariable ["bmkhs_pid_autoPedalNtt", (getArray (_config >> "pidAutoPedalNtt")) call bmkhs_fnc_pidCreate];
 _heli setVariable ["bmkhs_pid_autoPedalAero", (getArray (_config >> "pidAutoPedalAero")) call bmkhs_fnc_pidCreate];
-_heli setVariable ["bmkhs_pid_autoPedalTaxi", (getArray (_config >> "pidAutoPedalTaxi")) call bmkhs_fnc_pidCreate];
+//Taxi gains matter only with wheels - the regime never runs without them. Wheels declared without
+//the row is a config error. Either way the PID exists, so the regime code is never handed nil.
+private _taxiGains = getArray (_config >> "pidAutoPedalTaxi");
+if (count _taxiGains != 4) then {
+    if (isClass (_config >> "Wheels")) then {
+        "[BMKHS] FMC CONFIG ERROR: Wheels declared but pidAutoPedalTaxi[] {kp, ki, kd, limit} is missing. Auto pedal cannot taxi." call bmkhs_fnc_utilConfigError;
+    };
+    _taxiGains = [0, 0, 0, 0];
+};
+_heli setVariable ["bmkhs_pid_autoPedalTaxi", _taxiGains call bmkhs_fnc_pidCreate];
 
 //FMC output state
 _heli setVariable ["bmkhs_fmcAttHoldCycPitchOut", 0.0];
