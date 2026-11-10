@@ -111,8 +111,8 @@ for "_i" from 0 to (_numElements - 1) do {
 	private _v    = vectorMagnitude _relWind;
 	private _q    = 0.5 * _rho * _area * (_v * _v);
 
-	private _CL = [_airfoilTable, _AoA] call bmkhs_fnc_mathLinearInterp select 1;
-	private _CD = [_airfoilTable, _AoA] call bmkhs_fnc_mathLinearInterp select 2;
+	//One table read for both coefficients: the row is [AoA, CL, CD]
+	([_airfoilTable, _AoA] call bmkhs_fnc_mathLinearInterp) params ["", "_CL", "_CD"];
 
 	private _lift = _CL * _q;
 	private _drag = (_CD min 0.15) * _q;

@@ -63,14 +63,13 @@ for "_i" from 0 to (_count - 1) do {
 
 	private _aoa = (_relWindNormalized vectorDotProduct _up) atan2 (_relWindNormalized vectorDotProduct _chordLine);
 
-    //Lift coefficient
+    //Lift and drag coefficients - one table read, the row is [AoA, CL, CD]
     private _area        = [_a, _b, _c, _d] call bmkhs_fnc_mathGetArea;
-    private _CL          = [_airfoilTable, _aoa] call bmkhs_fnc_mathLinearInterp select 1;
+    ([_airfoilTable, _aoa] call bmkhs_fnc_mathLinearInterp) params ["", "_CL", "_CD"];
     private _v            = (vectorMagnitude _relWind) min VEL_VNE;
     private _lift         = _CL * 0.5 * _rho * _area * (_v * _v);
 
-    //Drag coefficient
-    private _CD          = [_airfoilTable, _aoa] call bmkhs_fnc_mathLinearInterp select 2;
+    //Drag
     private _relWindN     = _velModelSpace vectorDotProduct _up;
     private _drag         = _CD * 0.5 * _rho * _area * (_relWindN * _relWindN);
 

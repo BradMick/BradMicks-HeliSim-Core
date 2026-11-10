@@ -153,14 +153,11 @@ if (_isStab) then {
             _AoA = _AoA * -1.0;
         };
 
-        //Lift coefficient
+        //Lift and drag coefficients - one table read, the row is [AoA, CL, CD]
         private _area  = [_a, _b, _c, _d] call bmkhs_fnc_mathGetArea;
-        private _CL    = [_airfoilTable, _AoA] call bmkhs_fnc_mathLinearInterp select 1;
+        ([_airfoilTable, _AoA] call bmkhs_fnc_mathLinearInterp) params ["", "_CL", "_CD"];
         private _v     = vectorMagnitude _relativeWind;
         private _lift  = _CL * 0.5 * _rho * _area * (_v * _v);
-
-        //Drag coefficient
-        private _CD    = [_airfoilTable, _AoA] call bmkhs_fnc_mathLinearInterp select 2;
         private _drag  = _CD * 0.5 * _rho * _area * (_v * _v);
 
         private _liftVector = _relativeWindNormalized vectorCrossProduct _up;
