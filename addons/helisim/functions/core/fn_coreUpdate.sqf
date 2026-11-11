@@ -140,7 +140,7 @@ if (bmkhs_fmDebug && {!bmkhs_sysDebug} && {vehicle player == _heli}) then {
     \n_cyclicCenterTrimMode = %12
     \n_pedalCenterTrimMode = %13
     \n--------------------
-    \n_mouseAsJoystick = %14
+    \n_scheme pitch|roll|pedal = %14
     \n_kbStickyInterupt = %15
     \n_forceTrimInterupted = %16
     \n--------------------
@@ -190,7 +190,7 @@ if (bmkhs_fmDebug && {!bmkhs_sysDebug} && {vehicle player == _heli}) then {
     bmkhs_autoPedal,                                                 //11
     bmkhs_cyclicCenterTrimMode,                                          //12
     bmkhs_pedalCenterTrimMode,                                           //13
-    bmkhs_mouseAsJoystick,                                           //14
+    [bmkhs_pitchScheme, bmkhs_rollScheme, bmkhs_pedalScheme] joinString "|", //14
     _heli getVariable "bmkhs_kbStickyInterupt",                          //15
     _heli getVariable "bmkhs_forceTrimInterupted",                          //16
     _heli getVariable "bmkhs_fmcAttHoldCycPitchOut" toFixed 3,          //17

@@ -62,27 +62,38 @@ private _apuOn              = _heli getVariable ["bmkhs_apuOn", true];
 /////////////////////////////////////////////////////////////////////////////////////////////
 // Cyclic & Pedal Input /////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////
-private _heliCyclicFwdOut   = _heli getVariable "bmkhs_heliCyclicForwardOut";
-private _heliCyclicBackOut  = _heli getVariable "bmkhs_heliCyclicBackwardOut";
+//Each axis reads the control scheme last used on it
+private _pitchIn            = "bmkhs_" + bmkhs_pitchScheme + "Pitch";
+private _rollIn             = "bmkhs_" + bmkhs_rollScheme  + "Roll";
+private _pedalIn            = "bmkhs_" + bmkhs_pedalScheme + "Pedal";
+
+private _heliCyclicFwdOut   = _heli getVariable (_pitchIn + "ForwardOut");
+private _heliCyclicBackOut  = _heli getVariable (_pitchIn + "BackwardOut");
 private _cyclicFwdAft       = _heliCyclicFwdOut - _heliCyclicBackOut;
 _cyclicFwdAft               = [_cyclicFwdAft, -1.0, 1.0] call BIS_fnc_clamp;
 //systemChat format ["_cyclicFwdAft = %1", _cyclicFwdAft toFixed 2];
 
-private _heliCyclicLeftOut  = _heli getVariable "bmkhs_heliCyclicLeftOut";
-private _heliCyclicRightOut = _heli getVariable "bmkhs_heliCyclicRightOut";
+private _heliCyclicLeftOut  = _heli getVariable (_rollIn + "LeftOut");
+private _heliCyclicRightOut = _heli getVariable (_rollIn + "RightOut");
 private _cyclicLeftRight    = _heliCyclicLeftOut - _heliCyclicRightOut;
 _cyclicLeftRight            = [_cyclicLeftRight, -1.0, 1.0] call BIS_fnc_clamp;
 //systemChat format ["_cyclicLeftRight = %1", _cyclicLeftRight toFixed 2];
 
-private _heliRudderLeftOut  = _heli getVariable "bmkhs_heliRudderLeftOut";
-private _heliRudderRightOut = _heli getVariable "bmkhs_heliRudderRightOut";
+private _heliRudderLeftOut  = _heli getVariable (_pedalIn + "LeftOut");
+private _heliRudderRightOut = _heli getVariable (_pedalIn + "RightOut");
 private _pedalLeftRight     = _heliRudderRightOut - _heliRudderLeftOut;
 _pedalLeftRight             = [_pedalLeftRight, -1.0, 1.0] call BIS_fnc_clamp;
 //systemChat format ["_pedalLeftRight = %1", _pedalLeftRight toFixed 2];
 
-if (!_isPlaying || (freeLook && bmkhs_mouseAsJoystick)) then {
+if (!_isPlaying) then {
     _cyclicFwdAft      = 0.0;
     _cyclicLeftRight   = 0.0;
+};
+//Freelook has the mouse
+if (freeLook) then {
+    if (bmkhs_pitchScheme == "mouse") then { _cyclicFwdAft    = 0.0 };
+    if (bmkhs_rollScheme  == "mouse") then { _cyclicLeftRight = 0.0 };
+    if (bmkhs_pedalScheme == "mouse") then { _pedalLeftRight  = 0.0 };
 };
 
 //Cyclic Pitch
@@ -256,13 +267,13 @@ if (!_hydFailure || _emerHydOn) then {
 // Cyclic and Pedals    /////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////
 if (_isZeus && (!_hydFailure || _emerHydOn)) then {
-    if (bmkhs_mouseAsJoystick) then {
-        _heli setVariable ["bmkhs_cyclicFwdAft",    _cyclicFwdAft    * bmkhs_mouseSense];
-        _heli setVariable ["bmkhs_cyclicLeftRight", _cyclicLeftRight * bmkhs_mouseSense];
-    } else {
-        _heli setVariable ["bmkhs_cyclicFwdAft",    _cyclicFwdAft];
-        _heli setVariable ["bmkhs_cyclicLeftRight", _cyclicLeftRight];
-    };
+    //Mouse sensitivity, on the axes the mouse has
+    if (bmkhs_pitchScheme == "mouse") then { _cyclicFwdAft    = _cyclicFwdAft    * bmkhs_mouseSense };
+    if (bmkhs_rollScheme  == "mouse") then { _cyclicLeftRight = _cyclicLeftRight * bmkhs_mouseSense };
+    if (bmkhs_pedalScheme == "mouse") then { _pedalLeftRight  = _pedalLeftRight  * bmkhs_mouseSense };
+
+    _heli setVariable ["bmkhs_cyclicFwdAft",    _cyclicFwdAft];
+    _heli setVariable ["bmkhs_cyclicLeftRight", _cyclicLeftRight];
     if (!_tailRtrFixed) then {
         _heli setVariable ["bmkhs_pedalLeftRight", _pedalLeftRight];
     };

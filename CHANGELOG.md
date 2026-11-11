@@ -31,6 +31,13 @@
   pedal without overshooting. The pilot's pedal key rides the same foot, so a key press is a
   pedal stroke rather than a step to full pedal, in every regime. The old critically damped foot
   and its speed state are gone.
+- **A set of binds per control scheme.** Cyclic and pedals are now bound separately for keyboard,
+  HOTAS and mouse - `Keyboard Pitch Forward`, `HOTAS Pitch Forward`, `Mouse Pitch Forward` and so
+  on, for pitch, roll and pedal. Whichever scheme was last used on an axis has that axis, as the
+  collective already works, so any mix flies. **The old Cyclic / Pedal binds are gone: rebind
+  HOTAS and mouse axes on the new binds.** The keyboard binds default to W/S/A/D and Q/E.
+- **Mouse as Joystick setting removed.** Binding the Mouse binds is the switch. Mouse sensitivity
+  and the freelook cut-out act only on an axis the mouse has, never on keyboard or HOTAS input.
 
 ## 1.5.0.0
 

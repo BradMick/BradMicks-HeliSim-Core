@@ -25,12 +25,25 @@ class vname {\
 #include "\bmkhs_helisim\controlMacros.hpp"
 
 class CfgUserActions {
-    BMKHS_ANALOG(bmkhs_cyclicForward,"Cyclic Forward","Cyclic Forward");
-    BMKHS_ANALOG(bmkhs_cyclicBackward,"Cyclic Backward","Cyclic Backward");
-    BMKHS_ANALOG(bmkhs_cyclicLeft,"Cyclic Left","Cyclic Left");
-    BMKHS_ANALOG(bmkhs_cyclicRight,"Cyclic Right","Cyclic Right");
-    BMKHS_ANALOG(bmkhs_pedalLeft,"Pedal Left","Pedal Left");
-    BMKHS_ANALOG(bmkhs_pedalRight,"Pedal Right","Pedal Right");
+    //Cyclic and pedals, a set per control scheme - the last one used on an axis has it
+    BMKHS_NONANALOG(bmkhs_kbPitchForward,"Keyboard Pitch Forward","Keyboard Pitch Forward");
+    BMKHS_NONANALOG(bmkhs_kbPitchBackward,"Keyboard Pitch Backward","Keyboard Pitch Backward");
+    BMKHS_NONANALOG(bmkhs_kbRollLeft,"Keyboard Roll Left","Keyboard Roll Left");
+    BMKHS_NONANALOG(bmkhs_kbRollRight,"Keyboard Roll Right","Keyboard Roll Right");
+    BMKHS_NONANALOG(bmkhs_kbPedalLeft,"Keyboard Pedal Left","Keyboard Pedal Left");
+    BMKHS_NONANALOG(bmkhs_kbPedalRight,"Keyboard Pedal Right","Keyboard Pedal Right");
+    BMKHS_ANALOG(bmkhs_hotasPitchForward,"HOTAS Pitch Forward","HOTAS Pitch Forward");
+    BMKHS_ANALOG(bmkhs_hotasPitchBackward,"HOTAS Pitch Backward","HOTAS Pitch Backward");
+    BMKHS_ANALOG(bmkhs_hotasRollLeft,"HOTAS Roll Left","HOTAS Roll Left");
+    BMKHS_ANALOG(bmkhs_hotasRollRight,"HOTAS Roll Right","HOTAS Roll Right");
+    BMKHS_ANALOG(bmkhs_hotasPedalLeft,"HOTAS Pedal Left","HOTAS Pedal Left");
+    BMKHS_ANALOG(bmkhs_hotasPedalRight,"HOTAS Pedal Right","HOTAS Pedal Right");
+    BMKHS_ANALOG(bmkhs_mousePitchForward,"Mouse Pitch Forward","Mouse Pitch Forward");
+    BMKHS_ANALOG(bmkhs_mousePitchBackward,"Mouse Pitch Backward","Mouse Pitch Backward");
+    BMKHS_ANALOG(bmkhs_mouseRollLeft,"Mouse Roll Left","Mouse Roll Left");
+    BMKHS_ANALOG(bmkhs_mouseRollRight,"Mouse Roll Right","Mouse Roll Right");
+    BMKHS_ANALOG(bmkhs_mousePedalLeft,"Mouse Pedal Left","Mouse Pedal Left");
+    BMKHS_ANALOG(bmkhs_mousePedalRight,"Mouse Pedal Right","Mouse Pedal Right");
     BMKHS_ANALOG(bmkhs_collectiveUp,"Collective Up","Collective Up");
     BMKHS_ANALOG(bmkhs_collectiveDn,"Collective Down","Collective Down");
     BMKHS_NONANALOG(bmkhs_kbCollectiveUp,"Keyboard Collective Up","Keyboard Collective Up");

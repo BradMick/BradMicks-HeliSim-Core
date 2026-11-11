@@ -120,7 +120,8 @@ if (_wheels) then {
 _pedalLeftRight = _pedalLeftRight * _authority;
 
 //On the pedals - unless the pedal is springing back faster than a foot moves
-private _raw        = abs ((_heli getVariable "bmkhs_heliRudderRightOut") - (_heli getVariable "bmkhs_heliRudderLeftOut"));
+private _pedalIn    = "bmkhs_" + bmkhs_pedalScheme + "Pedal";
+private _raw        = abs ((_heli getVariable (_pedalIn + "RightOut")) - (_heli getVariable (_pedalIn + "LeftOut")));
 private _rawPrev    = _heli getVariable "bmkhs_autoPedalRawPrev";
 private _sprungPrev = _heli getVariable "bmkhs_autoPedalSprung";
 private _onPedals   = _raw > 0.01;

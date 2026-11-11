@@ -2144,7 +2144,7 @@ Fuselage and airfoil folders publish no designer-facing values.
 
 | Variable | Type / units | Net | Meaning |
 |---|---|---|---|
-| `bmkhs_cyclicFwdAft` | Number -1..1, + = forward | local (pilot's machine) | Pilot cyclic pitch after the keyboard handling, the assists and the actuator lag. It is the stick displacement only: no trim, SAS or hold. Forced to 0 when flight-control hydraulics are lost (`bmkhs_fltCtrlsSupplied` false and `bmkhs_emerHydOn` false). With mouse-as-joystick it is multiplied by `bmkhs_mouseSense`. (set in `input/fn_inputUpdate.sqf`) |
+| `bmkhs_cyclicFwdAft` | Number -1..1, + = forward | local (pilot's machine) | Pilot cyclic pitch after the keyboard handling, the assists and the actuator lag. It is the stick displacement only: no trim, SAS or hold. Forced to 0 when flight-control hydraulics are lost (`bmkhs_fltCtrlsSupplied` false and `bmkhs_emerHydOn` false). While the mouse has the axis (`bmkhs_pitchScheme` is `"mouse"`) it is multiplied by `bmkhs_mouseSense`. (set in `input/fn_inputUpdate.sqf`) |
 | `bmkhs_cyclicLeftRight` | Number -1..1, + = LEFT | local (pilot's machine) | Pilot cyclic roll, worked out the same way as pitch. Calculated as left minus right. (set in `input/fn_inputUpdate.sqf`) |
 | `bmkhs_pedalLeftRight` | Number -1..1, + = right pedal | local (pilot's machine) | Pilot pedal after actuator lag. It holds its last value when the tail rotor is unpowered or undriven (`bmkhs_tailRtrSupplied` / `bmkhs_tailRtrDriven` false). It is 0 when flight-control hydraulics are lost. (set in `input/fn_inputUpdate.sqf`) |
 | `bmkhs_collectiveOutput` | Number 0..1, 0 = full down | local (pilot's machine) | Pilot collective position after actuator lag. It holds its last value while flight-control hydraulics are lost, unless emergency hydraulics are on, and while the game is not focused or a dialog is open. (set in `input/fn_inputUpdate.sqf`) |
@@ -2181,8 +2181,8 @@ Registered in `event/fn_eventPreInit.sqf`. These are missionNamespace globals, n
 | `bmkhs_vrsWarning` | Bool | CBA setting | VRS warning on. |
 | `bmkhs_sysDebug` / `bmkhs_fmDebug` / `bmkhs_engDisplay` / `bmkhs_forcesDebug` | Bool | CBA setting | Debug displays on. |
 | `bmkhs_flightLog` | Bool | CBA setting | Writes the flight to the RPT at 10 Hz - `BMKHSLOG` lines under a `BMKHSLOG_HDR` header naming the columns (`debug/fn_debugFlightLog.sqf`). `python/dev/flightlog.py` reads them back. `forces` carries every force generator's force and moment that frame - `name:Fx|Fy|Fz|Mx|My|Mz`, model space, N and Nm about the CoM, `;` between generators (rotors by index: `main0`, `tail1`) - and `stabDeg` the stabilator angle; with these the rig is compared against the game force by force. |
-| `bmkhs_cyclicCenterTrimMode`, `bmkhs_pedalCenterTrimMode`, `bmkhs_springlessCyclic`, `bmkhs_springlessPedals`, `bmkhs_keyboardStickyPitch/Roll/Yaw`, `bmkhs_autoPedal`, `bmkhs_autoPitch`, `bmkhs_autoRoll`, `bmkhs_mouseAsJoystick` | Bool | CBA setting | Input options. |
-| `bmkhs_mouseSense` | Number 0.1..1.0 | CBA setting | Mouse sensitivity. |
+| `bmkhs_cyclicCenterTrimMode`, `bmkhs_pedalCenterTrimMode`, `bmkhs_springlessCyclic`, `bmkhs_springlessPedals`, `bmkhs_keyboardStickyPitch/Roll/Yaw`, `bmkhs_autoPedal`, `bmkhs_autoPitch`, `bmkhs_autoRoll` | Bool | CBA setting | Input options. |
+| `bmkhs_mouseSense` | Number 0.1..1.0 | CBA setting | Mouse sensitivity. Scales only an axis the mouse binds have. |
 | `bmkhs_testGwtEnabled` / `bmkhs_testGwtLbs` | Bool / String (lb) | CBA setting | Fixed test gross weight. |
 | `bmkhs_windDisabled` | Bool | CBA setting | Flight model ignores wind. |
 | `bmkhs_ctrlVisColor` | Number 0..5 | CBA setting | Colour scheme for the control visualiser. |
@@ -2310,6 +2310,7 @@ Working state, solver bookkeeping, filters and debug. These change without notic
 - `bmkhs_previousTime` / `bmkhs_deltaTime_avg` - frame timing state.
 - `bmkhs_movingAverageSize` (global) - smoothing window constant.
 - `bmkhs_keyboardCollective` / `bmkhs_keyboardCollectivePrevious` / `bmkhs_lastFrameGetIn` (global) - input path flags.
+- `bmkhs_pitchScheme` / `bmkhs_rollScheme` / `bmkhs_pedalScheme` (global) - the control scheme last used on each axis, `"kb"`, `"hotas"` or `"mouse"`: set by whichever of the Keyboard / HOTAS / Mouse binds last fired on it, `"kb"` at get-in. The axis reads that scheme's raw values only.
 - `bmkhs_accelX_avg` - moving-average buffer for accelX.
 - `bmkhs_accelY_avg` - moving-average buffer for accelY.
 - `bmkhs_accelZ_avg` - moving-average buffer for accelZ.
@@ -2362,8 +2363,7 @@ Working state, solver bookkeeping, filters and debug. These change without notic
 - `bmkhs_prevCyclicPitchValue`, `bmkhs_prevCyclicRollValue`, `bmkhs_prevPedalYawValue`: sticky-keyboard shadow values.
 - `bmkhs_kbStickyInterupt`: sticky interrupt key held.
 - `bmkhs_kbHeliCollectiveRaiseOut`, `bmkhs_kbHeliCollectiveLowerOut`: raw keyboard collective key state.
-- `bmkhs_heliCyclicForwardOut`, `bmkhs_heliCyclicBackwardOut`, `bmkhs_heliCyclicLeftOut`, `bmkhs_heliCyclicRightOut`: raw axis halves, pre-processing.
-- `bmkhs_heliRudderLeftOut`, `bmkhs_heliRudderRightOut`: raw axis halves, pre-processing.
+- `bmkhs_<scheme><Bind>Out`, scheme `kb` / `hotas` / `mouse`, bind `PitchForward`, `PitchBackward`, `RollLeft`, `RollRight`, `PedalLeft`, `PedalRight` (e.g. `bmkhs_hotasPitchForwardOut`): each bind's raw value, 0..1, pre-processing. The bind is `bmkhs_<scheme><Bind>`.
 - `bmkhs_heliCollectiveRaiseOut`, `bmkhs_heliCollectiveLowerOut`: raw axis halves, pre-processing.
 - `bmkhs_pid_prestonPitch`, `bmkhs_pid_prestonRoll`, `bmkhs_pid_prestonHoverX`, `bmkhs_pid_prestonHoverY`, `bmkhs_pid_prestonVelX`, `bmkhs_pid_prestonVelY`: Preston PIDs, AI disabled.
 - `bmkhs_prestonPitchActive`, `bmkhs_prestonRollActive`: Preston internals, AI disabled.

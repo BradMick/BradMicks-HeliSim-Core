@@ -13,14 +13,13 @@ Returns:
 ---------------------------------------------------------------------------- */
 params ["_heli", "_config"];
 
-//Cyclic input
-_heli setVariable ["bmkhs_heliCyclicForwardOut",   0.0];
-_heli setVariable ["bmkhs_heliCyclicBackwardOut",  0.0];
-_heli setVariable ["bmkhs_heliCyclicLeftOut",      0.0];
-_heli setVariable ["bmkhs_heliCyclicRightOut",     0.0];
-//Pedal input
-_heli setVariable ["bmkhs_heliRudderLeftOut",      0.0];
-_heli setVariable ["bmkhs_heliRudderRightOut",     0.0];
+//Cyclic and pedal input, per control scheme
+{
+    private _scheme = _x;
+    {
+        _heli setVariable ["bmkhs_" + _scheme + _x + "Out", 0.0];
+    } forEach ["PitchForward", "PitchBackward", "RollLeft", "RollRight", "PedalLeft", "PedalRight"];
+} forEach ["kb", "hotas", "mouse"];
 //Collective input
 _heli setVariable ["bmkhs_heliCollectiveRaiseOut", 0.0];
 _heli setVariable ["bmkhs_heliCollectiveLowerOut", 0.0];

@@ -102,18 +102,9 @@
 ] call CBA_fnc_addSetting;
 
 [
-    "bmkhs_mouseAsJoystick",
-    "CHECKBOX",
-    ["Mouse as Joystick", "DO NOT USE THIS IF USING HOTAS OR GAMEPAD! Enables the mouse sensitivity option and stops input in freelook"],
-    [BMKHS_SETTINGS_CATEGORY, "Controls"],
-    [false],
-    2
-] call CBA_fnc_addSetting;
-
-[
     "bmkhs_mouseSense",
     "SLIDER",
-    ["Mouse Sensitivity", "Controls the sensitivity of the Mouse when used as a Joystick"],
+    ["Mouse Sensitivity", "Controls the sensitivity of the Mouse Pitch / Roll / Pedal binds"],
     [BMKHS_SETTINGS_CATEGORY, "Controls"],
     [0.1, 1.0, 1.0, 1],
     2
@@ -260,7 +251,11 @@
 
 bmkhs_keyboardCollective         = true;
 bmkhs_keyboardCollectivePrevious = true;
-bmkhs_lastFrameGetIn             = false;
+//Control scheme last used on each axis: kb | hotas | mouse
+bmkhs_pitchScheme                = "kb";
+bmkhs_rollScheme                 = "kb";
+bmkhs_pedalScheme                = "kb";
+bmkhs_lastFrameGetIn            = false;
 
 //The aircraft this player crews but does not own. A pack ticks only what its machine owns, so
 //Core hands this one to coreUpdate itself - there is nothing for a pack to add.

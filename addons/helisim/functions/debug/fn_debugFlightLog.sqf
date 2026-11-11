@@ -139,7 +139,7 @@ private _row = [
     (_heli getVariable "bmkhs_pedalLeftRight") call _f, (_heli getVariable "bmkhs_collectiveOutput") call _f,
     (_heli getVariable "bmkhs_forceTrimPosPitch") call _f, (_heli getVariable "bmkhs_forceTrimPosRoll") call _f,
     (_heli getVariable "bmkhs_forceTrimPosYaw") call _f,
-    (_heli getVariable "bmkhs_heliRudderLeftOut") call _f, (_heli getVariable "bmkhs_heliRudderRightOut") call _f,
+    (_heli getVariable ("bmkhs_" + bmkhs_pedalScheme + "PedalLeftOut")) call _f, (_heli getVariable ("bmkhs_" + bmkhs_pedalScheme + "PedalRightOut")) call _f,
     (_heli getVariable "bmkhs_fmcSasPitchOut") call _f, (_heli getVariable "bmkhs_fmcSasRollOut") call _f,
     (_heli getVariable "bmkhs_fmcSasYawOut") call _f,
     (_heli getVariable "bmkhs_fmcAttHoldCycPitchOut") call _f, (_heli getVariable "bmkhs_fmcAttHoldCycRollOut") call _f,
