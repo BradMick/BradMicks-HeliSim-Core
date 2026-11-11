@@ -74,7 +74,7 @@ if (!(_heli getVariable "bmkhs_fmcCollOn")) then {
 
 //A flight director vertical mode drives the collective lever itself, from where the lever was
 //when the mode coupled - so the lever is always where the collective is, and whoever takes it
-//back takes it from there (fn_inputUpdate). The altitude hold still adds on top of the lever.
+//back takes it from there (fn_inputWrite). The altitude hold still adds on top of the lever.
 private _fd = _fmc getOrDefault ["FlightDirector", createHashMap];
 if ("coll" in _fdOut && {_heli getVariable "bmkhs_fmcCollOn"}) then {
     private _base = _fd getOrDefault ["collBase", _heli getVariable "bmkhs_collectiveOutput"];

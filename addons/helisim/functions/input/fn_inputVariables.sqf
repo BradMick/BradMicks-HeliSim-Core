@@ -24,6 +24,18 @@ params ["_heli", "_config"];
 _heli setVariable ["bmkhs_heliCollectiveRaiseOut", 0.0];
 _heli setVariable ["bmkhs_heliCollectiveLowerOut", 0.0];
 
+//What the player is asking for
+_heli setVariable ["bmkhs_inputPitch",            0.0];
+_heli setVariable ["bmkhs_inputRoll",             0.0];
+_heli setVariable ["bmkhs_inputPedal",            0.0];
+_heli setVariable ["bmkhs_inputCollective",       0.0];
+_heli setVariable ["bmkhs_inputCollectiveMoved",  false];
+//What the rotors get
+_heli setVariable ["bmkhs_fltCtrlPitchOut",       0.0];
+_heli setVariable ["bmkhs_fltCtrlRollOut",        0.0];
+_heli setVariable ["bmkhs_fltCtrlYawOut",         0.0];
+_heli setVariable ["bmkhs_fltCtrlCollOut",        0.0];
+
 _heli setVariable ["bmkhs_cyclicFwdAft",          0.0];
 _heli setVariable ["bmkhs_cyclicPitchValue",      0.0];
 _heli setVariable ["bmkhs_prevCyclicPitchValue",  0.0];

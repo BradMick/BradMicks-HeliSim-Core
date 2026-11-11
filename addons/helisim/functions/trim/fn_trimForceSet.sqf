@@ -17,7 +17,7 @@ params ["_heli"];
 if (currentPilot _heli != player || !local _heli) exitWith {};
 
 //Auto attitude writes force-trim every frame as a PID output, so trimming from stick position
-//would stomp it. Same gates as fn_inputUpdate.
+//would stomp it. Same gates as fn_inputWrite.
 private _casual    = bmkhs_helisimRealismSetting != REALISTIC;
 private _autoPitch = bmkhs_autoPitch && _casual;
 private _autoRoll  = bmkhs_autoRoll  && _casual;

@@ -176,6 +176,8 @@ class CfgFunctions
             class inputAutoPedal {R;};
             class inputCenterTrimMode {R;};
             class inputControlHandle {R;};
+            class inputWrite {R;};
+            class inputRead {R;};
             class inputUpdate {R;};
             class inputGetInterp {R;};
             class inputVariables {R;};

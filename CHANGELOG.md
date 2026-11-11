@@ -38,6 +38,18 @@
   HOTAS and mouse axes on the new binds.** The keyboard binds default to W/S/A/D and Q/E.
 - **Mouse as Joystick setting removed.** Binding the Mouse binds is the switch. Mouse sensitivity
   and the freelook cut-out act only on an axis the mouse has, never on keyboard or HOTAS input.
+- **Input is read, then output.** `bmkhs_fnc_inputUpdate` is now two steps: `bmkhs_fnc_inputRead`
+  reads the player and publishes `bmkhs_inputPitch/Roll/Pedal/Collective`, and
+  `bmkhs_fnc_inputWrite` runs the assists and the actuator lag, sets the control positions and
+  sums what the rotors get (`bmkhs_fltCtrlPitchOut/RollOut/YawOut/CollOut`).
+- **Lost hydraulics freeze the controls.** With flight-control hydraulics unsupplied the cyclic,
+  pedals and collective stay where they were, and so does what the rotors get - trim, SAS, the
+  holds, mixing and auto pedal no longer move them. The cyclic used to snap to its trim position.
+  An aircraft with `class HydraulicBoost` is mechanical and never freezes. The tail rotor freezes
+  on its own when unpowered or undriven, auto pedal included.
+- **Emergency hydraulics come through the supply.** Core no longer reads `bmkhs_emerHydOn`: the
+  controls are live while `bmkhs_fltCtrlsSupplied` is, so emergency pressure lasts as long as the
+  pack's emergency supply does. A pack must feed that supply into its `FlightControls` consumer.
 
 ## 1.5.0.0
 

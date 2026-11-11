@@ -1960,7 +1960,7 @@ Core seeds these by name, whether or not the config declares them (`systems/fn_s
 | `bmkhs_priHydPsi` | Number, psi | net | Seeded 0. With `useSystems = 0`: 3000 when `isEngineOn`, else 0. With systems, only if a producer declares it. |
 | `bmkhs_utilHydPsi` | Number, psi | net | As priHydPsi. |
 | `bmkhs_accHydPsi` | Number, psi | net | Seeded 3000. Changes only if a store declares it. |
-| `bmkhs_emerHydOn` | Bool | net | Seeded false. It is re-seeded and broadcast on every machine that runs coreConfig. Input: Core's flight-control input reads it, and the H-60 accumulator gates on it. Core never sets it true. |
+| `bmkhs_emerHydOn` | Bool | net | Seeded false. It is re-seeded and broadcast on every machine that runs coreConfig. Input: a pack's emergency supply gates on it (the AH-64 and H-60 accumulators). Core never sets it true and no longer reads it: emergency hydraulics reach the flight controls only through `bmkhs_fltCtrlsSupplied`. |
 
 ### APU
 
@@ -2144,15 +2144,15 @@ Fuselage and airfoil folders publish no designer-facing values.
 
 | Variable | Type / units | Net | Meaning |
 |---|---|---|---|
-| `bmkhs_cyclicFwdAft` | Number -1..1, + = forward | local (pilot's machine) | Pilot cyclic pitch after the keyboard handling, the assists and the actuator lag. It is the stick displacement only: no trim, SAS or hold. Forced to 0 when flight-control hydraulics are lost (`bmkhs_fltCtrlsSupplied` false and `bmkhs_emerHydOn` false). While the mouse has the axis (`bmkhs_pitchScheme` is `"mouse"`) it is multiplied by `bmkhs_mouseSense`. (set in `input/fn_inputUpdate.sqf`) |
-| `bmkhs_cyclicLeftRight` | Number -1..1, + = LEFT | local (pilot's machine) | Pilot cyclic roll, worked out the same way as pitch. Calculated as left minus right. (set in `input/fn_inputUpdate.sqf`) |
-| `bmkhs_pedalLeftRight` | Number -1..1, + = right pedal | local (pilot's machine) | Pilot pedal after actuator lag. It holds its last value when the tail rotor is unpowered or undriven (`bmkhs_tailRtrSupplied` / `bmkhs_tailRtrDriven` false). It is 0 when flight-control hydraulics are lost. (set in `input/fn_inputUpdate.sqf`) |
-| `bmkhs_collectiveOutput` | Number 0..1, 0 = full down | local (pilot's machine) | Pilot collective position after actuator lag. It holds its last value while flight-control hydraulics are lost, unless emergency hydraulics are on, and while the game is not focused or a dialog is open. (set in `input/fn_inputUpdate.sqf`) |
+| `bmkhs_cyclicFwdAft` | Number -1..1, + = forward | local (pilot's machine) | Cyclic pitch position: the player's input (`bmkhs_inputPitch`) after the assists and the actuator lag. It is the stick displacement only: no trim, SAS or hold. It holds its last value while the controls are frozen - flight-control hydraulics lost (`bmkhs_fltCtrlsSupplied` false) on an aircraft without `class HydraulicBoost`. (set in `input/fn_inputWrite.sqf`) |
+| `bmkhs_cyclicLeftRight` | Number -1..1, + = LEFT | local (pilot's machine) | Cyclic roll position, worked out the same way as pitch. Calculated as left minus right. (set in `input/fn_inputWrite.sqf`) |
+| `bmkhs_pedalLeftRight` | Number -1..1, + = right pedal | local (pilot's machine) | Pedal position: the player's input (`bmkhs_inputPedal`) after the assists and the actuator lag. It holds its last value while the controls are frozen, and when the tail rotor is unpowered or undriven (`bmkhs_tailRtrSupplied` / `bmkhs_tailRtrDriven` false). (set in `input/fn_inputWrite.sqf`) |
+| `bmkhs_collectiveOutput` | Number 0..1, 0 = full down | local (pilot's machine) | Collective lever position: the player's input (`bmkhs_inputCollective`) after actuator lag. It holds its last value while the controls are frozen, and while the game is not focused or a dialog is open. (set in `input/fn_inputWrite.sqf`) |
 | `bmkhs_forceTrimPosPitch` | Number -1..1, + = forward | 10 Hz | Cyclic pitch trim position: where the stick rests. Set on force-trim release, moved by beep trim while held. Zeroed by force-trim reset and held at 0 while force trim is off. The auto attitude assist writes it every frame. In springless/sticky-keyboard mode it is held at 0. (set in `trim/fn_trimForceSet.sqf`, `trim/fn_trimForceReset.sqf`, `input/fn_inputAutoAttitude.sqf`) |
 | `bmkhs_forceTrimPosRoll` | Number -1..1, + = left | 10 Hz | Cyclic roll trim position. Same rules as pitch. (set in `trim/fn_trimForceSet.sqf`, `trim/fn_trimForceReset.sqf`) |
 | `bmkhs_forceTrimPosYaw` | Number -1..1, + = right | 10 Hz | Pedal trim position. When auto pedal is on, auto pedal writes it every frame. (set in `trim/fn_trimForceSet.sqf`, `trim/fn_trimForceReset.sqf`, `input/fn_inputAutoPedal.sqf`) |
 | `bmkhs_autoAttCycRollOut` | Number, ±0.8 cyclic fraction | net | Roll command from the casual-mode auto attitude assist, added to cyclic roll at the rotor. It is 0 unless the auto-roll setting is on and realism is not REALISTIC. (set in `input/fn_inputAutoAttitude.sqf`) |
-| `bmkhs_flightControlLockOut` | Bool | local (pilot's machine) | Only used with the center-trim mode settings. It is true after a force-trim release while the controls are off centre, and pilot cyclic/pedal input is ignored until they come back within ±0.05. A pack could show a "centre controls" cue from it. (set in `input/fn_inputCenterTrimMode.sqf`, `input/fn_inputUpdate.sqf`) |
+| `bmkhs_flightControlLockOut` | Bool | local (pilot's machine) | Only used with the center-trim mode settings. It is true after a force-trim release while the controls are off centre, and pilot cyclic/pedal input is ignored until they come back within ±0.05. A pack could show a "centre controls" cue from it. (set in `input/fn_inputCenterTrimMode.sqf`, `input/fn_inputWrite.sqf`) |
 
 The control position the rotor actually usesis not stored anywhere. `rotor/fn_rotorControl.sqf` (and `simpleRotor/fn_simpleRotorControl.sqf`) work it out each frame:
   - pitch = `inputGetInterp(cyclicFwdAft, forceTrimPosPitch) + fmcSasPitchOut + fmcAttHoldCycPitchOut + mixPitchOut`, clamped to -1..1
@@ -2363,6 +2363,8 @@ Working state, solver bookkeeping, filters and debug. These change without notic
 - `bmkhs_prevCyclicPitchValue`, `bmkhs_prevCyclicRollValue`, `bmkhs_prevPedalYawValue`: sticky-keyboard shadow values.
 - `bmkhs_kbStickyInterupt`: sticky interrupt key held.
 - `bmkhs_kbHeliCollectiveRaiseOut`, `bmkhs_kbHeliCollectiveLowerOut`: raw keyboard collective key state.
+- `bmkhs_inputPitch`, `bmkhs_inputRoll`, `bmkhs_inputPedal`, `bmkhs_inputCollective`, `bmkhs_inputCollectiveMoved`: what the player is asking for, after scheme, sticky keys, mouse sensitivity and the not-playing gates; the collective and whether the player moved it this frame. Written by `input/fn_inputRead.sqf`, read only by `input/fn_inputWrite.sqf`.
+- `bmkhs_fltCtrlPitchOut`, `bmkhs_fltCtrlRollOut`, `bmkhs_fltCtrlYawOut`, `bmkhs_fltCtrlCollOut`: what the rotors get - control position and trim, SAS, the holds and mixing, summed in `input/fn_inputWrite.sqf` and read by the rotor control functions. They hold while the controls are frozen; yaw also holds when the tail rotor is unpowered or undriven.
 - `bmkhs_<scheme><Bind>Out`, scheme `kb` / `hotas` / `mouse`, bind `PitchForward`, `PitchBackward`, `RollLeft`, `RollRight`, `PedalLeft`, `PedalRight` (e.g. `bmkhs_hotasPitchForwardOut`): each bind's raw value, 0..1, pre-processing. The bind is `bmkhs_<scheme><Bind>`.
 - `bmkhs_heliCollectiveRaiseOut`, `bmkhs_heliCollectiveLowerOut`: raw axis halves, pre-processing.
 - `bmkhs_pid_prestonPitch`, `bmkhs_pid_prestonRoll`, `bmkhs_pid_prestonHoverX`, `bmkhs_pid_prestonHoverY`, `bmkhs_pid_prestonVelX`, `bmkhs_pid_prestonVelY`: Preston PIDs, AI disabled.
