@@ -21,7 +21,6 @@ params ["_heli"];
 
 if (isGamePaused || CBA_missionTime < 0.1) exitWith {
     _heli setVariable ["bmkhs_previousTime",  diag_tickTime];
-    _heli setVariable ["bmkhs_deltaTime_avg", [bmkhs_movingAverageSize] call bmkhs_fnc_smoothAverageInit];
 };
 
 //Not this machine's - its owner solves it. This copy is kept current from what the owner
@@ -173,7 +172,7 @@ if (bmkhs_fmDebug && {!bmkhs_sysDebug} && {vehicle player == _heli}) then {
     \nPitch = %38 Roll = %39
     \nYaw = %41  Sideslip = %40
     \n--------------------
-    \nAutoAtt = %42
+    \nCasual = %42
     \nPitchActive = %43 APTarget = %44
     \nRollActive = %45  ARTarget = %46
     ",

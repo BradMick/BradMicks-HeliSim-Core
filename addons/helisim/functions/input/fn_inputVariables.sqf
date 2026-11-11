@@ -56,9 +56,21 @@ _heli setVariable ["bmkhs_flightControlLockOut", false];
 _heli setVariable ["bmkhs_kbHeliCollectiveRaiseOut", 0.0];
 _heli setVariable ["bmkhs_kbHeliCollectiveLowerOut", 0.0];
 
-//Auto attitude and auto pedal
-_heli setVariable ["bmkhs_autoAttCycRollOut",  0.0];
-_heli setVariable ["bmkhs_autoAttRollTarget",  0.0];
+//Keyboard rate command: the attitude held, how long the key has been down, the rate asked for, the gains
+{
+    _heli setVariable ["bmkhs_rateCommand" + _x + "Ref",  0.0];
+    _heli setVariable ["bmkhs_rateCommand" + _x + "Held", 0.0];
+    _heli setVariable ["bmkhs_rateCommand" + _x + "On",   false];
+    _heli setVariable ["bmkhs_rateCommand" + _x + "Rate", 0.0];
+    private _gains = getArray (_config >> ("pidRateCommand" + _x));
+    if (count _gains != 4) then {
+        format ["[BMKHS] INPUT CONFIG ERROR: pidRateCommand%1[] {kp, ki, kd, limit} is missing. The keyboard cyclic does nothing on that axis.", _x] call bmkhs_fnc_utilConfigError;
+        _gains = [0, 0, 0, 0];
+    };
+    _heli setVariable ["bmkhs_pid_rateCommand" + _x, _gains call bmkhs_fnc_pidCreate];
+} forEach ["Pitch", "Roll"];
+
+//Auto pedal
 _heli setVariable ["bmkhs_autoPedalHdg",       getDir _heli];
 _heli setVariable ["bmkhs_autoPedalRegime",    "hdg"];   //hdg | ntt | aero | taxi (live regime)
 _heli setVariable ["bmkhs_autoPedalPos",       0.0];     //where the feet have the pedals

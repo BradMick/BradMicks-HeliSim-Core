@@ -304,17 +304,20 @@
 #define AUTOPEDAL_TAXI_AUTHORITY      0.5     //pilot pedal fraction at static load
 #define AUTOPEDAL_TAXI_SPD            1.0     //m/s ground speed - below it the feet rest
 
-//AUTO ATTITUDE (CASUAL + KEYBOARD). Drives the aircraft to wings level so a keyboard player is
-//not fighting the pitch-up the airframe develops with forward airspeed. There is no attitude
-//TARGET and no capture - the setpoint is always zero, so there is nothing to snap.
-//It never fights an input: authority fades out with stick deflection and returns as it centres.
-#define AUTOATT_KEY_DEADBAND          0.10    //below this the key counts as released
-#define AUTOATT_SPD_LO                7.717   //15kt GS - assist starts fading in
-#define AUTOATT_SPD_HI                15.433  //30kt GS - assist at full authority
-#define AUTOATT_ROLL_IN_TIME          0.250   //s, roll target sweep into the bank
-#define AUTOATT_ROLL_OUT_TIME         1.000   //s, roll target sweep back to level
-#define AUTOATT_PITCH_OUT_CLAMP       0.07    //max share of the cyclic the pitch assist may command
-#define AUTOATT_ROLL_OUT_CLAMP        0.80    //max share of the cyclic the roll assist may command
+//The aircraft flies on velocities and body rates as the engine gives them. The copies a display
+//reads (bmkhs_vel*Filtered) and the accelerations are smoothed over a time, the same at any frame rate.
+#define VEL_SMOOTH_TIME               0.15    //s
+#define ACCEL_SMOOTH_TIME             0.20    //s
+
+//RATE COMMAND, keyboard and mouse cyclic. The control commands a rate and releasing it holds the attitude.
+//The cyclic is driven from the error between the commanded rate and the measured body rate.
+#define RATECMD_TAP_TIME              0.15    //s - a key down no longer than this is a tap
+#define RATECMD_RATE_TAP              15.0    //deg/s while it is a tap
+#define RATECMD_RATE_HOLD_PITCH       60.0    //deg/s once it is a hold, and at full mouse travel
+#define RATECMD_RATE_HOLD_ROLL        120.0   //deg/s
+#define RATECMD_DEADBAND              0.02    //control travel below this is released
+#define RATECMD_HOLD_GAIN             2.0     //deg/s commanded per deg off the held attitude
+#define RATECMD_COAST                 0.2     //s of the rate at release added to the held attitude
 
 //Force-vector debug drawing. This was previously #ifdef __A3_DEBUG__, which is dead
 //code under HEMTT - that macro is hardcoded to 0 in a lookup the #ifdef existence

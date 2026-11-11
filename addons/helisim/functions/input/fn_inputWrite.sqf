@@ -17,10 +17,6 @@ Author:
 params ["_heli", "_piloted"];
 #include "\bmkhs_helisim\functions\core\core.hpp"
 
-if (!_piloted) then {
-    [_heli, "bmkhs_autoAttCycRollOut", 0.0] call bmkhs_fnc_utilUpdateNetworkGlobal;
-};
-
 /////////////////////////////////////////////////////////////////////////////////////////////
 // Hydraulics           /////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////
@@ -32,13 +28,18 @@ private _tailFrozen = _frozen
     || {!_boost && {!(_heli getVariable ["bmkhs_tailRtrSupplied", true])}}
     || {!(_heli getVariable ["bmkhs_tailRtrDriven", true])};
 
+//The rate command, per axis: the mouse's, and the keyboard's unless sticky has it
+private _ratePitch  = _piloted && {!_frozen} && {bmkhs_pitchScheme == "mouse" || {bmkhs_pitchScheme == "kb" && {!bmkhs_keyboardStickyPitch}}};
+private _rateRoll   = _piloted && {!_frozen} && {bmkhs_rollScheme  == "mouse" || {bmkhs_rollScheme  == "kb" && {!bmkhs_keyboardStickyRoll}}};
+if (!_ratePitch) then { _heli setVariable ["bmkhs_rateCommandPitchOn", false] };
+if (!_rateRoll)  then { _heli setVariable ["bmkhs_rateCommandRollOn",  false] };
+
 //Frozen controls stay where they were
 if (_frozen) exitWith {};
 
 if (_piloted) then {
     private _deltaTime         = _heli getVariable "bmkhs_deltaTime";
     private _inputLagValue     = getNumber (configOf _heli >> "BMKHS_HeliSim" >> "inputLagValue");
-    private _kbStickyInterupt  = _heli getVariable "bmkhs_kbStickyInterupt";
     private _fltControlLockout = _heli getVariable "bmkhs_flightControlLockOut";
 
     private _cyclicFwdAft      = _heli getVariable "bmkhs_inputPitch";
@@ -52,13 +53,15 @@ if (_piloted) then {
         _pedalLeftRight = [_heli, _deltaTime, _pedalLeftRight] call bmkhs_fnc_inputAutoPedal;
     };
     /////////////////////////////////////////////////////////////////////////////////////////////
-    // Auto Attitude       /////////////////////////////////////////////////////////////////////
+    // Rate Command        /////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////////////////////////
-    //The sticky interrupt suspends the assist and hands both axes back to the pilot.
-    if ((bmkhs_autoPitch || bmkhs_autoRoll) && {bmkhs_helisimRealismSetting != REALISTIC} && {!_kbStickyInterupt}) then {
-        _cyclicLeftRight = [_heli, _deltaTime, _cyclicFwdAft, _cyclicLeftRight] call bmkhs_fnc_inputAutoAttitude;
-    } else {
-        [_heli, "bmkhs_autoAttCycRollOut", 0.0] call bmkhs_fnc_utilUpdateNetworkGlobal;
+    if (_ratePitch || _rateRoll) then {
+        (_heli call BIS_fnc_getPitchBank) params ["_pitch", "_bank"];
+        //Body rates: + nose down, + roll left - the cyclic's own sense
+        (_heli getVariable "bmkhs_angVelModelSpace") params ["_pitchRate", "_rollRate"];
+        private _onGround = [_heli] call bmkhs_fnc_stateOnGround;
+        if (_ratePitch) then { _cyclicFwdAft    = [_heli, _deltaTime, "Pitch", _cyclicFwdAft,    bmkhs_pitchScheme == "kb", deg _pitchRate, _pitch, _onGround] call bmkhs_fnc_inputRateCommand };
+        if (_rateRoll)  then { _cyclicLeftRight = [_heli, _deltaTime, "Roll",  _cyclicLeftRight, bmkhs_rollScheme  == "kb", deg _rollRate,  _bank,  _onGround] call bmkhs_fnc_inputRateCommand };
     };
     /////////////////////////////////////////////////////////////////////////////////////////////
     // Flight Ctrl Lockout  /////////////////////////////////////////////////////////////////////
@@ -122,7 +125,7 @@ if (_piloted) then {
 private _pitch = ([_heli getVariable "bmkhs_cyclicFwdAft", _heli getVariable "bmkhs_forceTrimPosPitch"] call bmkhs_fnc_inputGetInterp)
     + (_heli getVariable "bmkhs_fmcSasPitchOut") + (_heli getVariable "bmkhs_fmcAttHoldCycPitchOut") + (_heli getVariable "bmkhs_mixPitchOut");
 private _roll  = ([_heli getVariable "bmkhs_cyclicLeftRight", _heli getVariable "bmkhs_forceTrimPosRoll"] call bmkhs_fnc_inputGetInterp)
-    + (_heli getVariable "bmkhs_fmcSasRollOut") + (_heli getVariable "bmkhs_fmcAttHoldCycRollOut") + (_heli getVariable "bmkhs_autoAttCycRollOut") + (_heli getVariable "bmkhs_mixRollOut");
+    + (_heli getVariable "bmkhs_fmcSasRollOut") + (_heli getVariable "bmkhs_fmcAttHoldCycRollOut") + (_heli getVariable "bmkhs_mixRollOut");
 private _yaw   = ([_heli getVariable "bmkhs_pedalLeftRight", _heli getVariable "bmkhs_forceTrimPosYaw"] call bmkhs_fnc_inputGetInterp)
     + (_heli getVariable "bmkhs_fmcSasYawOut") + (_heli getVariable "bmkhs_fmcHdgHoldPedalYawOut") + (_heli getVariable "bmkhs_mixYawOut");
 private _coll  = (_heli getVariable "bmkhs_collectiveOutput") + (_heli getVariable "bmkhs_fmcAltHoldCollOut") + (_heli getVariable "bmkhs_mixCollOut");

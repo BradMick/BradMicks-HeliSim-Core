@@ -30,7 +30,7 @@ private _isPlaying          = isGameFocused && _paused && _chatting && _inDialog
 
 private _deltaTime          = _heli getVariable "bmkhs_deltaTime";
 
-//Keyboard
+//Keyboard sticky
 private _kbStickyInterupt   = _heli getVariable "bmkhs_kbStickyInterupt";
 
 /////////////////////////////////////////////////////////////////////////////////////////////
@@ -71,7 +71,7 @@ if (freeLook) then {
 };
 
 //Cyclic Pitch
-if (bmkhs_keyboardStickyPitch) then {
+if (bmkhs_keyboardStickyPitch && {bmkhs_pitchScheme == "kb"}) then {
     private _cyclicPitchValue     = _heli getVariable "bmkhs_cyclicPitchValue";
     private _prevCyclicPitchValue = _heli getVariable "bmkhs_prevCyclicPitchValue";
 
@@ -93,7 +93,7 @@ if (bmkhs_keyboardStickyPitch) then {
     };
 };
 //Cyclic Roll
-if (bmkhs_keyboardStickyRoll) then {
+if (bmkhs_keyboardStickyRoll && {bmkhs_rollScheme == "kb"}) then {
     private _cyclicRollValue     = _heli getVariable "bmkhs_cyclicRollValue";
     private _prevCyclicRollValue = _heli getVariable "bmkhs_prevCyclicRollValue";
 
@@ -113,7 +113,7 @@ if (bmkhs_keyboardStickyRoll) then {
     };
 };
 //Pedal yaw
-if (bmkhs_keyboardStickyYaw && !bmkhs_autoPedal) then {
+if (bmkhs_keyboardStickyYaw && {bmkhs_pedalScheme == "kb"} && {!bmkhs_autoPedal}) then {
     private _pedalYawValue     = _heli getVariable "bmkhs_pedalYawValue";
     private _prevPedalYawValue = _heli getVariable "bmkhs_prevPedalYawValue";
 

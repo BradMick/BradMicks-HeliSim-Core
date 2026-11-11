@@ -2041,9 +2041,10 @@ A separated blade's centrifugal pull (`m × r × ω²`) is applied at the hub, t
 | `bmkhs_gndSpeed` | Number, m/s | local (owner only) | Ground speed. Magnitude of model-space x and y ground velocity (no wind). Body axes, so it reads low when pitched or rolled. (set in `state/fn_stateVelocities.sqf`) |
 | `bmkhs_velClimb` | Number, m/s | local (owner only) | Vertical speed. World z of smoothed velocity. Positive = climbing. Wind has no vertical part, so this is ground-referenced. (set in `state/fn_stateVelocities.sqf`) |
 | `bmkhs_velModelSpace` | Array [x, y, z], m/s, model space | local (owner only) | Smoothed air-relative velocity (ground velocity minus wind). Wind is rotated by heading only, not pitch or roll. (set in `state/fn_stateVelocities.sqf`) |
-| `bmkhs_velModelSpaceNoWind` | Array [x, y, z], m/s, model space | local (owner only) | Smoothed ground-relative velocity in body axes. (set in `state/fn_stateVelocities.sqf`) |
-| `bmkhs_velWorldSpace` | Array [x, y, z], m/s, world space | local (owner only) | Smoothed air-relative velocity in world axes (velocity minus wind). (set in `state/fn_stateVelocities.sqf`) |
-| `bmkhs_velWorldSpaceNoWind` | Array [x, y, z], m/s, world space | local (owner only) | Smoothed ground-relative velocity in world axes. (set in `state/fn_stateVelocities.sqf`) |
+| `bmkhs_velModelSpaceNoWind` | Array [x, y, z], m/s, model space | local (owner only) | Ground-relative velocity in body axes, the engine's value for the frame. What the aircraft flies on; a display reads `bmkhs_velModelSpaceNoWindFiltered`. (set in `state/fn_stateVelocities.sqf`) |
+| `bmkhs_velWorldSpace` | Array [x, y, z], m/s, world space | local (owner only) | Air-relative velocity in world axes (velocity minus wind), the engine's value for the frame. A display reads `bmkhs_velWorldSpaceFiltered`. (set in `state/fn_stateVelocities.sqf`) |
+| `bmkhs_velWorldSpaceNoWind` | Array [x, y, z], m/s, world space | local (owner only) | Ground-relative velocity in world axes, the engine's value for the frame. A display reads `bmkhs_velWorldSpaceNoWindFiltered`. (set in `state/fn_stateVelocities.sqf`) |
+| `bmkhs_velModelSpaceNoWindFiltered`, `bmkhs_velWorldSpaceNoWindFiltered`, `bmkhs_velWorldSpaceFiltered` | Array [x, y, z], m/s | local (owner only) | The three velocities above smoothed over `VEL_SMOOTH_TIME` with `bmkhs_fnc_utilSmooth`, for display only - a velocity vector, flight path vector or vertical speed read raw flickers. Nothing in Core flies on them. (set in `state/fn_stateVelocities.sqf`) |
 | `bmkhs_velWindModelSpace` | Array [x, y, 0], m/s, model space | local (owner only) | Wind velocity rotated into body x/y by heading only. z is always 0. (set in `state/fn_stateVelocities.sqf`) |
 | `bmkhs_angVelModelSpace` | Array [x, y, z], rad/s (Arma `angularVelocityModelSpace`), model space | local (owner only) | Smoothed body angular rates. Sign follows Arma's `angularVelocityModelSpace`. (set in `state/fn_stateVelocities.sqf`) |
 | `bmkhs_worldAccel` | Array [x, y, z], m/s², world space | local (owner only) | Raw kinematic acceleration: frame difference of `bmkhs_velWorldSpaceNoWind`. Gravity not included. Not smoothed. (set in `state/fn_stateAccelerations.sqf`) |
@@ -2144,19 +2145,18 @@ Fuselage and airfoil folders publish no designer-facing values.
 
 | Variable | Type / units | Net | Meaning |
 |---|---|---|---|
-| `bmkhs_cyclicFwdAft` | Number -1..1, + = forward | local (pilot's machine) | Cyclic pitch position: the player's input (`bmkhs_inputPitch`) after the assists and the actuator lag. It is the stick displacement only: no trim, SAS or hold. It holds its last value while the controls are frozen - flight-control hydraulics lost (`bmkhs_fltCtrlsSupplied` false) on an aircraft without `class HydraulicBoost`. (set in `input/fn_inputWrite.sqf`) |
+| `bmkhs_cyclicFwdAft` | Number -1..1, + = forward | local (pilot's machine) | Cyclic pitch position: the player's input (`bmkhs_inputPitch`) after the rate command, when the keyboard or the mouse has the axis, and the actuator lag. It is the stick displacement only: no trim, SAS or hold. It holds its last value while the controls are frozen - flight-control hydraulics lost (`bmkhs_fltCtrlsSupplied` false) on an aircraft without `class HydraulicBoost`. (set in `input/fn_inputWrite.sqf`) |
 | `bmkhs_cyclicLeftRight` | Number -1..1, + = LEFT | local (pilot's machine) | Cyclic roll position, worked out the same way as pitch. Calculated as left minus right. (set in `input/fn_inputWrite.sqf`) |
 | `bmkhs_pedalLeftRight` | Number -1..1, + = right pedal | local (pilot's machine) | Pedal position: the player's input (`bmkhs_inputPedal`) after the assists and the actuator lag. It holds its last value while the controls are frozen, and when the tail rotor is unpowered or undriven (`bmkhs_tailRtrSupplied` / `bmkhs_tailRtrDriven` false). (set in `input/fn_inputWrite.sqf`) |
 | `bmkhs_collectiveOutput` | Number 0..1, 0 = full down | local (pilot's machine) | Collective lever position: the player's input (`bmkhs_inputCollective`) after actuator lag. It holds its last value while the controls are frozen, and while the game is not focused or a dialog is open. (set in `input/fn_inputWrite.sqf`) |
-| `bmkhs_forceTrimPosPitch` | Number -1..1, + = forward | 10 Hz | Cyclic pitch trim position: where the stick rests. Set on force-trim release, moved by beep trim while held. Zeroed by force-trim reset and held at 0 while force trim is off. The auto attitude assist writes it every frame. In springless/sticky-keyboard mode it is held at 0. (set in `trim/fn_trimForceSet.sqf`, `trim/fn_trimForceReset.sqf`, `input/fn_inputAutoAttitude.sqf`) |
+| `bmkhs_forceTrimPosPitch` | Number -1..1, + = forward | 10 Hz | Cyclic pitch trim position: where the stick rests. Set on force-trim release, moved by beep trim while held. Zeroed by force-trim reset and held at 0 while force trim is off. Held at 0 in springless mode and on an axis the keyboard or the mouse has - those axes take no force trim. (set in `trim/fn_trimForceSet.sqf`, `trim/fn_trimForceReset.sqf`, `input/fn_inputAutoAttitude.sqf`) |
 | `bmkhs_forceTrimPosRoll` | Number -1..1, + = left | 10 Hz | Cyclic roll trim position. Same rules as pitch. (set in `trim/fn_trimForceSet.sqf`, `trim/fn_trimForceReset.sqf`) |
-| `bmkhs_forceTrimPosYaw` | Number -1..1, + = right | 10 Hz | Pedal trim position. When auto pedal is on, auto pedal writes it every frame. (set in `trim/fn_trimForceSet.sqf`, `trim/fn_trimForceReset.sqf`, `input/fn_inputAutoPedal.sqf`) |
-| `bmkhs_autoAttCycRollOut` | Number, ±0.8 cyclic fraction | net | Roll command from the casual-mode auto attitude assist, added to cyclic roll at the rotor. It is 0 unless the auto-roll setting is on and realism is not REALISTIC. (set in `input/fn_inputAutoAttitude.sqf`) |
+| `bmkhs_forceTrimPosYaw` | Number -1..1, + = right | 10 Hz | Pedal trim position. When auto pedal is on, auto pedal writes it every frame. (set in `trim/fn_trimForceSet.sqf`, `trim/fn_trimForceReset.sqf`, `input/keyboard/fn_inputAutoPedal.sqf`) |
 | `bmkhs_flightControlLockOut` | Bool | local (pilot's machine) | Only used with the center-trim mode settings. It is true after a force-trim release while the controls are off centre, and pilot cyclic/pedal input is ignored until they come back within ±0.05. A pack could show a "centre controls" cue from it. (set in `input/fn_inputCenterTrimMode.sqf`, `input/fn_inputWrite.sqf`) |
 
 The control position the rotor actually usesis not stored anywhere. `rotor/fn_rotorControl.sqf` (and `simpleRotor/fn_simpleRotorControl.sqf`) work it out each frame:
   - pitch = `inputGetInterp(cyclicFwdAft, forceTrimPosPitch) + fmcSasPitchOut + fmcAttHoldCycPitchOut + mixPitchOut`, clamped to -1..1
-  - roll = `inputGetInterp(cyclicLeftRight, forceTrimPosRoll) + fmcSasRollOut + fmcAttHoldCycRollOut + autoAttCycRollOut + mixRollOut`, clamped to -1..1
+  - roll = `inputGetInterp(cyclicLeftRight, forceTrimPosRoll) + fmcSasRollOut + fmcAttHoldCycRollOut + mixRollOut`, clamped to -1..1
   - yaw = `inputGetInterp(pedalLeftRight, forceTrimPosYaw) + fmcSasYawOut + fmcHdgHoldPedalYawOut + mixYawOut`, clamped to -1..1
   - collective = `collectiveOutput + fmcAltHoldCollOut + mixCollOut`
   
@@ -2181,7 +2181,7 @@ Registered in `event/fn_eventPreInit.sqf`. These are missionNamespace globals, n
 | `bmkhs_vrsWarning` | Bool | CBA setting | VRS warning on. |
 | `bmkhs_sysDebug` / `bmkhs_fmDebug` / `bmkhs_engDisplay` / `bmkhs_forcesDebug` | Bool | CBA setting | Debug displays on. |
 | `bmkhs_flightLog` | Bool | CBA setting | Writes the flight to the RPT at 10 Hz - `BMKHSLOG` lines under a `BMKHSLOG_HDR` header naming the columns (`debug/fn_debugFlightLog.sqf`). `python/dev/flightlog.py` reads them back. `forces` carries every force generator's force and moment that frame - `name:Fx|Fy|Fz|Mx|My|Mz`, model space, N and Nm about the CoM, `;` between generators (rotors by index: `main0`, `tail1`) - and `stabDeg` the stabilator angle; with these the rig is compared against the game force by force. |
-| `bmkhs_cyclicCenterTrimMode`, `bmkhs_pedalCenterTrimMode`, `bmkhs_springlessCyclic`, `bmkhs_springlessPedals`, `bmkhs_keyboardStickyPitch/Roll/Yaw`, `bmkhs_autoPedal`, `bmkhs_autoPitch`, `bmkhs_autoRoll` | Bool | CBA setting | Input options. |
+| `bmkhs_cyclicCenterTrimMode`, `bmkhs_pedalCenterTrimMode`, `bmkhs_springlessCyclic`, `bmkhs_springlessPedals`, `bmkhs_keyboardStickyPitch/Roll/Yaw`, `bmkhs_autoPedal` | Bool | CBA setting | Input options. |
 | `bmkhs_mouseSense` | Number 0.1..1.0 | CBA setting | Mouse sensitivity. Scales only an axis the mouse binds have. |
 | `bmkhs_testGwtEnabled` / `bmkhs_testGwtLbs` | Bool / String (lb) | CBA setting | Fixed test gross weight. |
 | `bmkhs_windDisabled` | Bool | CBA setting | Flight model ignores wind. |
@@ -2307,32 +2307,15 @@ Working state, solver bookkeeping, filters and debug. These change without notic
 - `bmkhs_boostOn` - seeded, never read or written.
 - `bmkhs_checkStartZulu` / `bmkhs_checkElapsedSec` - seeded, never updated by Core.
 - `bmkhs_damagePoints` - role map; use damageGet/damageCount.
-- `bmkhs_previousTime` / `bmkhs_deltaTime_avg` - frame timing state.
-- `bmkhs_movingAverageSize` (global) - smoothing window constant.
+- `bmkhs_previousTime` - frame timing state.
 - `bmkhs_keyboardCollective` / `bmkhs_keyboardCollectivePrevious` / `bmkhs_lastFrameGetIn` (global) - input path flags.
 - `bmkhs_pitchScheme` / `bmkhs_rollScheme` / `bmkhs_pedalScheme` (global) - the control scheme last used on each axis, `"kb"`, `"hotas"` or `"mouse"`: set by whichever of the Keyboard / HOTAS / Mouse binds last fired on it, `"kb"` at get-in. The axis reads that scheme's raw values only.
-- `bmkhs_accelX_avg` - moving-average buffer for accelX.
-- `bmkhs_accelY_avg` - moving-average buffer for accelY.
-- `bmkhs_accelZ_avg` - moving-average buffer for accelZ.
 - `bmkhs_aero_beta_g_prev` - low-pass filter state (broadcast anyway).
-- `bmkhs_angVelModelSpaceX_avg` - angular-rate smoothing buffer.
-- `bmkhs_angVelModelSpaceY_avg` - angular-rate smoothing buffer.
-- `bmkhs_angVelModelSpaceZ_avg` - angular-rate smoothing buffer.
 - `bmkhs_deltaTime` - Core frame step, capped 0.1 s.
-- `bmkhs_deltaTime_avg` - frame-time smoothing buffer.
-- `bmkhs_velModelSpaceX_avg` - velocity smoothing buffer.
-- `bmkhs_velModelSpaceY_avg` - velocity smoothing buffer.
-- `bmkhs_velModelSpaceZ_avg` - velocity smoothing buffer.
-- `bmkhs_velWorldSpaceX_avg` - velocity smoothing buffer.
-- `bmkhs_velWorldSpaceY_avg` - velocity smoothing buffer.
-- `bmkhs_velWorldSpaceZ_avg` - velocity smoothing buffer.
 - `bmkhs_velWorldSpaceNoWind_prev` - previous-frame value for differencing.
 - `bmkhs_velX_prev` - previous-frame value for differencing.
 - `bmkhs_velY_prev` - previous-frame value for differencing.
 - `bmkhs_velZ_prev` - previous-frame value for differencing.
-- `bmkhs_worldAccelX_avg` - acceleration smoothing buffer.
-- `bmkhs_worldAccelY_avg` - acceleration smoothing buffer.
-- `bmkhs_worldAccelZ_avg` - acceleration smoothing buffer.
 - `bmkhs_emptyMom` - raw config moment, frame-specific.
 - `bmkhs_emptyMassVariants` - cached config table.
 - `bmkhs_comCorrection` - config centre-of-mass offset.
@@ -2348,12 +2331,14 @@ Working state, solver bookkeeping, filters and debug. These change without notic
 - `bmkhs_fuselageAirfoil` - cached config airfoil name.
 - `bmkhs_fuselagePanels` - cached fuselage panel geometry.
 - `bmkhs_fmc`: the declared FMC features, their settings and PID state.
-- `bmkhs_pid_autoAttPitch`, `bmkhs_pid_autoAttRoll`: assist PID state, casual only.
+- `bmkhs_pid_rateCommandPitch`, `bmkhs_pid_rateCommandRoll`: keyboard rate command PIDs, from the pack's `pidRateCommandPitch[]` / `pidRateCommandRoll[]` {kp, ki, kd, limit}, cyclic per deg/s of rate error - the pack's because they are sized to the aircraft's control authority. A missing row is a config error and the keyboard cyclic does nothing on that axis.
+- `bmkhs_rateCommandPitchRate`, `bmkhs_rateCommandRollRate`: the rate being asked for, deg/s in the cyclic's sense (+ nose down, + roll left). A held key asks `RATECMD_RATE_TAP` for the first `RATECMD_TAP_TIME` seconds and its axis's hold rate after (`RATECMD_RATE_HOLD_PITCH`, `RATECMD_RATE_HOLD_ROLL` - what full cyclic gives on a stick); the mouse has no tap and asks its travel times the hold rate; travel under `RATECMD_DEADBAND` is released. Released, it is `RATECMD_HOLD_GAIN` times the error from the held attitude. The cyclic is driven from the difference between this and the measured body rate.
+- `bmkhs_rateCommandPitchRef`, `bmkhs_rateCommandRollRef`: the pitch and bank held, deg - set on release to the attitude plus `RATECMD_COAST` seconds of the rate at that moment.
+- `bmkhs_rateCommandPitchHeld`, `bmkhs_rateCommandRollHeld`: seconds the key has been down. `bmkhs_rateCommandPitchOn`, `bmkhs_rateCommandRollOn`: the rate command has the axis - the mouse has it, or the keyboard has it with its sticky setting off.
 - `bmkhs_pid_autoPedalHdg`, `bmkhs_pid_autoPedalNtt`, `bmkhs_pid_autoPedalAero`, `bmkhs_pid_autoPedalTaxi`: auto-pedal PID state.
 - `bmkhs_posIntX`, `bmkhs_posIntY`: position hold integrator, clamped tiny.
 - `bmkhs_mixes`: parsed `ControlMixing` table.
-- `bmkhs_autoAttLevelPitch`, `bmkhs_autoAttRollLimit`: config copy for assist.
-- `bmkhs_autoAttRollTarget`: assist roll setpoint, deg.
+- `bmkhs_autoAttLevelPitch`: the pack's level flight pitch attitude, deg.
 - `bmkhs_autoPedalHdg`: auto-pedal heading setpoint (networked).
 - `bmkhs_autoPedalRegime`: auto-pedal regime, taxi / hdg / ntt / aero. `taxi` is in and out on the squat switch (`bmkhs_fnc_stateOnGround`, aircraft with wheels only): the nose on the direction of travel, forwards or backwards, feet at neutral when stopped, and the pilot's pedal scaled by the squat strut's compression from `AUTOPEDAL_TAXI_AUTHORITY` at static load to full as the wheel lifts.
 - `bmkhs_autoPedalPos`: the auto-pedal foot, where it has the pedal; it writes forceTrimPosYaw every frame. The foot moves at a pilot's pace - `AUTOPEDAL_FOOT_RATE_PER` times the pedal still to go, between `AUTOPEDAL_FOOT_RATE_MIN` and `AUTOPEDAL_FOOT_RATE_MAX` per second - toward the pilot's pedal while a key is held and the loop's pedal once released, so with auto pedal on the pedal downstream is zero and the foot is the pedal.

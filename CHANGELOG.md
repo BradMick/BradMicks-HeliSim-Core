@@ -50,6 +50,35 @@
 - **Emergency hydraulics come through the supply.** Core no longer reads `bmkhs_emerHydOn`: the
   controls are live while `bmkhs_fltCtrlsSupplied` is, so emergency pressure lasts as long as the
   pack's emergency supply does. A pack must feed that supply into its `FlightControls` consumer.
+- **Keyboard and mouse cyclic are a rate command.** A pitch or roll key, or the mouse, no longer is
+  the stick. A key's tap commands a slow rate and its hold a quick one; the mouse commands a rate in
+  proportion to its travel. On release the aircraft holds the pitch and bank it has.
+  Core flies the cyclic from the difference between the commanded rate and the aircraft's measured
+  rate, as a pilot would - through the primary control, not trim or the SAS - at both realism
+  levels. Gains are the aircraft's `pidRateCommandPitch[]` and `pidRateCommandRoll[]`
+  {kp, ki, kd, limit}, sized to its control authority and **required in every pack**: a missing
+  row is a config error and the keyboard cyclic does nothing on that axis. The rates are Core's
+  (`RATECMD_*`, `core.hpp`).
+- **Auto pitch and auto roll are gone**, with their settings and the pack rows only they read
+  (`pidAutoAttPitch[]`, `pidAutoAttRoll[]`, `autoAttRollLimit`). The rate command replaces them.
+- **Sticky keys are the keyboard's only.** Sticky pitch, roll and yaw apply only while the keyboard
+  has that axis, and each turns the rate command off on its axis. A keyboard or mouse axis takes
+  no force trim.
+
+### State
+- **The aircraft flies on this frame's values.** The 10-frame moving average is gone. It was a
+  window in frames, so its delay grew as the frame rate fell - 75 ms at 60 fps, 150 ms at 30 - and
+  the flight model and every loop flew on stale data. `bmkhs_velModelSpace`, `bmkhs_velWorldSpace`,
+  `bmkhs_angVelModelSpace` and what derives from them are now the engine's values for the frame.
+- **Displays read smoothed copies.** `bmkhs_velModelSpaceNoWindFiltered`,
+  `bmkhs_velWorldSpaceNoWindFiltered` and `bmkhs_velWorldSpaceFiltered` are the velocities smoothed
+  over `VEL_SMOOTH_TIME` (0.15 s), as the trim ball's `bmkhs_worldAccelFiltered` already was.
+  **A pack's velocity vector, flight path vector and vertical speed should read these**; read raw
+  they flicker.
+- **Smoothing is over time, not frames.** The new `bmkhs_fnc_utilSmooth` does it, the same at any
+  frame rate. Accelerations use it over `ACCEL_SMOOTH_TIME` (0.20 s).
+- Removed: `bmkhs_fnc_smoothAverageAdd/Get/Init`, `bmkhs_fnc_utilSmoothAverage`, the sixteen `_avg`
+  buffers and `bmkhs_movingAverageSize`.
 
 ## 1.5.0.0
 

@@ -172,8 +172,6 @@ class CfgFunctions
         class input {
             file = "\bmkhs_helisim\functions\input";
             class inputAnalogHandler {R;};
-            class inputAutoAttitude {R;};
-            class inputAutoPedal {R;};
             class inputCenterTrimMode {R;};
             class inputControlHandle {R;};
             class inputWrite {R;};
@@ -183,6 +181,11 @@ class CfgFunctions
             class inputVariables {R;};
             class inputNonAnalogHandler {R;};
             class stickyInterrupt {R;};
+        };
+        class inputKeyboard {
+            file = "\bmkhs_helisim\functions\input\keyboard";
+            class inputAutoPedal {R;};
+            class inputRateCommand {R;};
         };
         class mass {
             file = "\bmkhs_helisim\functions\mass";
@@ -212,7 +215,7 @@ class CfgFunctions
         class util {
             file = "\bmkhs_helisim\functions\util";
             class utilConfigError {R;};
-            class utilSmoothAverage {R;};
+            class utilSmooth {R;};
             class utilNotify {R;};
             class utilNotifyRegister {R;};
             class utilGateOpen {R;};
@@ -235,12 +238,6 @@ class CfgFunctions
             class quaternionFromVec3 {R;};
             class quaternionMultiply {R;};
             class quaternionNormalize {R;};
-        };
-        class mathSmoothAverage {
-            file = "\bmkhs_helisim\functions\math\smoothAverage";
-            class smoothAverageAdd {R;};
-            class smoothAverageGet {R;};
-            class smoothAverageInit {R;};
         };
         class rotor {
             file = "\bmkhs_helisim\functions\rotor";

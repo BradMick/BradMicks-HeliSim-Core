@@ -50,7 +50,7 @@
 [
     "bmkhs_keyboardStickyPitch",
     "CHECKBOX",
-    ["Keyboard Sticky Pitch", "DO NOT USE THIS IF USING HOTAS OR GAMEPAD! When enabled, keyboard input is continously updated while the input key is held down"],
+    ["Keyboard Sticky Pitch", "Keyboard only. When enabled, the key accumulates control position while held, in place of the rate command on this axis"],
     [BMKHS_SETTINGS_CATEGORY, "Keyboard"],
     [false],
     2
@@ -59,7 +59,7 @@
 [
     "bmkhs_keyboardStickyRoll",
     "CHECKBOX",
-    ["Keyboard Sticky Roll", "DO NOT USE THIS IF USING HOTAS OR GAMEPAD! When enabled, keyboard input is continously updated while the input key is held down"],
+    ["Keyboard Sticky Roll", "Keyboard only. When enabled, the key accumulates control position while held, in place of the rate command on this axis"],
     [BMKHS_SETTINGS_CATEGORY, "Keyboard"],
     [false],
     2
@@ -68,7 +68,7 @@
 [
     "bmkhs_keyboardStickyYaw",
     "CHECKBOX",
-    ["Keyboard Sticky Yaw", "DO NOT USE THIS IF USING HOTAS OR GAMEPAD! When enabled, keyboard input is continously updated while the input key is held down"],
+    ["Keyboard Sticky Yaw", "Keyboard only. When enabled, the key accumulates control position while held, in place of the rate command on this axis"],
     [BMKHS_SETTINGS_CATEGORY, "Keyboard"],
     [false],
     2
@@ -80,24 +80,6 @@
     ["Keyboard Auto Pedal", "DOES NOT WORK WITH STICKY YAW! When enabled, the pedals are automatically managed by AI"],
     [BMKHS_SETTINGS_CATEGORY, "Keyboard"],
     [true],
-    2
-] call CBA_fnc_addSetting;
-
-[
-    "bmkhs_autoPitch",
-    "CHECKBOX",
-    ["Keyboard Auto Pitch", "When enabled, the aircraft is held at its level flight pitch attitude. CASUAL only."],
-    [BMKHS_SETTINGS_CATEGORY, "Keyboard"],
-    [true],
-    2
-] call CBA_fnc_addSetting;
-
-[
-    "bmkhs_autoRoll",
-    "CHECKBOX",
-    ["Keyboard Auto Roll", "When enabled, the roll key commands a bank angle up to the airframe's limit and returns to wings level on release. CASUAL only."],
-    [BMKHS_SETTINGS_CATEGORY, "Keyboard"],
-    [false],
     2
 ] call CBA_fnc_addSetting;
 
@@ -226,22 +208,7 @@
     2
 ] call CBA_fnc_addSetting;
 
-//An auto assist and a sticky axis cannot both own the same control, so selecting an auto
-//clears the sticky settings it conflicts with.
-["bmkhs_autoPitch", {
-    params ["_value"];
-    if (_value) then {
-        ["bmkhs_keyboardStickyPitch", false, false, true] call CBA_settings_fnc_set;
-    };
-}] call CBA_settings_fnc_addEventHandler;
-
-["bmkhs_autoRoll", {
-    params ["_value"];
-    if (_value) then {
-        ["bmkhs_keyboardStickyRoll", false, false, true] call CBA_settings_fnc_set;
-    };
-}] call CBA_settings_fnc_addEventHandler;
-
+//Auto pedal and sticky yaw cannot both own the pedals, so selecting auto pedal clears sticky yaw.
 ["bmkhs_autoPedal", {
     params ["_value"];
     if (_value) then {

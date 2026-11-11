@@ -40,15 +40,7 @@ private _velWindModelSpaceY  = (_velWindWorldSpaceX * sin _hdg) + (_velWindWorld
 private _velWindModelSpace   = [_velWindModelSpaceX, _velWindModelSpaceY, 0.0];
 
 //Velocity model space
-private _velModelSpaceX_avg  = _heli getVariable "bmkhs_velModelSpaceX_avg";
-private _velModelSpaceY_avg  = _heli getVariable "bmkhs_velModelSpaceY_avg";
-private _velModelSpaceZ_avg  = _heli getVariable "bmkhs_velModelSpaceZ_avg";
-private _velModelSpaceX      = velocityModelSpace _heli select 0;
-_velModelSpaceX              = [_velModelSpaceX_avg, _velModelSpaceX] call bmkhs_fnc_utilSmoothAverage;
-private _velModelSpaceY      = velocityModelSpace _heli select 1;
-_velModelSpaceY              = [_velModelSpaceY_avg, _velModelSpaceY] call bmkhs_fnc_utilSmoothAverage;
-private _velModelSpaceZ      = velocityModelSpace _heli select 2;
-_velModelSpaceZ              = [_velModelSpaceZ_avg, _velModelSpaceZ] call bmkhs_fnc_utilSmoothAverage;
+(velocityModelSpace _heli) params ["_velModelSpaceX", "_velModelSpaceY", "_velModelSpaceZ"];
 private _velModelSpace       = [_velModelSpaceX, _velModelSpaceY, _velModelSpaceZ] vectorDiff _velWindModelSpace;
 private _velModelSpaceNoWind = [_velModelSpaceX, _velModelSpaceY, _velModelSpaceZ];
 //Ground speed
@@ -58,34 +50,19 @@ private _vel3D               = vectorMagnitude _velModelSpace;
 //2D velocity of the aircraft - the pitot reads 0 to 180 kt
 private _vel2D               = [_velModelSpace select 1, 0.0, 180.0 * KNOTS_TO_MPS] call BIS_fnc_clamp;
 //Velocity world space
-private _velWorldSpaceX_avg  = _heli getVariable "bmkhs_velWorldSpaceX_avg";
-private _velWorldSpaceY_avg  = _heli getVariable "bmkhs_velWorldSpaceY_avg";
-private _velWorldSpaceZ_avg  = _heli getVariable "bmkhs_velWorldSpaceZ_avg";
-
-private _velWorldSpaceX      = velocity _heli select 0;
-_velWorldSpaceX              = [_velWorldSpaceX_avg, _velWorldSpaceX] call bmkhs_fnc_utilSmoothAverage;
-private _velWorldSpaceY      = velocity _heli select 1;
-_velWorldSpaceY              = [_velWorldSpaceY_avg, _velWorldSpaceY] call bmkhs_fnc_utilSmoothAverage;
-private _velWorldSpaceZ      = velocity _heli select 2;
-_velWorldSpaceZ              = [_velWorldSpaceZ_avg, _velWorldSpaceZ] call bmkhs_fnc_utilSmoothAverage;
+(velocity _heli) params ["_velWorldSpaceX", "_velWorldSpaceY", "_velWorldSpaceZ"];
 private _velWorldSpace       = [_velWorldSpaceX, _velWorldSpaceY, _velWorldSpaceZ] vectorDiff _velWindWorldSpace;
 private _velWorldSpaceNoWind = [_velWorldSpaceX, _velWorldSpaceY, _velWorldSpaceZ];
 //Climb velocity
 private _velClimb              = _velWorldSpace select 2;
 //Angular velocity in model space
-private _angVelModelSpaceX_avg = _heli getVariable "bmkhs_angVelModelSpaceX_avg";
-private _angVelModelSpaceY_avg = _heli getVariable "bmkhs_angVelModelSpaceY_avg";
-private _angVelModelSpaceZ_avg = _heli getVariable "bmkhs_angVelModelSpaceZ_avg";
-
-private _angVelModelSpaceX     = angularVelocityModelSpace _heli select 0;
-_angVelModelSpaceX             = [_angVelModelSpaceX_avg, _angVelModelSpaceX] call bmkhs_fnc_utilSmoothAverage;
-private _angVelModelSpaceY     = angularVelocityModelSpace _heli select 1;
-_angVelModelSpaceY             = [_angVelModelSpaceY_avg, _angVelModelSpaceY] call bmkhs_fnc_utilSmoothAverage;
-private _angVelModelSpaceZ     = angularVelocityModelSpace _heli select 2;
-_angVelModelSpaceZ             = [_angVelModelSpaceZ_avg, _angVelModelSpaceZ] call bmkhs_fnc_utilSmoothAverage;
-private _angVelModelSpace      = [_angVelModelSpaceX, _angVelModelSpaceY, _angVelModelSpaceZ];
+private _angVelModelSpace      = angularVelocityModelSpace _heli;
 //Angular velocity in world space
 private _angVelWorldSpace      = angularVelocity _heli;
+//Smoothed copies for display - the aircraft flies on the values above
+private _deltaTime                   = _heli getVariable "bmkhs_deltaTime";
+private _velModelSpaceNoWindFiltered = [_heli getVariable "bmkhs_velModelSpaceNoWindFiltered", _velModelSpaceNoWind, _deltaTime, VEL_SMOOTH_TIME] call bmkhs_fnc_utilSmooth;
+private _velWorldSpaceNoWindFiltered = [_heli getVariable "bmkhs_velWorldSpaceNoWindFiltered", _velWorldSpaceNoWind, _deltaTime, VEL_SMOOTH_TIME] call bmkhs_fnc_utilSmooth;
 
 _heli setVariable ["bmkhs_gndSpeed",            _gndSpeed];
 _heli setVariable ["bmkhs_vel2D",               _vel2D];
@@ -97,4 +74,7 @@ _heli setVariable ["bmkhs_velWorldSpace",       _velWorldSpace];
 _heli setVariable ["bmkhs_velWorldSpaceNoWind", _velWorldSpaceNoWind];
 _heli setVariable ["bmkhs_velClimb",            _velClimb];
 _heli setVariable ["bmkhs_angVelModelSpace",    _angVelModelSpace];
+_heli setVariable ["bmkhs_velModelSpaceNoWindFiltered", _velModelSpaceNoWindFiltered];
+_heli setVariable ["bmkhs_velWorldSpaceNoWindFiltered", _velWorldSpaceNoWindFiltered];
+_heli setVariable ["bmkhs_velWorldSpaceFiltered",       _velWorldSpaceNoWindFiltered vectorDiff _velWindWorldSpace];
 //windDirFrom / windSpeed are published by fn_environment (single source of truth).

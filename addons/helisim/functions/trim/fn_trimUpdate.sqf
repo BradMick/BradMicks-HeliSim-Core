@@ -21,10 +21,9 @@ params ["_heli"];
 private _trim = _heli getVariable "bmkhs_trim";
 private _on   = _heli getVariable "bmkhs_fmcTrimOn";
 
-//The axes a casual assist owns - it writes the trim position itself (fn_trimForceSet)
-private _casual    = bmkhs_helisimRealismSetting != REALISTIC;
-private _autoPitch = bmkhs_autoPitch && _casual;
-private _autoRoll  = bmkhs_autoRoll  && _casual;
+//A keyboard or mouse axis takes no force trim (fn_trimForceSet)
+private _noTrimPitch = bmkhs_pitchScheme in ["kb", "mouse"];
+private _noTrimRoll  = bmkhs_rollScheme  in ["kb", "mouse"];
 
 //The beep's travel this frame, {pitch, roll} - the stick's moves the holds' references, a
 //director target's the flight director
@@ -42,8 +41,8 @@ if (_on != (_heli getVariable "bmkhs_trimOn")) then {
 };
 
 if (!_on) exitWith {
-    if (!_autoPitch)       then { _heli setVariable ["bmkhs_forceTrimPosPitch", 0.0] };
-    if (!_autoRoll)        then { _heli setVariable ["bmkhs_forceTrimPosRoll",  0.0] };
+    _heli setVariable ["bmkhs_forceTrimPosPitch", 0.0];
+    _heli setVariable ["bmkhs_forceTrimPosRoll",  0.0];
     if (!bmkhs_autoPedal)  then { _heli setVariable ["bmkhs_forceTrimPosYaw",   0.0] };
 };
 
@@ -83,8 +82,8 @@ private _fd        = [0.0, 0.0];
         _moved set [_forEachIndex, _pos - _was];
     };
 } forEach [
-    ["bmkhs_forceTrimPosPitch", _autoPitch || bmkhs_springlessCyclic || bmkhs_keyboardStickyPitch],
-    ["bmkhs_forceTrimPosRoll",  _autoRoll  || bmkhs_springlessCyclic || bmkhs_keyboardStickyRoll]
+    ["bmkhs_forceTrimPosPitch", _noTrimPitch || bmkhs_springlessCyclic],
+    ["bmkhs_forceTrimPosRoll",  _noTrimRoll  || bmkhs_springlessCyclic]
 ];
 _heli setVariable ["bmkhs_trimBeepDelta", _moved];
 _heli setVariable ["bmkhs_trimBeepFd",    _fd];

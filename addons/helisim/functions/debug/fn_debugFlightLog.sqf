@@ -60,6 +60,7 @@ private _cols = [
     "sasAv", "attAv", "altAv", "hdgAv", "fdAv",
     "attOn", "attSub", "altOn", "altSub", "hdgOn", "hdgSub", "ftInt",
     "apOn", "apMode", "apHdgSet", "apHdg", "apPos",
+    "rcPitchOn", "rcPitchRef", "rcPitchCmd", "rcRollOn", "rcRollRef", "rcRollCmd",
     "fdModes", "fdFpm", "fdWantPitch", "fdWantBank", "fdTqRoom",
     "engOn", "engState", "engOverspeed", "engTqTimer", "lct", "massKg", "com", "bc", "stabDeg", "forces"
 ] + (_fdTargets apply {"tgt_" + _x})
@@ -157,6 +158,11 @@ private _row = [
     str (bmkhs_autoPedal call _b), _heli getVariable ["bmkhs_autoPedalRegime", ""],
     str ((_heli getVariable ["bmkhs_autoPedalHdgSet", false]) call _b),
     (_heli getVariable ["bmkhs_autoPedalHdg", 0]) toFixed 1, (_heli getVariable ["bmkhs_autoPedalPos", 0]) call _f,
+    //Keyboard rate command: has the axis, the attitude it holds (deg), the rate it asks for (deg/s, + nose down / left)
+    str ((_heli getVariable "bmkhs_rateCommandPitchOn") call _b), (_heli getVariable "bmkhs_rateCommandPitchRef") toFixed 2,
+    (_heli getVariable "bmkhs_rateCommandPitchRate") toFixed 2,
+    str ((_heli getVariable "bmkhs_rateCommandRollOn") call _b), (_heli getVariable "bmkhs_rateCommandRollRef") toFixed 2,
+    (_heli getVariable "bmkhs_rateCommandRollRate") toFixed 2,
     ((_fdModes select {_heli getVariable ["bmkhs_fd_" + _x, false]}) joinString "|"),
     (_climb * MPS_TO_FPM) toFixed 0, _wantPitch toFixed 2, _wantBank toFixed 2, _tqRoom call _f,
     str (isEngineOn _heli call _b),

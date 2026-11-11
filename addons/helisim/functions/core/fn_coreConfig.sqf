@@ -21,7 +21,6 @@ params ["_heli", ["_configIn", configNull]];
 
 //Caller supplies the config; fall back to the vehicle class for legacy callers
 private _config = if (isNull _configIn) then { configOf _heli >> "BMKHS_HeliSim" } else { _configIn };
-bmkhs_movingAverageSize = 10;
 
 //Built on this machine - every machine builds its own copy, the config is never sent.
 _heli setVariable ["bmkhs_configured", true];
