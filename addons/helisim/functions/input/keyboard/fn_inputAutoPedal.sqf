@@ -13,11 +13,14 @@ Description:
 
     The foot moves at a pilot's pace - brisk for a nudge, faster the further it has to go, a
     full stroke in about a second - and stops on the pedal without overshooting. It is the
-    pedal: while the pilot holds a key the foot strokes toward that pedal, scaled by weight on
-    wheels, and on release it strokes toward the loop's - in the hover, the pedal that stops the
-    yaw, then the heading hold. Nothing goes downstream around it; a key is 0 or 1, and it is
-    the foot that makes a stroke of it. An analog pedal springing back faster than a foot moves
-    is a release, the same as a key.
+    pedal: off the wheels a held pedal asks for a rate of yaw (bmkhs_fnc_inputRateCommand) and
+    the foot strokes toward the pedal that gives it; on the wheels it strokes toward the
+    pilot's pedal, scaled by weight on wheels. On release it strokes toward the loop's - in the
+    hover, the pedal that stops the yaw, then the heading hold. An analog pedal springing back
+    faster than a foot moves is a release, the same as a key.
+
+    The foot works the primary pedal. Settled with the pedal released, its position becomes the
+    yaw trim, so another crew member takes the controls without a jump.
 
     On the wheels the pilot's pedal is scaled by weight on wheels - reduced at static load for
     steady pedal turns, full by the time the squat strut unloads - so a rolling takeoff or
@@ -29,7 +32,7 @@ Parameters:
     _pedalLeftRight - Pilot's pedal [Number].
 
 Returns:
-    The pilot's pedal to pass downstream - always zero, the foot carries it [Number].
+    The pedal - the foot's, over the yaw trim [Number].
 
 Author:
     BradMick
@@ -62,7 +65,8 @@ private _regime = _heli getVariable "bmkhs_autoPedalRegime";
 //TAXI <-> the air, on the squat switch. Weight on wheels needs wheels; a skid aircraft never taxis.
 //Off the wheels it lands in the regime the speed says - HDG from a hover lift-off, NTT from a roll.
 private _wheels   = (_heli getVariable "bmkhs_numWheels") > 0;
-private _onWheels = _wheels && {[_heli] call bmkhs_fnc_stateOnGround};
+private _onGround = [_heli] call bmkhs_fnc_stateOnGround;
+private _onWheels = _wheels && _onGround;
 if (_regime != "taxi" && _onWheels) then {
     _regime = "taxi";
     [_pidAutoPedalHdg]  call bmkhs_fnc_pidReset;
@@ -144,7 +148,7 @@ if (_engaged || _velFwd > AUTOPEDAL_NTT_SPD || _regime == "taxi") then {
     _heli setVariable ["bmkhs_autoPedalHdgSet", !_engaged];   //slowing into the hover holds at once
     //The pedal before the turn: the foot, until the press is underway - the foot moves during it
     if (!_sprung && {!_onPedals || !_wasEngaged}) then {
-        _trim = _ftYaw;
+        _trim = _pos;
         _heli setVariable ["bmkhs_autoPedalTrim", _trim];
     };
 } else {
@@ -245,6 +249,17 @@ private _yawOutput = _hdgOut + _nttOut + _aeroOut + _taxiOut;
 //The foot strokes toward the pilot's pedal while a key is held, the loop's pedal once released:
 //faster the further it has to go, between a nudge and a full stroke, and it stops on the pedal.
 private _target = [_yawOutput, _pedalLeftRight] select _engaged;
+//Off the wheels a held pedal asks for a rate of yaw. A press begun on the wheels stays a pedal.
+private _asksRate = _engaged && {_regime != "taxi"} && {_pedalLeftRight != 0.0} && {(_heli getVariable "bmkhs_rateCommandYawOn") || !_wasEngaged};
+if (_asksRate) then {
+    //The rate command releases under its deadband; the foot is on the pedal
+    private _key = ((abs _pedalLeftRight) max RATECMD_DEADBAND) * ([1, -1] select (_pedalLeftRight < 0.0));
+    private _out = [_heli, _deltaTime, "Yaw", _key, bmkhs_pedalScheme == "kb", _yawRate, -_curHdg, _onGround] call bmkhs_fnc_inputRateCommand;
+    _target = [_trim + _out, -1.0, 1.0] call BIS_fnc_clamp;
+} else {
+    _heli setVariable ["bmkhs_rateCommandYawOn",   false];
+    _heli setVariable ["bmkhs_rateCommandYawHeld", 0.0];
+};
 if (_engaged) then {
     [_pidAutoPedalHdg]  call bmkhs_fnc_pidReset;
     [_pidAutoPedalNtt]  call bmkhs_fnc_pidReset;
@@ -255,7 +270,22 @@ private _toGo = _target - _pos;
 private _rate = [AUTOPEDAL_FOOT_RATE_PER * abs _toGo, AUTOPEDAL_FOOT_RATE_MIN, AUTOPEDAL_FOOT_RATE_MAX] call BIS_fnc_clamp;
 _pos = _pos + (((_rate * _deltaTime) min abs _toGo) * ([1, -1] select (_toGo < 0.0)));
 _heli setVariable ["bmkhs_autoPedalPos", _pos];
-_heli setVariable ["bmkhs_forceTrimPosYaw", _pos];
 
-//The foot is the pedal - nothing goes downstream around it
-0.0
+//Trim - where a centred pedal rests, so another crew member takes the controls without a jump
+private _settled = _heli getVariable "bmkhs_rateCommandYawSettled";
+_settled = [0.0, _settled + _deltaTime] select (!_engaged && {!_onGround} && {abs _yawRate < RATECMD_TRIM_RATE});
+if (_heli getVariable "bmkhs_fmcTrimOn") then {
+    //Neutral on the ground
+    if (_onGround) then { _ftYaw = [_ftYaw, 0.0, _deltaTime, RATECMD_TRIM_TIME] call bmkhs_fnc_utilSmooth };
+    //Settled with the pedal released: the foot's pedal becomes the trim
+    if (_settled > RATECMD_TRIM_TIME && {abs (_pos - _ftYaw) > RATECMD_DEADBAND}) then {
+        _ftYaw   = _pos;
+        _settled = 0.0;
+    };
+    _heli setVariable ["bmkhs_forceTrimPosYaw", _ftYaw];
+};
+_heli setVariable ["bmkhs_rateCommandYawSettled", _settled];
+
+//The foot's pedal over the trim - the reverse of bmkhs_fnc_inputGetInterp
+private _span = [1.0 + _ftYaw, 1.0 - _ftYaw] select (_pos > _ftYaw);
+if (_span > 0.0) then { (_pos - _ftYaw) / _span } else { 0.0 }

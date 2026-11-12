@@ -29,13 +29,16 @@ private _tailFrozen = _frozen
     || {!(_heli getVariable ["bmkhs_tailRtrDriven", true])};
 
 //The rate command, per axis: the mouse's, and the keyboard's unless sticky has it
-private _ratePitch  = _piloted && {!_frozen} && {bmkhs_pitchScheme == "mouse" || {bmkhs_pitchScheme == "kb" && {!bmkhs_keyboardStickyPitch}}};
-private _rateRoll   = _piloted && {!_frozen} && {bmkhs_rollScheme  == "mouse" || {bmkhs_rollScheme  == "kb" && {!bmkhs_keyboardStickyRoll}}};
+private _ratePitch  = _piloted && {!_frozen} && {bmkhs_pitchScheme == "mouseGamepad" || {bmkhs_pitchScheme == "kb" && {!bmkhs_keyboardStickyPitch}}};
+private _rateRoll   = _piloted && {!_frozen} && {bmkhs_rollScheme  == "mouseGamepad" || {bmkhs_rollScheme  == "kb" && {!bmkhs_keyboardStickyRoll}}};
 if (!_ratePitch) then { _heli setVariable ["bmkhs_rateCommandPitchOn", false] };
 if (!_rateRoll)  then { _heli setVariable ["bmkhs_rateCommandRollOn",  false] };
 
 //Frozen controls stay where they were
 if (_frozen) exitWith {};
+
+//Auto pedal is the feet of a player without pedals - HOTAS pedals in use, it is ignored
+private _autoPedal = bmkhs_autoPedal && {bmkhs_pedalScheme != "hotas"};
 
 if (_piloted) then {
     private _deltaTime         = _heli getVariable "bmkhs_deltaTime";
@@ -49,8 +52,36 @@ if (_piloted) then {
     /////////////////////////////////////////////////////////////////////////////////////////////
     // Auto Pedal          /////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////////////////////////
-    if (bmkhs_autoPedal) then {
+    if (_autoPedal) then {
         _pedalLeftRight = [_heli, _deltaTime, _pedalLeftRight] call bmkhs_fnc_inputAutoPedal;
+    };
+    /////////////////////////////////////////////////////////////////////////////////////////////
+    // Auto Taxi           /////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////////////////////////
+    private _onGround = [_heli] call bmkhs_fnc_stateOnGround;
+    private _kbTaxi   = _ratePitch && {bmkhs_pitchScheme == "kb"} && {bmkhs_autoTaxi} && {(_heli getVariable "bmkhs_numWheels") > 0};
+    private _regime   = _heli getVariable "bmkhs_autoTaxiRegime";
+    private _radAltFt = ((_heli getVariable "bmkhs_radAlt") * METERS_TO_FEET) max 0.0;
+    //Leaving the wheels with the forward key held is a rolling takeoff. Up to AUTOTAXI_BLEND_FT the key blends into the rate command.
+    private _climb    = _kbTaxi && {!_onGround} && {_radAltFt < AUTOTAXI_BLEND_FT}
+        && {_regime == "climb" || {_regime == "takeoff" && {_cyclicFwdAft > 0.0}}};
+    //On the wheels the pitch key is a taxi speed. Any other key held from the wheels keeps it until released.
+    private _taxi     = _kbTaxi && {!_climb} && {_onGround || {_cyclicFwdAft != 0.0 && {_regime in ["taxi", "takeoff"]}}};
+    //On the ground the mouse or gamepad is the stick itself
+    private _stick = _ratePitch && {bmkhs_pitchScheme == "mouseGamepad"} && {_onGround};
+    if (_taxi) then {
+        _cyclicFwdAft = [_heli, _deltaTime, _cyclicFwdAft] call bmkhs_fnc_inputAutoTaxi;
+    } else {
+        _heli setVariable ["bmkhs_autoTaxiRegime", ["off", "climb"] select _climb];
+    };
+    if (_taxi || _stick) then {
+        //The rate command takes the axis afresh at lift-off. Trim is neutral on the ground, as it leaves it.
+        _ratePitch = false;
+        _heli setVariable ["bmkhs_rateCommandPitchOn",   false];
+        _heli setVariable ["bmkhs_rateCommandPitchHeld", 0.0];
+        if (_onGround && {_heli getVariable "bmkhs_fmcTrimOn"}) then {
+            _heli setVariable ["bmkhs_forceTrimPosPitch", [_heli getVariable "bmkhs_forceTrimPosPitch", 0.0, _deltaTime, RATECMD_TRIM_TIME] call bmkhs_fnc_utilSmooth];
+        };
     };
     /////////////////////////////////////////////////////////////////////////////////////////////
     // Rate Command        /////////////////////////////////////////////////////////////////////
@@ -59,18 +90,21 @@ if (_piloted) then {
         (_heli call BIS_fnc_getPitchBank) params ["_pitch", "_bank"];
         //Body rates: + nose down, + roll left - the cyclic's own sense
         (_heli getVariable "bmkhs_angVelModelSpace") params ["_pitchRate", "_rollRate"];
-        private _onGround = [_heli] call bmkhs_fnc_stateOnGround;
-        if (_ratePitch) then { _cyclicFwdAft    = [_heli, _deltaTime, "Pitch", _cyclicFwdAft,    bmkhs_pitchScheme == "kb", deg _pitchRate, _pitch, _onGround] call bmkhs_fnc_inputRateCommand };
+        //Climbing out, the forward key's share of its rate grows with height; the rest holds the level-flight attitude
+        private _share = [1.0, (_radAltFt / AUTOTAXI_BLEND_FT) ^ 2] select _climb;
+        if (_ratePitch) then { _cyclicFwdAft    = [_heli, _deltaTime, "Pitch", _cyclicFwdAft,    bmkhs_pitchScheme == "kb", deg _pitchRate, _pitch, _onGround, _share, _heli getVariable "bmkhs_autoAttLevelPitch"] call bmkhs_fnc_inputRateCommand };
         if (_rateRoll)  then { _cyclicLeftRight = [_heli, _deltaTime, "Roll",  _cyclicLeftRight, bmkhs_rollScheme  == "kb", deg _rollRate,  _bank,  _onGround] call bmkhs_fnc_inputRateCommand };
     };
     /////////////////////////////////////////////////////////////////////////////////////////////
     // Flight Ctrl Lockout  /////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////////////////////////
     if (_fltControlLockout) then {
+        //The lockout is for the pilot's own controls - the feet are not locked out
+        private _pedalOwn = [_pedalLeftRight, 0.0] select _autoPedal;
         if (
             (_cyclicFwdAft    < CENTER_TRIM_VAL && _cyclicFwdAft    > -CENTER_TRIM_VAL) &&
             (_cyclicLeftRight < CENTER_TRIM_VAL && _cyclicLeftRight > -CENTER_TRIM_VAL) &&
-            (_pedalLeftRight  < CENTER_TRIM_VAL && _pedalLeftRight  > -CENTER_TRIM_VAL)
+            (_pedalOwn        < CENTER_TRIM_VAL && _pedalOwn        > -CENTER_TRIM_VAL)
            ) then {
                 _heli setVariable ["bmkhs_flightControlLockOut", false];
            };
@@ -79,7 +113,7 @@ if (_piloted) then {
                 _cyclicLeftRight = 0.0;
            };
 
-           if (bmkhs_pedalCenterTrimMode) then {
+           if (bmkhs_pedalCenterTrimMode && {!_autoPedal}) then {
                 _pedalLeftRight  = 0.0;
            };
     };
@@ -121,6 +155,10 @@ if (_piloted) then {
 /////////////////////////////////////////////////////////////////////////////////////////////
 // To the rotors        /////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////
+//While the feet are not flying, the foot follows the pedal - they take it from where it is
+if (!_piloted || !_autoPedal) then {
+    _heli setVariable ["bmkhs_autoPedalPos", [_heli getVariable "bmkhs_pedalLeftRight", _heli getVariable "bmkhs_forceTrimPosYaw"] call bmkhs_fnc_inputGetInterp];
+};
 //Pilot and trim, SAS, the holds and mixing
 private _pitch = ([_heli getVariable "bmkhs_cyclicFwdAft", _heli getVariable "bmkhs_forceTrimPosPitch"] call bmkhs_fnc_inputGetInterp)
     + (_heli getVariable "bmkhs_fmcSasPitchOut") + (_heli getVariable "bmkhs_fmcAttHoldCycPitchOut") + (_heli getVariable "bmkhs_mixPitchOut");

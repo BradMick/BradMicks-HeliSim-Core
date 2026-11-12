@@ -46,6 +46,8 @@ MPS_TO_KNOTS = 1.94384
 KNOTS_TO_MPS = 0.51444
 FT = E.FEET_TO_METERS
 BLADE_PITCH_RANGE = 10.0  # rotor.hpp
+ROTOR_WEIGHT_LIFT_LOSS = 0.40  # core.hpp
+ROTOR_WEIGHT_LIFT_GAIN = 0.80  # core.hpp
 
 
 def _norm(v):
@@ -113,9 +115,10 @@ def density(paFt, fat):
 # fn_simpleRotor - the force path in full, and the rotor torque it hands on
 # ---------------------------------------------------------------------------------------------
 
-def simple_rotor(r, ctl, vel, rho, xmsnRpm, com):
+def simple_rotor(r, ctl, vel, rho, xmsnRpm, com, weightRatio=1.0):
     """One rotor: total force and moment about com (model space, N and Nm, no dt) and its shaft
-    torque (Nm at the rotor, as fn_simpleRotor sums it). vel is bmkhs_velModelSpace."""
+    torque (Nm at the rotor, as fn_simpleRotor sums it). vel is bmkhs_velModelSpace. weightRatio is
+    gross weight over the weight the tables were fitted at."""
     pitchOutput, rollOutput, collOutput, tandemPitch, tandemYaw, lct = ctl
     isTail = r['type'].lower() == 'tail'
     isCw = r['direction'].lower() == 'cw'
@@ -144,9 +147,14 @@ def simple_rotor(r, ctl, vel, rho, xmsnRpm, com):
 
     liftGrid = E.math_build_interp_grid(r['liftCoefTable'])
     dragGrid = E.math_build_interp_grid(r['dragCoefTable'])
-    #Air down through a lifting rotor's disc costs angle of attack, off the collective
-    liftKey = tableKey - ((math.degrees(max(velZ, 0.0) / bladeVel75) / BLADE_PITCH_RANGE) if (not isTail and bladeVel75 > 1.0) else 0.0)
-    liftCoef = E.math_linear_interp_2d(liftGrid, liftKey, velXY)
+    #Air down through a lifting rotor's disc costs angle of attack, off the collective - more of it
+    #the more weight is carried. The blades give less for the collective over the fitted weight and
+    #more under it, in with airspeed so the hover stands.
+    liftKey, weightLoss = tableKey, 0.0
+    if not isTail and bladeVel75 > 1.0:
+        liftKey = tableKey - (math.sqrt(weightRatio) * math.degrees(max(velZ, 0.0) / bladeVel75) / BLADE_PITCH_RANGE)
+        weightLoss = (ROTOR_WEIGHT_LIFT_LOSS if weightRatio > 1.0 else ROTOR_WEIGHT_LIFT_GAIN) * (weightRatio - 1.0) * min(velXY / E.VEL_ETL, 1.0)
+    liftCoef = E.math_linear_interp_2d(liftGrid, liftKey, velXY) * (1.0 - weightLoss)
     axialVel = velZ * (-1.0 if liftCoef < 0 else 1.0)
     viDenom = E.linear_conversion(-7.62, -19.30, axialVel, E.VEL_VRS, E.VEL_VRS * 0.1, True)
     torqueSign = -1.0 if isCw else 1.0
@@ -365,15 +373,18 @@ class Airframe:
         self.rpm = e['designRpm'] * e['npFly']
         self.refTq = (e['powerKw'] * 1000) / (e['designRpm'] * e['npFly'] * 0.10472)
         self.numEngines = E.num_engines(E.CFG)
+        #fitGrossMass, kg - 0 when the pack names none, and lift takes no weight adjustment
+        self.fitGwt = float(E.CFG.get('fitGrossMass', 0.0))
 
-    def forces(self, vel, pitch, roll, yaw, coll, rho, paFt, parts=False):
+    def forces(self, vel, pitch, roll, yaw, coll, rho, paFt, parts=False, gwt=None):
         """Sum of every aerodynamic force and moment about the CoM, model space, and the gauge
         torque per engine (fraction). parts returns each contributor too."""
         out = {}
         tq = 0.0
+        weightRatio = (gwt / self.fitGwt) if (gwt and self.fitGwt > 0.0) else 1.0
         for r in self.rotors:
             ctl = FO.simple_rotor_control(r, pitch, roll, yaw, coll, math.hypot(vel[0], vel[1]) * MPS_TO_KNOTS, paFt)
-            f, m, rt = simple_rotor(r, ctl, vel, rho, self.rpm, self.cg)
+            f, m, rt = simple_rotor(r, ctl, vel, rho, self.rpm, self.cg, weightRatio)
             #A tandem has two main rotors - the position keeps their keys apart.
             out[r['type'] + ' rotor' + (' ' + r['position'] if r.get('position') else '')] = (f, m)
             tq += rt / r['gearRatio']
@@ -409,7 +420,7 @@ def trim(af, v, gwt, rho, paFt, cyc=0.0, cycLR=0.0, pedal=0.0, solveCyc=False, g
         th, c = x[0], x[1]
         cp = x[2] if solveCyc else cyc
         vel, down = body_state(v, th)
-        F, M, _ = af.forces(vel, cp, cycLR, pedal, c, rho, paFt)
+        F, M, _ = af.forces(vel, cp, cycLR, pedal, c, rho, paFt, gwt=gwt)
         r = [(F[1] + W * down[1]) / W, (F[2] + W * down[2]) / W]
         if solveCyc:
             r.append(M[0] / (W * 1.0))
@@ -434,7 +445,7 @@ def trim(af, v, gwt, rho, paFt, cyc=0.0, cycLR=0.0, pedal=0.0, solveCyc=False, g
     th, c = x[0], x[1]
     cp = x[2] if solveCyc else cyc
     vel, down = body_state(v, th)
-    F, M, g = af.forces(vel, cp, cycLR, pedal, c, rho, paFt)
+    F, M, g = af.forces(vel, cp, cycLR, pedal, c, rho, paFt, gwt=gwt)
     ok = max(abs(a) for a in res(x)) < 1e-4
     return dict(pitch=th, coll=c, cyc=cp, tq=g, F=F, M=M, ok=ok, bodyKt=vel[1] * MPS_TO_KNOTS)
 
@@ -476,7 +487,7 @@ def report_parts(af, a, kt):
     rho = density(a.pa, a.fat)
     t = trim(af, kt / MPS_TO_KNOTS, a.gwt, rho, a.pa, a.cyc, a.cycLR, a.pedal, a.solve)
     vel, _ = body_state(kt / MPS_TO_KNOTS, t['pitch'])
-    F, M, g, parts = af.forces(vel, t['cyc'], a.cycLR, a.pedal, t['coll'], rho, a.pa, parts=True)
+    F, M, g, parts = af.forces(vel, t['cyc'], a.cycLR, a.pedal, t['coll'], rho, a.pa, parts=True, gwt=a.gwt)
     print('\nForces at %.0f kt trim (model space N: x right, y forward, z up):' % kt)
     for k, (f, m) in parts.items():
         print('  %-22s %+9.0f %+9.0f %+9.0f' % (k, f[0], f[1], f[2]))
@@ -526,7 +537,7 @@ def replay(af, path, gwt):
         yaw = ctl('pedal', 'ftYaw', 'sasY', 'hdgY', 'mixY')
         paFt = m('altFt')
         rho = density(paFt, 15.0 - 2.0 * paFt / 1000.0)
-        F, M, g = af.forces(vel, cycP, cycR, yaw, m('coll'), rho, paFt)
+        F, M, g = af.forces(vel, cycP, cycR, yaw, m('coll'), rho, paFt, gwt=gwt)
         print('  %5.1f-%5.1f %6.1f  %+5.2f  %.3f  %+.3f  %5.1f   %5.1f   %+.4f  %+.4f' % (
             fl(s[0], 't'), fl(s[-1], 't'), m('kts'), pitch, m('coll'), cycP, m('tq1') * 100, g * 100,
             (F[1] + W * down[1]) / W, (F[2] + W * down[2]) / W))

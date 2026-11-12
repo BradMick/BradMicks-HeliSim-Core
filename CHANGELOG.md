@@ -32,12 +32,14 @@
   pedal stroke rather than a step to full pedal, in every regime. The old critically damped foot
   and its speed state are gone.
 - **A set of binds per control scheme.** Cyclic and pedals are now bound separately for keyboard,
-  HOTAS and mouse - `Keyboard Pitch Forward`, `HOTAS Pitch Forward`, `Mouse Pitch Forward` and so
-  on, for pitch, roll and pedal. Whichever scheme was last used on an axis has that axis, as the
+  HOTAS and mouse or gamepad - `Keyboard Pitch Forward`, `HOTAS Pitch Forward`,
+  `Mouse/Gamepad Pitch Forward` and so on, for pitch, roll and pedal. Whichever scheme was last used on an axis has that axis, as the
   collective already works, so any mix flies. **The old Cyclic / Pedal binds are gone: rebind
   HOTAS and mouse axes on the new binds.** The keyboard binds default to W/S/A/D and Q/E.
-- **Mouse as Joystick setting removed.** Binding the Mouse binds is the switch. Mouse sensitivity
-  and the freelook cut-out act only on an axis the mouse has, never on keyboard or HOTAS input.
+- **Mouse as Joystick setting removed.** Binding the Mouse/Gamepad binds is the switch.
+  Mouse/Gamepad Sensitivity and the freelook cut-out act only on an axis those binds have, never
+  on keyboard or HOTAS input. The setting's variable is now `bmkhs_mouseGamepadSense`, so a saved
+  sensitivity resets to 1.0.
 - **Input is read, then output.** `bmkhs_fnc_inputUpdate` is now two steps: `bmkhs_fnc_inputRead`
   reads the player and publishes `bmkhs_inputPitch/Roll/Pedal/Collective`, and
   `bmkhs_fnc_inputWrite` runs the assists and the actuator lag, sets the control positions and
@@ -61,9 +63,50 @@
   (`RATECMD_*`, `core.hpp`).
 - **Auto pitch and auto roll are gone**, with their settings and the pack rows only they read
   (`pidAutoAttPitch[]`, `pidAutoAttRoll[]`, `autoAttRollLimit`). The rate command replaces them.
+- **The rate command trims itself.** Once the aircraft has settled with the key or mouse released,
+  the cyclic the rate command is holding is moved into the force trim and its stick centres. A
+  crew member taking the controls - on a stick, or on keys - starts from the same control position
+  instead of a jump. The force trim switch does nothing on an axis the rate command has, and the
+  trim eases to neutral on the ground.
+- **The pedal is a rate command too, and the feet work the pedal.** With auto pedal on and off the
+  wheels, a held pedal asks for a rate of yaw - a key's tap 15 deg/s, its hold 45, the mouse or
+  gamepad in proportion to travel - and the foot strokes to the pedal that gives it, from the
+  measured yaw rate. Released, the regimes carry on as before: heading hold in the hover,
+  nose-to-tail, ball centred, taxi. On the wheels a held pedal is still the pedal itself. The foot
+  now moves the primary pedal, not the yaw trim; once settled its pedal is moved into the trim, as
+  the cyclic's is. Gains are the aircraft's `pidRateCommandYaw[]` {kp, ki, kd, limit}, **required
+  in every pack**. The setting is now "Keyboard & Mouse/Gamepad Auto Pedal". It is ignored
+  while the HOTAS pedal binds have the pedals - the pedals are then the pilot's and the FMC's, as
+  with it off - and it takes the pedal back from where it is when a key or the mouse does.
+  Selecting sticky yaw clears it, as selecting it clears sticky yaw.
+- **Keyboard auto taxi.** On the wheels a pitch key was a rate of pitch the aircraft could not give
+  on its gear, and it put in full cyclic and tipped the aircraft. On the wheels the forward key now
+  holds 6 kt of taxi speed, the back key 6 kt backward, and released the aircraft is brought to a
+  stop; parking brake set, the cyclic is neutral. Above 40% torque the aircraft is taking off (taxi
+  again under 35%): no key leaves the cyclic neutral, the forward key holds the level-flight
+  attitude (`autoAttLevelPitch`) so it cannot nose over, and the back key is aft cyclic. Aft cyclic
+  backs off as the squat strut unloads. Lifting off with the forward key held is a rolling takeoff:
+  up to 50 ft the key blends from that hold into the rate command's nose-down rate, by the square
+  of the height, so the key does not change meaning in one step. The setting is
+  "Keyboard Auto Taxi", on by default, at both realism levels; it and sticky pitch clear each
+  other. Gains are the aircraft's `pidAutoTaxi[]` {kp, ki, kd, limit}, cyclic per m/s, **required
+  in every pack with wheels**. Roll on the ground is unchanged.
+- **On the ground the mouse or gamepad's pitch is the stick itself.** Its travel is the cyclic
+  position, as a joystick's is; the rate command takes it at lift-off.
 - **Sticky keys are the keyboard's only.** Sticky pitch, roll and yaw apply only while the keyboard
   has that axis, and each turns the rate command off on its axis. A keyboard or mouse axis takes
   no force trim.
+
+### Rotor
+- **Torque follows gross weight in forward flight.** A pack names the weight its main rotor tables
+  were fitted at, `fitGrossMass` (kg), and Core adjusts a lifting rotor's lift from it: the
+  collective lost to air coming down through the disc scales with the square root of gross weight
+  over that weight; above it lift falls 0.40% for each 1% of excess and below it rises 0.80% for
+  each 1% short, brought in from the hover over the first 24 kt. Torque still reads only collective
+  and airspeed. Before, a heavier aircraft trimmed on less torque above about 100 kt. The numbers
+  are set against the AH-64D's charts at 15,000 and 21,000 lb, within 5 points of torque from 75 to
+  140 kt. The fitted weight and the hover at every weight are unchanged, and no table needs
+  refitting. A pack that does not declare it flies as before.
 
 ### State
 - **The aircraft flies on this frame's values.** The 10-frame moving average is gone. It was a
@@ -75,6 +118,9 @@
   over `VEL_SMOOTH_TIME` (0.15 s), as the trim ball's `bmkhs_worldAccelFiltered` already was.
   **A pack's velocity vector, flight path vector and vertical speed should read these**; read raw
   they flicker.
+- **Parked is still.** While the aircraft is held on its wheels its velocities and body rates read
+  zero. The engine reports the fall gravity gives it each frame before the hold takes it back out,
+  which showed as a vertical speed of about -150 ft/min on the ground.
 - **Smoothing is over time, not frames.** The new `bmkhs_fnc_utilSmooth` does it, the same at any
   frame rate. Accelerations use it over `ACCEL_SMOOTH_TIME` (0.20 s).
 - Removed: `bmkhs_fnc_smoothAverageAdd/Get/Init`, `bmkhs_fnc_utilSmoothAverage`, the sixteen `_avg`

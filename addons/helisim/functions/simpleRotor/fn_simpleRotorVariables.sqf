@@ -106,6 +106,8 @@ _heli setVariable ["bmkhs_simpleRotors",    _rotors];
 _heli setVariable ["bmkhs_controlScheme",   (["conventional", "tandem", "coaxial", "tiltrotor", "compound"] find (toLower getText (_config >> "controlScheme"))) max CONVENTIONAL];
 //{normal low, normal high, high rotor, maximum}
 _heli setVariable ["bmkhs_nrLimits",        getArray (_config >> "nrLimits")];
+//Gross mass the rotor tables were fitted at, kg - 0 when not declared, and lift takes no weight adjustment
+_heli setVariable ["bmkhs_fitGrossMass",    getNumber (_config >> "fitGrossMass")];
 //Drivetrain drag - constant torque, as a fraction of each engine's 100% torque. 0 when not declared
 _heli setVariable ["bmkhs_drivetrainDrag",  getNumber (_config >> "drivetrainDrag")];
 

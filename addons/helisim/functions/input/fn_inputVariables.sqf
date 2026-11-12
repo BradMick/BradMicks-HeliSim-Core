@@ -19,7 +19,7 @@ params ["_heli", "_config"];
     {
         _heli setVariable ["bmkhs_" + _scheme + _x + "Out", 0.0];
     } forEach ["PitchForward", "PitchBackward", "RollLeft", "RollRight", "PedalLeft", "PedalRight"];
-} forEach ["kb", "hotas", "mouse"];
+} forEach ["kb", "hotas", "mouseGamepad"];
 //Collective input
 _heli setVariable ["bmkhs_heliCollectiveRaiseOut", 0.0];
 _heli setVariable ["bmkhs_heliCollectiveLowerOut", 0.0];
@@ -62,13 +62,27 @@ _heli setVariable ["bmkhs_kbHeliCollectiveLowerOut", 0.0];
     _heli setVariable ["bmkhs_rateCommand" + _x + "Held", 0.0];
     _heli setVariable ["bmkhs_rateCommand" + _x + "On",   false];
     _heli setVariable ["bmkhs_rateCommand" + _x + "Rate", 0.0];
+    _heli setVariable ["bmkhs_rateCommand" + _x + "Settled", 0.0];
     private _gains = getArray (_config >> ("pidRateCommand" + _x));
     if (count _gains != 4) then {
-        format ["[BMKHS] INPUT CONFIG ERROR: pidRateCommand%1[] {kp, ki, kd, limit} is missing. The keyboard cyclic does nothing on that axis.", _x] call bmkhs_fnc_utilConfigError;
+        format ["[BMKHS] INPUT CONFIG ERROR: pidRateCommand%1[] {kp, ki, kd, limit} is missing. The rate command does nothing on that axis.", _x] call bmkhs_fnc_utilConfigError;
         _gains = [0, 0, 0, 0];
     };
     _heli setVariable ["bmkhs_pid_rateCommand" + _x, _gains call bmkhs_fnc_pidCreate];
-} forEach ["Pitch", "Roll"];
+} forEach ["Pitch", "Roll", "Yaw"];
+
+//Auto taxi. The gains matter only with wheels; wheels declared without the row is a config error.
+_heli setVariable ["bmkhs_autoTaxiRegime",     "off"];   //off | taxi | takeoff | climb
+_heli setVariable ["bmkhs_autoTaxiSpd",        0.0];     //taxi speed held, m/s + forward
+_heli setVariable ["bmkhs_autoTaxiOut",        0.0];     //its cyclic
+private _taxiGains = getArray (_config >> "pidAutoTaxi");
+if (count _taxiGains != 4) then {
+    if (isClass (_config >> "Wheels")) then {
+        "[BMKHS] INPUT CONFIG ERROR: Wheels declared but pidAutoTaxi[] {kp, ki, kd, limit} is missing. Auto taxi does nothing." call bmkhs_fnc_utilConfigError;
+    };
+    _taxiGains = [0, 0, 0, 0];
+};
+_heli setVariable ["bmkhs_pid_autoTaxi", _taxiGains call bmkhs_fnc_pidCreate];
 
 //Auto pedal
 _heli setVariable ["bmkhs_autoPedalHdg",       getDir _heli];

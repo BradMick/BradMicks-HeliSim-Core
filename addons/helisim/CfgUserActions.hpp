@@ -38,12 +38,12 @@ class CfgUserActions {
     BMKHS_ANALOG(bmkhs_hotasRollRight,"HOTAS Roll Right","HOTAS Roll Right");
     BMKHS_ANALOG(bmkhs_hotasPedalLeft,"HOTAS Pedal Left","HOTAS Pedal Left");
     BMKHS_ANALOG(bmkhs_hotasPedalRight,"HOTAS Pedal Right","HOTAS Pedal Right");
-    BMKHS_ANALOG(bmkhs_mousePitchForward,"Mouse Pitch Forward","Mouse Pitch Forward");
-    BMKHS_ANALOG(bmkhs_mousePitchBackward,"Mouse Pitch Backward","Mouse Pitch Backward");
-    BMKHS_ANALOG(bmkhs_mouseRollLeft,"Mouse Roll Left","Mouse Roll Left");
-    BMKHS_ANALOG(bmkhs_mouseRollRight,"Mouse Roll Right","Mouse Roll Right");
-    BMKHS_ANALOG(bmkhs_mousePedalLeft,"Mouse Pedal Left","Mouse Pedal Left");
-    BMKHS_ANALOG(bmkhs_mousePedalRight,"Mouse Pedal Right","Mouse Pedal Right");
+    BMKHS_ANALOG(bmkhs_mouseGamepadPitchForward,"Mouse/Gamepad Pitch Forward","Mouse/Gamepad Pitch Forward");
+    BMKHS_ANALOG(bmkhs_mouseGamepadPitchBackward,"Mouse/Gamepad Pitch Backward","Mouse/Gamepad Pitch Backward");
+    BMKHS_ANALOG(bmkhs_mouseGamepadRollLeft,"Mouse/Gamepad Roll Left","Mouse/Gamepad Roll Left");
+    BMKHS_ANALOG(bmkhs_mouseGamepadRollRight,"Mouse/Gamepad Roll Right","Mouse/Gamepad Roll Right");
+    BMKHS_ANALOG(bmkhs_mouseGamepadPedalLeft,"Mouse/Gamepad Pedal Left","Mouse/Gamepad Pedal Left");
+    BMKHS_ANALOG(bmkhs_mouseGamepadPedalRight,"Mouse/Gamepad Pedal Right","Mouse/Gamepad Pedal Right");
     BMKHS_ANALOG(bmkhs_collectiveUp,"Collective Up","Collective Up");
     BMKHS_ANALOG(bmkhs_collectiveDn,"Collective Down","Collective Down");
     BMKHS_NONANALOG(bmkhs_kbCollectiveUp,"Keyboard Collective Up","Keyboard Collective Up");

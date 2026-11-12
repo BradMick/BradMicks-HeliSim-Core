@@ -49,6 +49,8 @@
 #define VEL_VBE                 38.583  //75 kts
 #define VEL_VNE                 128.611 //250 kts
 #define VEL_VRS                 24.384
+#define ROTOR_WEIGHT_LIFT_LOSS  0.40    //lift lost per unit of gross weight over the rotor tables' fitted weight
+#define ROTOR_WEIGHT_LIFT_GAIN  0.80    //lift gained per unit of gross weight under it
 #define ISA_STD_DAY_AIR_DENSITY 1.225
 
 #define VRS_SCALAR_EXPONENT     0.3
@@ -309,15 +311,27 @@
 #define VEL_SMOOTH_TIME               0.15    //s
 #define ACCEL_SMOOTH_TIME             0.20    //s
 
-//RATE COMMAND, keyboard and mouse cyclic. The control commands a rate and releasing it holds the attitude.
-//The cyclic is driven from the error between the commanded rate and the measured body rate.
+//RATE COMMAND, keyboard and mouse cyclic, and the pedal under auto pedal. The control commands a rate and
+//releasing it holds the attitude. It is driven from the error between the commanded rate and the measured body rate.
 #define RATECMD_TAP_TIME              0.15    //s - a key down no longer than this is a tap
 #define RATECMD_RATE_TAP              15.0    //deg/s while it is a tap
 #define RATECMD_RATE_HOLD_PITCH       60.0    //deg/s once it is a hold, and at full mouse travel
 #define RATECMD_RATE_HOLD_ROLL        120.0   //deg/s
+#define RATECMD_RATE_HOLD_YAW         45.0    //deg/s
 #define RATECMD_DEADBAND              0.02    //control travel below this is released
 #define RATECMD_HOLD_GAIN             2.0     //deg/s commanded per deg off the held attitude
 #define RATECMD_COAST                 0.2     //s of the rate at release added to the held attitude
+#define RATECMD_TRIM_RATE             1.0     //deg/s - below this, commanded and measured, the aircraft is settled
+#define RATECMD_TRIM_TIME             0.5     //s settled before the stick's position becomes the trim
+
+//AUTO TAXI, the keyboard's pitch on the wheels. Under the takeoff torque a pitch key is a taxi speed the
+//cyclic holds; over it the forward key holds the level-flight attitude. Gains are the pack's pidAutoTaxi[].
+#define AUTOTAXI_SPD                  3.087   //m/s - 6 kt, forward or backward
+#define AUTOTAXI_TQ_TAKEOFF           0.40    //highest engine torque at which the aircraft is taking off
+#define AUTOTAXI_TQ_TAXI              0.35    //and back under which it is taxiing again
+#define AUTOTAXI_CYCLIC_MAX           0.30    //most cyclic the taxi speed is held with
+#define AUTOTAXI_HAND_TIME            0.25    //s - the hand moves the cyclic over this
+#define AUTOTAXI_BLEND_FT             50.0    //ft AGL - by here a rolling takeoff's forward key is all rate command
 
 //Force-vector debug drawing. This was previously #ifdef __A3_DEBUG__, which is dead
 //code under HEMTT - that macro is hardcoded to 0 in a lookup the #ifdef existence

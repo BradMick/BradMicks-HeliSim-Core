@@ -185,6 +185,7 @@ class CfgFunctions
         class inputKeyboard {
             file = "\bmkhs_helisim\functions\input\keyboard";
             class inputAutoPedal {R;};
+            class inputAutoTaxi {R;};
             class inputRateCommand {R;};
         };
         class mass {

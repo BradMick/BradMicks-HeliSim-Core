@@ -132,13 +132,20 @@ if (!_realistic) then {
     _reacTqScalar       = 0.0;
 };
 
+//Gross weight over the weight the tables were fitted at - 1.0 where the pack names none
+private _fitGrossMass   = _heli getVariable "bmkhs_fitGrossMass";
+private _weightRatio    = if (_fitGrossMass > 0.0) then { (_heli getVariable "bmkhs_gwt") / _fitGrossMass } else { 1.0 };
+
 //Blade lift coefficient - the same at all four positions. Air down through a lifting rotor's disc
-//costs angle of attack, taken off the collective at the blade pitch range.
+//costs angle of attack, taken off the collective at the blade pitch range - more of it the more weight is carried.
 private _liftKey        = _tableKey;
+private _weightLoss     = 0.0;
 if (_type != TAIL && {_bladeVel_75 > 1.0}) then {
-    _liftKey            = _tableKey - ((deg ((_velZ max 0.0) / _bladeVel_75)) / BLADE_PITCH_RANGE);
+    _liftKey            = _tableKey - ((sqrt _weightRatio) * (deg ((_velZ max 0.0) / _bladeVel_75)) / BLADE_PITCH_RANGE);
+    //The blades give less for the collective over the fitted weight and more under it - in with airspeed, so the hover stands
+    _weightLoss         = ([ROTOR_WEIGHT_LIFT_GAIN, ROTOR_WEIGHT_LIFT_LOSS] select (_weightRatio > 1.0)) * (_weightRatio - 1.0) * ((_velXY / VEL_ETL) min 1.0);
 };
-private _liftCoef       = [_liftCoefTable, _liftKey, _velXY] call bmkhs_fnc_mathLinearInterp2D;
+private _liftCoef       = ([_liftCoefTable, _liftKey, _velXY] call bmkhs_fnc_mathLinearInterp2D) * (1.0 - _weightLoss);
 //Axial speed along the thrust actually produced - a tail rotor's reverses with pedal
 private _axialVel       = _velZ * ([1.0, -1.0] select (_liftCoef < 0));
 

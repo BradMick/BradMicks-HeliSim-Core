@@ -60,6 +60,8 @@ private _breakoutValue = (_hh get "breakout") select ((["pos", "vel", "att"] fin
 //the breakout values for the pedals, then heading hold is not active (doing work)
 //otherwise, heading hold is ALWAYS active
 private _breakout = false;
+//Auto pedal is ignored while HOTAS pedals are in use
+private _autoPedal = bmkhs_autoPedal && {bmkhs_pedalScheme != "hotas"};
 if ((_heli getVariable "bmkhs_pedalLeftRight") <= -_breakoutValue && (_heli getVariable "bmkhs_pedalLeftRight") < 0.0) then {
     _breakout = true;
 };
@@ -83,8 +85,8 @@ if (   !_on
             _heli setVariable ["bmkhs_hdgHoldActive", false, true];
         };
         //Pedals or force trim in flight - yaw SAS; auto pedal - aut
-        private _idle = ["yaw", "aut"] select bmkhs_autoPedal;
-        if (_on && {!_onGnd} && {_turn != "hdg" || {bmkhs_autoPedal}} && {_subMode != _idle}) then {
+        private _idle = ["yaw", "aut"] select _autoPedal;
+        if (_on && {!_onGnd} && {_turn != "hdg" || {_autoPedal}} && {_subMode != _idle}) then {
             _heli setVariable ["bmkhs_hdgHoldSubMode", _idle, true];
         };
 } else {
@@ -99,7 +101,7 @@ if (   !_on
         [_pidTrn] call bmkhs_fnc_pidReset;
         call _resetYaw;
         //Heading captured once settled
-        if (_turn != "hdg" && {!bmkhs_autoPedal}) then {
+        if (_turn != "hdg" && {!_autoPedal}) then {
             _heli setVariable ["bmkhs_hdgHoldSubMode", "yaw", true];
             _heli setVariable ["bmkhs_hdgHoldTrnSettle", 0.0];
             _subMode = "yaw";
@@ -121,7 +123,7 @@ if (_heli getVariable "bmkhs_hdgHoldActive") then {
     private _out       = ["yaw", _turn] select _fast;
     private _yawRateOk = abs (_angVelZ * RAD_TO_DEG) < _exitRate;
     private _targetSubMode = switch (true) do {
-        case (bmkhs_autoPedal):                                     { "aut" };
+        case (_autoPedal):                                     { "aut" };
         case (_turn == "hdg"):                                      { "hdg" };
         case (!_attHoldOn && {_fast}):                              { _turn };
         case (_subMode == "hdg"):                                   { ["hdg", _out] select (_attHoldOn && _action) };

@@ -24,17 +24,17 @@ private _binds = createHashMapFromArray [
     ,["bmkhs_hotasRollRight",     ["hotas", "roll"]]
     ,["bmkhs_hotasPedalLeft",     ["hotas", "pedal"]]
     ,["bmkhs_hotasPedalRight",    ["hotas", "pedal"]]
-    ,["bmkhs_mousePitchForward",  ["mouse", "pitch"]]
-    ,["bmkhs_mousePitchBackward", ["mouse", "pitch"]]
-    ,["bmkhs_mouseRollLeft",      ["mouse", "roll"]]
-    ,["bmkhs_mouseRollRight",     ["mouse", "roll"]]
-    ,["bmkhs_mousePedalLeft",     ["mouse", "pedal"]]
-    ,["bmkhs_mousePedalRight",    ["mouse", "pedal"]]
+    ,["bmkhs_mouseGamepadPitchForward",  ["mouseGamepad", "pitch"]]
+    ,["bmkhs_mouseGamepadPitchBackward", ["mouseGamepad", "pitch"]]
+    ,["bmkhs_mouseGamepadRollLeft",      ["mouseGamepad", "roll"]]
+    ,["bmkhs_mouseGamepadRollRight",     ["mouseGamepad", "roll"]]
+    ,["bmkhs_mouseGamepadPedalLeft",     ["mouseGamepad", "pedal"]]
+    ,["bmkhs_mouseGamepadPedalRight",    ["mouseGamepad", "pedal"]]
 ];
 if (_name in _binds) exitWith {
     (_binds get _name) params ["_scheme", "_axis"];
     //Freelook has the mouse
-    if (_scheme == "mouse" && {freeLook}) exitWith { _heli setVariable [_name + "Out", 0.0] };
+    if (_scheme == "mouseGamepad" && {freeLook}) exitWith { _heli setVariable [_name + "Out", 0.0] };
 
     private _devices = [];
     {

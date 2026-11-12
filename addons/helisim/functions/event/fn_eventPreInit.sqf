@@ -77,16 +77,25 @@
 [
     "bmkhs_autoPedal",
     "CHECKBOX",
-    ["Keyboard Auto Pedal", "DOES NOT WORK WITH STICKY YAW! When enabled, the pedals are automatically managed by AI"],
+    ["Keyboard & Mouse/Gamepad Auto Pedal", "Keyboard and Mouse/Gamepad pedals only - ignored while HOTAS pedals are in use. DOES NOT WORK WITH STICKY YAW! When enabled, the pedals are automatically managed by AI"],
     [BMKHS_SETTINGS_CATEGORY, "Keyboard"],
     [true],
     2
 ] call CBA_fnc_addSetting;
 
 [
-    "bmkhs_mouseSense",
+    "bmkhs_autoTaxi",
+    "CHECKBOX",
+    ["Keyboard Auto Taxi", "Keyboard only. DOES NOT WORK WITH STICKY PITCH! When enabled, on the wheels the pitch keys hold a taxi speed - 6 kt forward or backward - and released they stop the aircraft"],
+    [BMKHS_SETTINGS_CATEGORY, "Keyboard"],
+    [true],
+    2
+] call CBA_fnc_addSetting;
+
+[
+    "bmkhs_mouseGamepadSense",
     "SLIDER",
-    ["Mouse Sensitivity", "Controls the sensitivity of the Mouse Pitch / Roll / Pedal binds"],
+    ["Mouse/Gamepad Sensitivity", "Controls the sensitivity of the Mouse/Gamepad Pitch / Roll / Pedal binds"],
     [BMKHS_SETTINGS_CATEGORY, "Controls"],
     [0.1, 1.0, 1.0, 1],
     2
@@ -208,17 +217,36 @@
     2
 ] call CBA_fnc_addSetting;
 
-//Auto pedal and sticky yaw cannot both own the pedals, so selecting auto pedal clears sticky yaw.
+//Auto pedal and sticky yaw cannot both own the pedals, so selecting one clears the other.
 ["bmkhs_autoPedal", {
     params ["_value"];
     if (_value) then {
         ["bmkhs_keyboardStickyYaw", false, false, true] call CBA_settings_fnc_set;
     };
 }] call CBA_settings_fnc_addEventHandler;
+["bmkhs_keyboardStickyYaw", {
+    params ["_value"];
+    if (_value) then {
+        ["bmkhs_autoPedal", false, false, true] call CBA_settings_fnc_set;
+    };
+}] call CBA_settings_fnc_addEventHandler;
+//Auto taxi and sticky pitch cannot both own the pitch keys on the wheels, the same.
+["bmkhs_autoTaxi", {
+    params ["_value"];
+    if (_value) then {
+        ["bmkhs_keyboardStickyPitch", false, false, true] call CBA_settings_fnc_set;
+    };
+}] call CBA_settings_fnc_addEventHandler;
+["bmkhs_keyboardStickyPitch", {
+    params ["_value"];
+    if (_value) then {
+        ["bmkhs_autoTaxi", false, false, true] call CBA_settings_fnc_set;
+    };
+}] call CBA_settings_fnc_addEventHandler;
 
 bmkhs_keyboardCollective         = true;
 bmkhs_keyboardCollectivePrevious = true;
-//Control scheme last used on each axis: kb | hotas | mouse
+//Control scheme last used on each axis: kb | hotas | mouseGamepad
 bmkhs_pitchScheme                = "kb";
 bmkhs_rollScheme                 = "kb";
 bmkhs_pedalScheme                = "kb";

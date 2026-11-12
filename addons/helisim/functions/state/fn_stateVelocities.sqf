@@ -39,8 +39,11 @@ private _velWindModelSpaceX  = (_velWindWorldSpaceX * cos _hdg) - (_velWindWorld
 private _velWindModelSpaceY  = (_velWindWorldSpaceX * sin _hdg) + (_velWindWorldSpaceY * cos _hdg);
 private _velWindModelSpace   = [_velWindModelSpaceX, _velWindModelSpaceY, 0.0];
 
+//Held on its wheels the aircraft is not moving - the engine reports the fall the hold takes back out each frame
+private _held                = (_heli getVariable "bmkhs_suspHeldPose") isNotEqualTo [];
+private _still               = [0.0, 0.0, 0.0];
 //Velocity model space
-(velocityModelSpace _heli) params ["_velModelSpaceX", "_velModelSpaceY", "_velModelSpaceZ"];
+([velocityModelSpace _heli, _still] select _held) params ["_velModelSpaceX", "_velModelSpaceY", "_velModelSpaceZ"];
 private _velModelSpace       = [_velModelSpaceX, _velModelSpaceY, _velModelSpaceZ] vectorDiff _velWindModelSpace;
 private _velModelSpaceNoWind = [_velModelSpaceX, _velModelSpaceY, _velModelSpaceZ];
 //Ground speed
@@ -50,13 +53,13 @@ private _vel3D               = vectorMagnitude _velModelSpace;
 //2D velocity of the aircraft - the pitot reads 0 to 180 kt
 private _vel2D               = [_velModelSpace select 1, 0.0, 180.0 * KNOTS_TO_MPS] call BIS_fnc_clamp;
 //Velocity world space
-(velocity _heli) params ["_velWorldSpaceX", "_velWorldSpaceY", "_velWorldSpaceZ"];
+([velocity _heli, _still] select _held) params ["_velWorldSpaceX", "_velWorldSpaceY", "_velWorldSpaceZ"];
 private _velWorldSpace       = [_velWorldSpaceX, _velWorldSpaceY, _velWorldSpaceZ] vectorDiff _velWindWorldSpace;
 private _velWorldSpaceNoWind = [_velWorldSpaceX, _velWorldSpaceY, _velWorldSpaceZ];
 //Climb velocity
 private _velClimb              = _velWorldSpace select 2;
 //Angular velocity in model space
-private _angVelModelSpace      = angularVelocityModelSpace _heli;
+private _angVelModelSpace      = [angularVelocityModelSpace _heli, _still] select _held;
 //Angular velocity in world space
 private _angVelWorldSpace      = angularVelocity _heli;
 //Smoothed copies for display - the aircraft flies on the values above
