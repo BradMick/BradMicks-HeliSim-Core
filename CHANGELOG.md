@@ -107,6 +107,11 @@
   are set against the AH-64D's charts at 15,000 and 21,000 lb, within 5 points of torque from 75 to
   140 kt. The fitted weight and the hover at every weight are unchanged, and no table needs
   refitting. A pack that does not declare it flies as before.
+- **Cyclic authority fades with collective.** A pack declares `cyclicFade[]` - {scale at the
+  floor, collective at the floor, collective at full} - and Core scales the cyclic lift
+  coefficients by it, so full authority at taxi power does not lift a wheel while an autorotation
+  keeps the floor. Required with `class Wheels`, a config error without it; optional otherwise,
+  and a pack that does not declare it flies as before. The AH-64D's, moved out of its pack.
 
 ### State
 - **The aircraft flies on this frame's values.** The 10-frame moving average is gone. It was a

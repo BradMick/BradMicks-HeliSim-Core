@@ -108,6 +108,16 @@ _heli setVariable ["bmkhs_controlScheme",   (["conventional", "tandem", "coaxial
 _heli setVariable ["bmkhs_nrLimits",        getArray (_config >> "nrLimits")];
 //Gross mass the rotor tables were fitted at, kg - 0 when not declared, and lift takes no weight adjustment
 _heli setVariable ["bmkhs_fitGrossMass",    getNumber (_config >> "fitGrossMass")];
+//Cyclic lift coefficients against collective - {scale at the floor, collective at the floor, collective at full}.
+//Empty when not declared, and they do not fade. Wheels declared without it is a config error.
+private _cyclicFade = getArray (_config >> "cyclicFade");
+if (count _cyclicFade != 3) then {
+    if (isClass (_config >> "Wheels")) then {
+        "[BMKHS] ROTOR CONFIG ERROR: Wheels declared but cyclicFade[] {scale at floor, collective at floor, collective at full} is missing. Cyclic authority does not fade." call bmkhs_fnc_utilConfigError;
+    };
+    _cyclicFade = [];
+};
+_heli setVariable ["bmkhs_cyclicFade",      _cyclicFade];
 //Drivetrain drag - constant torque, as a fraction of each engine's 100% torque. 0 when not declared
 _heli setVariable ["bmkhs_drivetrainDrag",  getNumber (_config >> "drivetrainDrag")];
 

@@ -821,6 +821,13 @@ deg, - forward, + aft; the masts stay where `rotation[]` puts them.
 Outside REALISTIC Core sets every tail rotor upright - pitch 0, roll 90 - so a canted tail rotor
 yaws without pitching or rolling the aircraft. Nothing to declare.
 
+**Cyclic authority fades with collective.** `cyclicFade[]` (aircraft level, beside `nrLimits[]`)
+is {scale at the floor, collective at or below which the floor applies, collective at or above
+which authority is full}. Core scales `rollLiftCoef` and `pitchLiftCoef` by it, linear between
+the two collectives, so full authority at taxi power does not lift a wheel. The floor is the
+authority left in an autorotation. Required on an aircraft that declares `class Wheels` - without
+it Core reports a config error and does not fade. Optional otherwise.
+
 ### Fitting the main rotor tables
 
 Declare the fit's mid gross weight in the pack as `fitGrossMass` (kg, beside `nrLimits[]`). The fit pins that one
@@ -1914,6 +1921,7 @@ machines, and what it means. Inputs are the config field references
 | `bmkhs_nrLimits` | array of 4 numbers, fraction | local | From config `nrLimits[]`: {normal low, normal high, high rotor, maximum} (e.g. {0.96, 1.05, 1.06, 1.10}). Core only stores it (set in `simpleRotor/fn_simpleRotorVariables.sqf`). |
 | `bmkhs_drivetrainDrag` | number, fraction | local | From config `drivetrainDrag` (aircraft level, beside `nrLimits[]`; 0 when not declared): constant drivetrain drag torque - gearboxes, shafting, accessories - as a fraction of each engine's 100% torque. Added to the rotor load in `transmission/fn_transmissionUpdate.sqf`; it only resists, so a stopped drivetrain stays stopped. |
 | `bmkhs_fitGrossMass` | number, kg | local | From config `fitGrossMass` (aircraft level, beside `nrLimits[]`; 0 when not declared): the gross mass the main rotor tables were fitted at - the mid gross weight of the fit. Core adjusts a lifting rotor's lift for gross weight from it, so torque moves with weight in forward flight: the collective lost to air coming down through the disc is multiplied by the square root of gross mass over this; above it lift falls by `ROTOR_WEIGHT_LIFT_LOSS` for each unit of excess and below it rises by `ROTOR_WEIGHT_LIFT_GAIN` for each unit short, brought in from the hover over `VEL_ETL`. The hover and the fitted weight are untouched. Not declared, lift takes no weight adjustment (set in `simpleRotor/fn_simpleRotorVariables.sqf`, read in `simpleRotor/fn_simpleRotor.sqf`) |
+| `bmkhs_cyclicFade` | array of 3 numbers | local | From config `cyclicFade[]` (aircraft level, beside `nrLimits[]`; empty when not declared): {scale at the floor, collective at the floor, collective at full}. Core scales each rotor's `rollLiftCoef` and `pitchLiftCoef` by it from `bmkhs_collectiveOutput`, linear between the two collectives and clamped. Required with `class Wheels` - a config error without it. Not declared, the coefficients do not fade (set in `simpleRotor/fn_simpleRotorVariables.sqf`, read in `simpleRotor/fn_simpleRotor.sqf`) |
 | `bmkhs_reqEngTorque` | array of numbers, per rotor, Nm at the engine shaft | 10 Hz | Rotor torque demand referred to the engine shaft, filtered. Sum it for total load. Seeded as 2 slots (set in `simpleRotor/fn_simpleRotorTorque.sqf`, or `rotor/fn_rotor.sqf` with the BET model). |
 | `bmkhs_rtrThrust` | array of numbers, per rotor, N | net on change | Rotor thrust. Only written by the BET rotor model (`bmkhs_rotorModel` = 1). With the Simple model (default) it stays 0 (set in `rotor/fn_rotor.sqf`). |
 

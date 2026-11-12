@@ -257,6 +257,13 @@ private _inflowMean     = 0.0;
 { _inflowMean = _inflowMean + _x; } forEach _bladeInflow;
 _inflowMean             = _inflowMean / 4;
 
+//Cyclic lift coefficients fade with collective, down to a floor - 1.0 where the pack declares none
+private _cyclicFade     = _heli getVariable "bmkhs_cyclicFade";
+private _cyclicScale    = if (_cyclicFade isEqualTo []) then { 1.0 } else {
+    _cyclicFade params ["_floorScale", "_collAtFloor", "_collAtFull"];
+    linearConversion [_collAtFloor, _collAtFull, _heli getVariable "bmkhs_collectiveOutput", _floorScale, 1.0, true]
+};
+
 for "_i" from 0 to 3 do {
     private _psi       = _i * 90.0;
     (_bladeFrames select _i) params ["_locRVec", "_locFVec", "_liftDir"];
@@ -271,7 +278,7 @@ for "_i" from 0 to 3 do {
     _bladeLift              = _bladeLift * _bladeScalar;
 
     //Differential lift from the controls, mixed for the control scheme
-    ([_heli, _rotor, _psi, _controls, _liftCoef] call bmkhs_fnc_simpleRotorGetLiftCoefDelta)
+    ([_heli, _rotor, _psi, _controls, _liftCoef, _cyclicScale] call bmkhs_fnc_simpleRotorGetLiftCoefDelta)
         params ["_rollLiftCoef", "_pitchLiftCoef"];
     private _liftCoefDelta  = _rollLiftCoef + _pitchLiftCoef;
     private _bladeLiftDelta = _liftCoefDelta * _bladeDynPressure * (_cycMults select _i);
