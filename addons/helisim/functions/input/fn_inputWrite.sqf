@@ -29,16 +29,16 @@ private _tailFrozen = _frozen
     || {!(_heli getVariable ["bmkhs_tailRtrDriven", true])};
 
 //The rate command, per axis: the mouse's, and the keyboard's unless sticky has it
-private _ratePitch  = _piloted && {!_frozen} && {bmkhs_pitchScheme == "mouseGamepad" || {bmkhs_pitchScheme == "kb" && {!bmkhs_keyboardStickyPitch}}};
-private _rateRoll   = _piloted && {!_frozen} && {bmkhs_rollScheme  == "mouseGamepad" || {bmkhs_rollScheme  == "kb" && {!bmkhs_keyboardStickyRoll}}};
+private _ratePitch  = _piloted && {!_frozen} && {bmkhs_pitchScheme == "mouse" || {bmkhs_pitchScheme == "kb" && {!bmkhs_keyboardStickyPitch}}};
+private _rateRoll   = _piloted && {!_frozen} && {bmkhs_rollScheme  == "mouse" || {bmkhs_rollScheme  == "kb" && {!bmkhs_keyboardStickyRoll}}};
 if (!_ratePitch) then { _heli setVariable ["bmkhs_rateCommandPitchOn", false] };
 if (!_rateRoll)  then { _heli setVariable ["bmkhs_rateCommandRollOn",  false] };
 
 //Frozen controls stay where they were
 if (_frozen) exitWith {};
 
-//Auto pedal is the feet of a player without pedals - HOTAS pedals in use, it is ignored
-private _autoPedal = bmkhs_autoPedal && {bmkhs_pedalScheme != "hotas"};
+//Auto pedal is the feet of a player without pedals - HOTAS/Gamepad pedals in use, it is ignored
+private _autoPedal = bmkhs_autoPedal && {bmkhs_pedalScheme != "hotasGamepad"};
 
 if (_piloted) then {
     private _deltaTime         = _heli getVariable "bmkhs_deltaTime";
@@ -59,22 +59,16 @@ if (_piloted) then {
     // Auto Taxi           /////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////////////////////////
     private _onGround = [_heli] call bmkhs_fnc_stateOnGround;
-    private _kbTaxi   = _ratePitch && {bmkhs_pitchScheme == "kb"} && {bmkhs_autoTaxi} && {(_heli getVariable "bmkhs_numWheels") > 0};
+    private _autoTaxi = _ratePitch && {bmkhs_autoTaxi} && {(_heli getVariable "bmkhs_numWheels") > 0};
     private _regime   = _heli getVariable "bmkhs_autoTaxiRegime";
     private _radAltFt = ((_heli getVariable "bmkhs_radAlt") * METERS_TO_FEET) max 0.0;
-    //Leaving the wheels with the forward key held is a rolling takeoff. Up to AUTOTAXI_BLEND_FT the key blends into the rate command.
-    private _climb    = _kbTaxi && {!_onGround} && {_radAltFt < AUTOTAXI_BLEND_FT}
-        && {_regime == "climb" || {_regime == "takeoff" && {_cyclicFwdAft > 0.0}}};
-    //On the wheels the pitch key is a taxi speed. Any other key held from the wheels keeps it until released.
-    private _taxi     = _kbTaxi && {!_climb} && {_onGround || {_cyclicFwdAft != 0.0 && {_regime in ["taxi", "takeoff"]}}};
-    //On the ground the mouse or gamepad is the stick itself
-    private _stick = _ratePitch && {bmkhs_pitchScheme == "mouseGamepad"} && {_onGround};
+    //Leaving the wheels with the forward key or mouse held is a rolling takeoff. Up to AUTOTAXI_BLEND_FT the key blends into the rate command.
+    private _climb    = _autoTaxi && {!_onGround} && {_radAltFt < AUTOTAXI_BLEND_FT}
+        && {_regime == "climb" || {_regime == "takeoff" && {_cyclicFwdAft >= RATECMD_DEADBAND}}};
+    //On the wheels the pitch key or mouse is a taxi speed. Any other held from the wheels keeps it until released.
+    private _taxi     = _autoTaxi && {!_climb} && {_onGround || {abs _cyclicFwdAft >= RATECMD_DEADBAND && {_regime in ["taxi", "takeoff"]}}};
     if (_taxi) then {
         _cyclicFwdAft = [_heli, _deltaTime, _cyclicFwdAft] call bmkhs_fnc_inputAutoTaxi;
-    } else {
-        _heli setVariable ["bmkhs_autoTaxiRegime", ["off", "climb"] select _climb];
-    };
-    if (_taxi || _stick) then {
         //The rate command takes the axis afresh at lift-off. Trim is neutral on the ground, as it leaves it.
         _ratePitch = false;
         _heli setVariable ["bmkhs_rateCommandPitchOn",   false];
@@ -82,6 +76,8 @@ if (_piloted) then {
         if (_onGround && {_heli getVariable "bmkhs_fmcTrimOn"}) then {
             _heli setVariable ["bmkhs_forceTrimPosPitch", [_heli getVariable "bmkhs_forceTrimPosPitch", 0.0, _deltaTime, RATECMD_TRIM_TIME] call bmkhs_fnc_utilSmooth];
         };
+    } else {
+        _heli setVariable ["bmkhs_autoTaxiRegime", ["off", "climb"] select _climb];
     };
     /////////////////////////////////////////////////////////////////////////////////////////////
     // Rate Command        /////////////////////////////////////////////////////////////////////
@@ -117,6 +113,24 @@ if (_piloted) then {
                 _pedalLeftRight  = 0.0;
            };
     };
+    /////////////////////////////////////////////////////////////////////////////////////////////
+    // Auto Taxi Roll       /////////////////////////////////////////////////////////////////////
+    /////////////////////////////////////////////////////////////////////////////////////////////
+    //Rolling on the wheels with the roll key or mouse at rest, the hand holds the roll rate at zero:
+    //cyclic into a turn as the aircraft leans out of it, and back off as it stands up
+    private _pidTaxiRoll = _heli getVariable "bmkhs_pid_autoTaxiRoll";
+    private _taxiRoll    = _heli getVariable "bmkhs_autoTaxiRollOut";
+    if (_rateRoll && {bmkhs_autoTaxi} && {_onGround} && {(_heli getVariable "bmkhs_numWheels") > 0}
+        && {abs (_heli getVariable "bmkhs_inputRoll") < RATECMD_DEADBAND}
+        && {(_heli getVariable "bmkhs_gndSpeed") >= AUTOPEDAL_TAXI_SPD}) then {
+        //Roll rate + left, the cyclic's own sense
+        _taxiRoll = [_pidTaxiRoll, _deltaTime, 0.0, deg ((_heli getVariable "bmkhs_angVelModelSpace") select 1)] call bmkhs_fnc_pidRun;
+    } else {
+        [_pidTaxiRoll] call bmkhs_fnc_pidReset;
+        _taxiRoll = [_taxiRoll, 0.0, _deltaTime, AUTOTAXI_HAND_TIME] call bmkhs_fnc_utilSmooth;
+    };
+    _heli setVariable ["bmkhs_autoTaxiRollOut", _taxiRoll];
+    _cyclicLeftRight = [_cyclicLeftRight + _taxiRoll, -1.0, 1.0] call BIS_fnc_clamp;
     /////////////////////////////////////////////////////////////////////////////////////////////
     // Cyclic and Pedals    /////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////////////////////////

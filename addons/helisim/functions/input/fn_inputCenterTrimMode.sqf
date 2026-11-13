@@ -20,8 +20,8 @@ if (bmkhs_cyclicCenterTrimMode) then {
     };
 };
 
-//Not the feet - auto pedal, unless HOTAS pedals are in use
-if (bmkhs_pedalCenterTrimMode && {!(bmkhs_autoPedal && {bmkhs_pedalScheme != "hotas"})}) then {
+//Not the feet - auto pedal, unless HOTAS/Gamepad pedals are in use
+if (bmkhs_pedalCenterTrimMode && {!(bmkhs_autoPedal && {bmkhs_pedalScheme != "hotasGamepad"})}) then {
     if (_pedalLeftRight > CENTER_TRIM_VAL || _pedalLeftRight < -CENTER_TRIM_VAL) then {
         //systemChat format ["Yaw Locked out! Return Yaw to Center!"];
         _heli setVariable ["bmkhs_flightControlLockOut", true];

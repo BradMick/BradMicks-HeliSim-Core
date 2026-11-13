@@ -18,28 +18,29 @@
   `bmkhs_wheelCompression` rides in the net state, so the answer holds on the crew's machines.
 
 ### Flight controls
-- **Auto pedal taxis.** A fourth regime, `taxi`, in and out on the squat switch. Rolling, it holds
-  the nose on the direction of travel - the tail when backing up - and stopped, the feet rest at
-  neutral. The pilot's pedal is scaled by weight on wheels, half at static load and full as the
+- **Auto pedal taxis.** A fourth regime, `taxi`, in and out on the squat switch. Under 10 kt it
+  holds the heading, as the hover regime does, against the torque as the collective comes up;
+  above 10 kt, on a takeoff or landing roll, it holds the nose on the direction of travel. Stopped
+  with the collective down, the feet rest at neutral. The pilot's pedal is scaled by weight on wheels, half at static load and full as the
   squat strut unloads, so pedal turns on the ground are steady and a rolling takeoff or landing
   hands the pedal across the stroke rather than at the switch. Leaving the wheels it drops into
   heading hold or nose-to-tail by speed, through the same hand-off as the other regimes. Gains
-  are the aircraft's `pidAutoPedalTaxi[]`, required when the aircraft declares wheels - a config
-  error names it when missing - and not needed otherwise.
+  are the aircraft's `pidAutoPedalTaxiHdg[]` (heading) and `pidAutoPedalTaxi[]` (direction of
+  travel), both required when the aircraft declares wheels - a config error names the one
+  missing - and not needed otherwise.
 - **Auto pedal moves like feet.** The foot's speed is set by how far it has to go - a nudge is
   brisk, a full stroke takes about a second - fitted to measured pedal work, and it stops on the
   pedal without overshooting. The pilot's pedal key rides the same foot, so a key press is a
   pedal stroke rather than a step to full pedal, in every regime. The old critically damped foot
   and its speed state are gone.
 - **A set of binds per control scheme.** Cyclic and pedals are now bound separately for keyboard,
-  HOTAS and mouse or gamepad - `Keyboard Pitch Forward`, `HOTAS Pitch Forward`,
-  `Mouse/Gamepad Pitch Forward` and so on, for pitch, roll and pedal. Whichever scheme was last used on an axis has that axis, as the
+  mouse and HOTAS or gamepad - `Keyboard Pitch Forward`, `Mouse Pitch Forward`,
+  `HOTAS/Gamepad Pitch Forward` and so on, for pitch, roll and pedal. Whichever scheme was last used on an axis has that axis, as the
   collective already works, so any mix flies. **The old Cyclic / Pedal binds are gone: rebind
-  HOTAS and mouse axes on the new binds.** The keyboard binds default to W/S/A/D and Q/E.
-- **Mouse as Joystick setting removed.** Binding the Mouse/Gamepad binds is the switch.
-  Mouse/Gamepad Sensitivity and the freelook cut-out act only on an axis those binds have, never
-  on keyboard or HOTAS input. The setting's variable is now `bmkhs_mouseGamepadSense`, so a saved
-  sensitivity resets to 1.0.
+  HOTAS, gamepad and mouse axes on the new binds.** The keyboard binds default to W/S/A/D and Q/E.
+- **Mouse as Joystick setting removed.** Binding the Mouse binds is the switch.
+  Mouse Sensitivity and the freelook cut-out act only on an axis those binds have, never
+  on keyboard, HOTAS or gamepad input.
 - **Input is read, then output.** `bmkhs_fnc_inputUpdate` is now two steps: `bmkhs_fnc_inputRead`
   reads the player and publishes `bmkhs_inputPitch/Roll/Pedal/Collective`, and
   `bmkhs_fnc_inputWrite` runs the assists and the actuator lag, sets the control positions and
@@ -75,11 +76,11 @@
   nose-to-tail, ball centred, taxi. On the wheels a held pedal is still the pedal itself. The foot
   now moves the primary pedal, not the yaw trim; once settled its pedal is moved into the trim, as
   the cyclic's is. Gains are the aircraft's `pidRateCommandYaw[]` {kp, ki, kd, limit}, **required
-  in every pack**. The setting is now "Keyboard & Mouse/Gamepad Auto Pedal". It is ignored
-  while the HOTAS pedal binds have the pedals - the pedals are then the pilot's and the FMC's, as
+  in every pack**. The setting is now "Keyboard & Mouse Auto Pedal". It is ignored
+  while the HOTAS/Gamepad pedal binds have the pedals - the pedals are then the pilot's and the FMC's, as
   with it off - and it takes the pedal back from where it is when a key or the mouse does.
   Selecting sticky yaw clears it, as selecting it clears sticky yaw.
-- **Keyboard auto taxi.** On the wheels a pitch key was a rate of pitch the aircraft could not give
+- **Keyboard and mouse auto taxi.** On the wheels a pitch key or the mouse was a rate of pitch the aircraft could not give
   on its gear, and it put in full cyclic and tipped the aircraft. On the wheels the forward key now
   holds 6 kt of taxi speed, the back key 6 kt backward, and released the aircraft is brought to a
   stop; parking brake set, the cyclic is neutral. Above 40% torque the aircraft is taking off (taxi
@@ -88,11 +89,12 @@
   backs off as the squat strut unloads. Lifting off with the forward key held is a rolling takeoff:
   up to 50 ft the key blends from that hold into the rate command's nose-down rate, by the square
   of the height, so the key does not change meaning in one step. The setting is
-  "Keyboard Auto Taxi", on by default, at both realism levels; it and sticky pitch clear each
+  "Keyboard & Mouse Auto Taxi", on by default, at both realism levels; it and sticky pitch clear each
   other. Gains are the aircraft's `pidAutoTaxi[]` {kp, ki, kd, limit}, cyclic per m/s, **required
-  in every pack with wheels**. Roll on the ground is unchanged.
-- **On the ground the mouse or gamepad's pitch is the stick itself.** Its travel is the cyclic
-  position, as a joystick's is; the rate command takes it at lift-off.
+  in every pack with wheels**. Rolling with the roll key or mouse at rest it also holds the roll rate
+  at zero, so the cyclic goes into a turn as the aircraft leans out of it: `pidAutoTaxiRoll[]`
+  {kp, ki, kd, limit}, cyclic per deg/s, required the same way. A roll key on the ground is
+  unchanged.
 - **Sticky keys are the keyboard's only.** Sticky pitch, roll and yaw apply only while the keyboard
   has that axis, and each turns the rate command off on its axis. A keyboard or mouse axis takes
   no force trim.

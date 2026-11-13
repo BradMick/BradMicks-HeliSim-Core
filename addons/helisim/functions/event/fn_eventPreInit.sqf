@@ -77,7 +77,7 @@
 [
     "bmkhs_autoPedal",
     "CHECKBOX",
-    ["Keyboard & Mouse/Gamepad Auto Pedal", "Keyboard and Mouse/Gamepad pedals only - ignored while HOTAS pedals are in use. DOES NOT WORK WITH STICKY YAW! When enabled, the pedals are automatically managed by AI"],
+    ["Keyboard & Mouse Auto Pedal", "Keyboard and Mouse pedals only - ignored while HOTAS/Gamepad pedals are in use. DOES NOT WORK WITH STICKY YAW! When enabled, the pedals are automatically managed by AI"],
     [BMKHS_SETTINGS_CATEGORY, "Keyboard"],
     [true],
     2
@@ -86,16 +86,16 @@
 [
     "bmkhs_autoTaxi",
     "CHECKBOX",
-    ["Keyboard Auto Taxi", "Keyboard only. DOES NOT WORK WITH STICKY PITCH! When enabled, on the wheels the pitch keys hold a taxi speed - 6 kt forward or backward - and released they stop the aircraft"],
+    ["Keyboard & Mouse Auto Taxi", "Keyboard and Mouse only. DOES NOT WORK WITH STICKY PITCH! When enabled, on the wheels the pitch keys or mouse hold a taxi speed - 6 kt forward or backward - and released they stop the aircraft"],
     [BMKHS_SETTINGS_CATEGORY, "Keyboard"],
     [true],
     2
 ] call CBA_fnc_addSetting;
 
 [
-    "bmkhs_mouseGamepadSense",
+    "bmkhs_mouseSense",
     "SLIDER",
-    ["Mouse/Gamepad Sensitivity", "Controls the sensitivity of the Mouse/Gamepad Pitch / Roll / Pedal binds"],
+    ["Mouse Sensitivity", "Controls the sensitivity of the Mouse Pitch / Roll / Pedal binds"],
     [BMKHS_SETTINGS_CATEGORY, "Controls"],
     [0.1, 1.0, 1.0, 1],
     2
@@ -246,7 +246,7 @@
 
 bmkhs_keyboardCollective         = true;
 bmkhs_keyboardCollectivePrevious = true;
-//Control scheme last used on each axis: kb | hotas | mouseGamepad
+//Control scheme last used on each axis: kb | hotasGamepad | mouse
 bmkhs_pitchScheme                = "kb";
 bmkhs_rollScheme                 = "kb";
 bmkhs_pedalScheme                = "kb";

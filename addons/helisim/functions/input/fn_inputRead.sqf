@@ -65,9 +65,9 @@ if (!_isPlaying) then {
 };
 //Freelook has the mouse
 if (freeLook) then {
-    if (bmkhs_pitchScheme == "mouseGamepad") then { _cyclicFwdAft    = 0.0 };
-    if (bmkhs_rollScheme  == "mouseGamepad") then { _cyclicLeftRight = 0.0 };
-    if (bmkhs_pedalScheme == "mouseGamepad") then { _pedalLeftRight  = 0.0 };
+    if (bmkhs_pitchScheme == "mouse") then { _cyclicFwdAft    = 0.0 };
+    if (bmkhs_rollScheme  == "mouse") then { _cyclicLeftRight = 0.0 };
+    if (bmkhs_pedalScheme == "mouse") then { _pedalLeftRight  = 0.0 };
 };
 
 //Cyclic Pitch
@@ -134,9 +134,9 @@ if (bmkhs_keyboardStickyYaw && {bmkhs_pedalScheme == "kb"} && {!bmkhs_autoPedal}
 };
 
 //Mouse sensitivity, on the axes the mouse has
-if (bmkhs_pitchScheme == "mouseGamepad") then { _cyclicFwdAft    = _cyclicFwdAft    * bmkhs_mouseGamepadSense };
-if (bmkhs_rollScheme  == "mouseGamepad") then { _cyclicLeftRight = _cyclicLeftRight * bmkhs_mouseGamepadSense };
-if (bmkhs_pedalScheme == "mouseGamepad") then { _pedalLeftRight  = _pedalLeftRight  * bmkhs_mouseGamepadSense };
+if (bmkhs_pitchScheme == "mouse") then { _cyclicFwdAft    = _cyclicFwdAft    * bmkhs_mouseSense };
+if (bmkhs_rollScheme  == "mouse") then { _cyclicLeftRight = _cyclicLeftRight * bmkhs_mouseSense };
+if (bmkhs_pedalScheme == "mouse") then { _pedalLeftRight  = _pedalLeftRight  * bmkhs_mouseSense };
 
 //Zeus has the screen
 if (!_isZeus) then {

@@ -56,12 +56,13 @@ private _cols = [
     "pRateDps", "rRateDps", "yRateDps",
     "tq1", "tq2", "np1", "np2", "nr",
     "cyc", "cycLR", "pedal", "coll", "ftPitch", "ftRoll", "ftYaw", "pedalInL", "pedalInR",
+    "pitchScheme", "rollScheme", "pedalScheme",
     "sasP", "sasR", "sasY", "attP", "attR", "hdgY", "altC", "mixP", "mixR", "mixY",
     "sasAv", "attAv", "altAv", "hdgAv", "fdAv",
     "attOn", "attSub", "altOn", "altSub", "hdgOn", "hdgSub", "ftInt",
     "apOn", "apMode", "apHdgSet", "apHdg", "apPos",
     "rcPitchOn", "rcPitchRef", "rcPitchCmd", "rcRollOn", "rcRollRef", "rcRollCmd", "rcYawOn", "rcYawCmd",
-    "atMode", "atSpdKts", "atCyc",
+    "atMode", "atSpdKts", "atCyc", "atRoll",
     "fdModes", "fdFpm", "fdWantPitch", "fdWantBank", "fdTqRoom",
     "engOn", "engState", "engOverspeed", "engTqTimer", "lct", "massKg", "com", "bc", "stabDeg", "forces"
 ] + (_fdTargets apply {"tgt_" + _x})
@@ -142,6 +143,8 @@ private _row = [
     (_heli getVariable "bmkhs_forceTrimPosPitch") call _f, (_heli getVariable "bmkhs_forceTrimPosRoll") call _f,
     (_heli getVariable "bmkhs_forceTrimPosYaw") call _f,
     (_heli getVariable ("bmkhs_" + bmkhs_pedalScheme + "PedalLeftOut")) call _f, (_heli getVariable ("bmkhs_" + bmkhs_pedalScheme + "PedalRightOut")) call _f,
+    //The control scheme that has each axis: kb / hotasGamepad / mouse
+    bmkhs_pitchScheme, bmkhs_rollScheme, bmkhs_pedalScheme,
     (_heli getVariable "bmkhs_fmcSasPitchOut") call _f, (_heli getVariable "bmkhs_fmcSasRollOut") call _f,
     (_heli getVariable "bmkhs_fmcSasYawOut") call _f,
     (_heli getVariable "bmkhs_fmcAttHoldCycPitchOut") call _f, (_heli getVariable "bmkhs_fmcAttHoldCycRollOut") call _f,
@@ -156,7 +159,7 @@ private _row = [
     str ((_heli getVariable "bmkhs_hdgHoldActive") call _b), _heli getVariable "bmkhs_hdgHoldSubMode",
     str ((_heli getVariable "bmkhs_forceTrimInterupted") call _b),
     //Auto pedal: on, regime (hdg / ntt / aero), hover heading captured, that heading, the foot's pedal
-    str ((bmkhs_autoPedal && {bmkhs_pedalScheme != "hotas"}) call _b), _heli getVariable ["bmkhs_autoPedalRegime", ""],
+    str ((bmkhs_autoPedal && {bmkhs_pedalScheme != "hotasGamepad"}) call _b), _heli getVariable ["bmkhs_autoPedalRegime", ""],
     str ((_heli getVariable ["bmkhs_autoPedalHdgSet", false]) call _b),
     (_heli getVariable ["bmkhs_autoPedalHdg", 0]) toFixed 1, (_heli getVariable ["bmkhs_autoPedalPos", 0]) call _f,
     //Keyboard rate command: has the axis, the attitude it holds (deg), the rate it asks for (deg/s, + nose down / left)
@@ -165,9 +168,9 @@ private _row = [
     str ((_heli getVariable "bmkhs_rateCommandRollOn") call _b), (_heli getVariable "bmkhs_rateCommandRollRef") toFixed 2,
     (_heli getVariable "bmkhs_rateCommandRollRate") toFixed 2,
     str ((_heli getVariable "bmkhs_rateCommandYawOn") call _b), (_heli getVariable "bmkhs_rateCommandYawRate") toFixed 2,
-    //Auto taxi: regime (off / taxi / takeoff / climb), the taxi speed it holds (kt, + forward), its cyclic
+    //Auto taxi: regime (off / taxi / takeoff / climb), the taxi speed it holds (kt, + forward), its cyclic, its roll cyclic (+ left)
     _heli getVariable "bmkhs_autoTaxiRegime", ((_heli getVariable "bmkhs_autoTaxiSpd") * MPS_TO_KNOTS) toFixed 1,
-    (_heli getVariable "bmkhs_autoTaxiOut") call _f,
+    (_heli getVariable "bmkhs_autoTaxiOut") call _f, (_heli getVariable "bmkhs_autoTaxiRollOut") call _f,
     ((_fdModes select {_heli getVariable ["bmkhs_fd_" + _x, false]}) joinString "|"),
     (_climb * MPS_TO_FPM) toFixed 0, _wantPitch toFixed 2, _wantBank toFixed 2, _tqRoom call _f,
     str (isEngineOn _heli call _b),

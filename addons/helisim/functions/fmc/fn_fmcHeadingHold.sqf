@@ -60,8 +60,8 @@ private _breakoutValue = (_hh get "breakout") select ((["pos", "vel", "att"] fin
 //the breakout values for the pedals, then heading hold is not active (doing work)
 //otherwise, heading hold is ALWAYS active
 private _breakout = false;
-//Auto pedal is ignored while HOTAS pedals are in use
-private _autoPedal = bmkhs_autoPedal && {bmkhs_pedalScheme != "hotas"};
+//Auto pedal is ignored while HOTAS/Gamepad pedals are in use
+private _autoPedal = bmkhs_autoPedal && {bmkhs_pedalScheme != "hotasGamepad"};
 if ((_heli getVariable "bmkhs_pedalLeftRight") <= -_breakoutValue && (_heli getVariable "bmkhs_pedalLeftRight") < 0.0) then {
     _breakout = true;
 };

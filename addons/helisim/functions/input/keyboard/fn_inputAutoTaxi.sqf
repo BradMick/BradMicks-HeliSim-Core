@@ -2,8 +2,8 @@
 Function: bmkhs_fnc_inputAutoTaxi
 
 Description:
-    Auto taxi - the keyboard's pitch on the wheels. A key is fully down or fully up, so on the
-    wheels it is not the cyclic: it asks for a taxi speed and the cyclic is moved to hold it.
+    Auto taxi - the keyboard's and the mouse's pitch on the wheels. On the wheels the key or the
+    mouse is not the cyclic: it asks for a taxi speed and the cyclic is moved to hold it.
 
     Two regimes, on the highest engine torque, with a gap so the boundary cannot chatter:
         TAXI    - the forward key holds AUTOTAXI_SPD forward, the back key the same backward,
@@ -20,7 +20,7 @@ Description:
 Parameters:
     _heli      - The helicopter [Object].
     _deltaTime - Frame time [Number].
-    _key       - The pitch key, + forward [Number].
+    _key       - The pitch key or mouse travel, + forward [Number].
 
 Returns:
     The cyclic, + forward [Number].
@@ -60,7 +60,7 @@ _weight = _weight min 1.0;
 private _brakeCtl = (_heli getVariable "bmkhs_wheelSettings") get "brakeControl";
 private _brake    = _brakeCtl isNotEqualTo "" && {_heli getVariable format ["bmkhs_%1On", _brakeCtl]};
 
-//The key: forward, back or released
+//The key or mouse: forward, back or released
 private _dir = 0.0;
 if (abs _key >= RATECMD_DEADBAND) then { _dir = [1.0, -1.0] select (_key < 0.0) };
 

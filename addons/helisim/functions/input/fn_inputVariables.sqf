@@ -19,7 +19,7 @@ params ["_heli", "_config"];
     {
         _heli setVariable ["bmkhs_" + _scheme + _x + "Out", 0.0];
     } forEach ["PitchForward", "PitchBackward", "RollLeft", "RollRight", "PedalLeft", "PedalRight"];
-} forEach ["kb", "hotas", "mouseGamepad"];
+} forEach ["kb", "hotasGamepad", "mouse"];
 //Collective input
 _heli setVariable ["bmkhs_heliCollectiveRaiseOut", 0.0];
 _heli setVariable ["bmkhs_heliCollectiveLowerOut", 0.0];
@@ -83,6 +83,16 @@ if (count _taxiGains != 4) then {
     _taxiGains = [0, 0, 0, 0];
 };
 _heli setVariable ["bmkhs_pid_autoTaxi", _taxiGains call bmkhs_fnc_pidCreate];
+//Its roll, rolling on the wheels: the roll rate held at zero
+_heli setVariable ["bmkhs_autoTaxiRollOut",    0.0];     //its roll cyclic, + left
+private _taxiRollGains = getArray (_config >> "pidAutoTaxiRoll");
+if (count _taxiRollGains != 4) then {
+    if (isClass (_config >> "Wheels")) then {
+        "[BMKHS] INPUT CONFIG ERROR: Wheels declared but pidAutoTaxiRoll[] {kp, ki, kd, limit} is missing. Auto taxi does not level the aircraft in a turn." call bmkhs_fnc_utilConfigError;
+    };
+    _taxiRollGains = [0, 0, 0, 0];
+};
+_heli setVariable ["bmkhs_pid_autoTaxiRoll", _taxiRollGains call bmkhs_fnc_pidCreate];
 
 //Auto pedal
 _heli setVariable ["bmkhs_autoPedalHdg",       getDir _heli];

@@ -5,8 +5,10 @@ Description:
     Auto pedal - an input assist that works the pedals for the pilot, like a pilot's feet.
 
     Four regimes, selected by hysteresis:
-        TAXI (on the wheels) - the nose on the direction of travel, forwards or backwards; the
-                               feet rest at neutral while stopped. In and out on the squat switch.
+        TAXI (on the wheels) - under the hover gate, hold HEADING as the hover does, against the
+                               torque as the collective comes up; above it, the nose on the
+                               direction of travel. Stopped with the collective down the feet
+                               rest at neutral. In and out on the squat switch.
         HDG  (hover)        - hold HEADING (deg); the ball is meaningless without airflow
         NTT  (accel, <50ft) - NOSE-TO-TAIL: drive the ground track's angle off the nose to zero
         AERO (>50ft AGL)    - AERODYNAMIC: drive lateral accel (beta_g) to zero, ball centred
@@ -38,6 +40,7 @@ Author:
     BradMick
 ---------------------------------------------------------------------------- */
 #include "\bmkhs_helisim\functions\core\core.hpp"
+#include "\bmkhs_helisim\functions\suspension\suspension.hpp"
 
 params ["_heli", "_deltaTime", "_pedalLeftRight"];
 
@@ -45,6 +48,7 @@ private _pidAutoPedalHdg  = _heli getVariable "bmkhs_pid_autoPedalHdg";
 private _pidAutoPedalNtt  = _heli getVariable "bmkhs_pid_autoPedalNtt";
 private _pidAutoPedalAero = _heli getVariable "bmkhs_pid_autoPedalAero";
 private _pidAutoPedalTaxi = _heli getVariable "bmkhs_pid_autoPedalTaxi";
+private _pidAutoPedalTaxiHdg = _heli getVariable "bmkhs_pid_autoPedalTaxiHdg";
 
 private _hdgOut     = 0.0;
 private _nttOut     = 0.0;
@@ -75,7 +79,8 @@ if (_regime != "taxi" && _onWheels) then {
 };
 if (_regime == "taxi" && !_onWheels) then {
     _regime = ["hdg", "ntt"] select (_velFwd >= AUTOPEDAL_NTT_SPD);
-    [_pidAutoPedalTaxi] call bmkhs_fnc_pidReset;
+    [_pidAutoPedalTaxi]    call bmkhs_fnc_pidReset;
+    [_pidAutoPedalTaxiHdg] call bmkhs_fnc_pidReset;
 };
 //The hover gate and the regime switch are the SAME threshold, or nothing works in between.
 if (_regime == "hdg" && _velFwd >= AUTOPEDAL_NTT_SPD) then {
@@ -139,10 +144,14 @@ _heli setVariable ["bmkhs_autoPedalSprung", _sprung];
 private _engaged    = _onPedals && !_sprung;
 private _wasEngaged = _rawPrev > 0.01 && !_sprungPrev;
 
-//The setpoint tracks the aircraft while the pilot is on the pedals AND at any speed above
-//the hover gate - above it the slip channels own the axis, as they do on the wheels. Below
-//it, the hover heading holds.
-if (_engaged || _velFwd > AUTOPEDAL_NTT_SPD || _regime == "taxi") then {
+//Stopped on the wheels with the collective down, the feet rest at neutral
+private _taxiRest = _regime == "taxi"
+    && {(_heli getVariable "bmkhs_gndSpeed") < AUTOPEDAL_TAXI_SPD}
+    && {(_heli getVariable "bmkhs_collectiveOutput") <= SUSP_SLEEP_COLLECTIVE};
+
+//The setpoint tracks the aircraft while the pilot is on the pedals, at any speed above the hover
+//gate - there the slip channels own the axis - and while the feet rest. Otherwise the heading holds.
+if (_engaged || _velFwd > AUTOPEDAL_NTT_SPD || _taxiRest) then {
     _desiredHdg = getDir _heli;
     _heli setVariable ["bmkhs_autoPedalHdg", _desiredHdg];
     _heli setVariable ["bmkhs_autoPedalHdgSet", !_engaged];   //slowing into the hover holds at once
@@ -176,9 +185,8 @@ private _trackDeg = if (_gndVelXY > 0.0) then { asin (_gndVelX / _gndVelXY) } el
 private _hdgError  = [_curHdg - _desiredHdg] call CBA_fnc_simplifyAngle180;
 private _nttError  = 0.0 - _trackDeg;
 private _aeroError = 0.0 - _betaG;
-//On the wheels the direction of travel may be aft: the track is then held on the tail, and the
-//pedal that closes the angle is the opposite one.
-private _taxiError = _nttError * ([1, -1] select (_velFwd < 0.0));
+//On the wheels a pilot does not chase a fraction of a degree of heading
+private _taxiHdgError = _hdgError;
 
 //PILOT DEADBAND. Subtracting the band rather than zeroing inside it keeps the response
 //continuous - the correction just starts from zero once the error is worth correcting.
@@ -192,10 +200,10 @@ if (abs _nttError <= AUTOPEDAL_NTT_DEADBAND_DEG) then {
 } else {
     _nttError = _nttError - (AUTOPEDAL_NTT_DEADBAND_DEG * ([1, -1] select (_nttError < 0)));
 };
-if (abs _taxiError <= AUTOPEDAL_NTT_DEADBAND_DEG) then {
-    _taxiError = 0.0;
+if (abs _taxiHdgError <= AUTOPEDAL_NTT_DEADBAND_DEG) then {
+    _taxiHdgError = 0.0;
 } else {
-    _taxiError = _taxiError - (AUTOPEDAL_NTT_DEADBAND_DEG * ([1, -1] select (_taxiError < 0)));
+    _taxiHdgError = _taxiHdgError - (AUTOPEDAL_NTT_DEADBAND_DEG * ([1, -1] select (_taxiHdgError < 0)));
 };
 
 //Hand-off: a loop fresh from reset starts from the pedal the foot holds - nothing moves at the switch
@@ -232,13 +240,27 @@ switch (_regime) do {
         _aeroOut = [_aeroOut, -1.0, 1.0] call BIS_fnc_clamp;
     };
     case "taxi": {
-        //Stopped, the feet rest at neutral; the loop waits reset so it starts from the foot when the roll begins
-        if (_gndVelXY < AUTOPEDAL_TAXI_SPD) then {
-            [_pidAutoPedalTaxi] call bmkhs_fnc_pidReset;
-        } else {
-            [_pidAutoPedalTaxi, -_taxiError] call _takeOver;
-            _taxiOut = [_pidAutoPedalTaxi, _deltaTime, 0.0, _taxiError] call bmkhs_fnc_pidRun;
+        if (_velFwd > AUTOPEDAL_NTT_SPD) then {
+            //A takeoff or landing roll: the nose on the direction of travel
+            [_pidAutoPedalTaxiHdg] call bmkhs_fnc_pidReset;
+            [_pidAutoPedalTaxi, -_nttError] call _takeOver;
+            _taxiOut = [_pidAutoPedalTaxi, _deltaTime, 0.0, _nttError] call bmkhs_fnc_pidRun;
             _taxiOut = [_taxiOut, -1.0, 1.0] call BIS_fnc_clamp;
+        } else {
+            [_pidAutoPedalTaxi] call bmkhs_fnc_pidReset;
+            if (_taxiRest) then {
+                //Resting, the loop waits reset so it starts from the foot when the hold begins
+                [_pidAutoPedalTaxiHdg] call bmkhs_fnc_pidReset;
+            } else {
+                if (_heli getVariable "bmkhs_autoPedalHdgSet") then {
+                    [_pidAutoPedalTaxiHdg, -_taxiHdgError] call _takeOver;
+                    _taxiOut = [_pidAutoPedalTaxiHdg, _deltaTime, 0.0, _taxiHdgError] call bmkhs_fnc_pidRun;
+                    _taxiOut = [_taxiOut, -1.0, 1.0] call BIS_fnc_clamp;
+                } else {
+                    //Ease toward the pedal that stops the yaw, as in the hover
+                    _taxiOut = [_trim - AUTOPEDAL_FEEL * _yawRate, -1.0, 1.0] call BIS_fnc_clamp;
+                };
+            };
         };
     };
 };
@@ -265,6 +287,7 @@ if (_engaged) then {
     [_pidAutoPedalNtt]  call bmkhs_fnc_pidReset;
     [_pidAutoPedalAero] call bmkhs_fnc_pidReset;
     [_pidAutoPedalTaxi] call bmkhs_fnc_pidReset;
+    [_pidAutoPedalTaxiHdg] call bmkhs_fnc_pidReset;
 };
 private _toGo = _target - _pos;
 private _rate = [AUTOPEDAL_FOOT_RATE_PER * abs _toGo, AUTOPEDAL_FOOT_RATE_MIN, AUTOPEDAL_FOOT_RATE_MAX] call BIS_fnc_clamp;

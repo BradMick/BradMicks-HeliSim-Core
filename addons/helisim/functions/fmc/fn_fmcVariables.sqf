@@ -149,6 +149,15 @@ if (count _taxiGains != 4) then {
     _taxiGains = [0, 0, 0, 0];
 };
 _heli setVariable ["bmkhs_pid_autoPedalTaxi", _taxiGains call bmkhs_fnc_pidCreate];
+//The heading hold on the wheels, the same way
+private _taxiHdgGains = getArray (_config >> "pidAutoPedalTaxiHdg");
+if (count _taxiHdgGains != 4) then {
+    if (isClass (_config >> "Wheels")) then {
+        "[BMKHS] FMC CONFIG ERROR: Wheels declared but pidAutoPedalTaxiHdg[] {kp, ki, kd, limit} is missing. Auto pedal cannot hold the heading on the wheels." call bmkhs_fnc_utilConfigError;
+    };
+    _taxiHdgGains = [0, 0, 0, 0];
+};
+_heli setVariable ["bmkhs_pid_autoPedalTaxiHdg", _taxiHdgGains call bmkhs_fnc_pidCreate];
 
 //FMC output state
 _heli setVariable ["bmkhs_fmcAttHoldCycPitchOut", 0.0];

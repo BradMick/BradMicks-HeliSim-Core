@@ -17,8 +17,8 @@ params ["_heli"];
 if (currentPilot _heli != player || !local _heli) exitWith {};
 
 //A keyboard or mouse axis is not trimmed from the stick. The rate command keeps its own trim; sticky has none.
-private _noTrimPitch = bmkhs_pitchScheme in ["kb", "mouseGamepad"];
-private _noTrimRoll  = bmkhs_rollScheme  in ["kb", "mouseGamepad"];
+private _noTrimPitch = bmkhs_pitchScheme in ["kb", "mouse"];
+private _noTrimRoll  = bmkhs_rollScheme  in ["kb", "mouse"];
 
 //Cyclic pitch trim
 private _curCyclicFwdAft  = (_heli getVariable "bmkhs_cyclicFwdAft");
@@ -42,8 +42,8 @@ if !(_heli getVariable "bmkhs_rateCommandRollOn") then {
         _heli setVariable ["bmkhs_forceTrimPosRoll", _rollTrimVal];
     };
 };
-//Pedal trim - the feet keep their own (auto pedal, unless HOTAS pedals are in use)
-if !(bmkhs_autoPedal && {bmkhs_pedalScheme != "hotas"}) then {
+//Pedal trim - the feet keep their own (auto pedal, unless HOTAS/Gamepad pedals are in use)
+if !(bmkhs_autoPedal && {bmkhs_pedalScheme != "hotasGamepad"}) then {
     private _curPedalLeftRight  = (_heli getVariable "bmkhs_pedalLeftRight");
     private _prevPedalLeftRight = _heli getVariable "bmkhs_forceTrimPosYaw";
     private _pedalTrimVal       = [_curPedalLeftRight, _prevPedalLeftRight] call bmkhs_fnc_inputGetInterp;

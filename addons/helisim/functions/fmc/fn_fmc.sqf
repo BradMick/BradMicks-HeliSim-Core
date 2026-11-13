@@ -49,7 +49,7 @@ _attHoldCycPitchOut = _axes select 0;
 _attHoldCycRollOut  = _axes select 1;
 _hdgHoldPedalYawOut = _axes select 2;
 
-if (bmkhs_springlessPedals || {bmkhs_autoPedal && {bmkhs_pedalScheme != "hotas"}}) then {
+if (bmkhs_springlessPedals || {bmkhs_autoPedal && {bmkhs_pedalScheme != "hotasGamepad"}}) then {
     _hdgHoldPedalYawOut = 0.0;
 };
 

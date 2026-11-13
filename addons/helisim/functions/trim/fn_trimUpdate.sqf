@@ -22,8 +22,8 @@ private _trim = _heli getVariable "bmkhs_trim";
 private _on   = _heli getVariable "bmkhs_fmcTrimOn";
 
 //A keyboard or mouse axis takes no force trim (fn_trimForceSet)
-private _noTrimPitch = bmkhs_pitchScheme in ["kb", "mouseGamepad"];
-private _noTrimRoll  = bmkhs_rollScheme  in ["kb", "mouseGamepad"];
+private _noTrimPitch = bmkhs_pitchScheme in ["kb", "mouse"];
+private _noTrimRoll  = bmkhs_rollScheme  in ["kb", "mouse"];
 
 //The beep's travel this frame, {pitch, roll} - the stick's moves the holds' references, a
 //director target's the flight director

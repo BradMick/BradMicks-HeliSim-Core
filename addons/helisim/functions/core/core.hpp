@@ -300,11 +300,11 @@
 #define AUTOPEDAL_FEEL               0.01    //pedal per deg/s of yaw left - foot settles where the yaw stops
 #define AUTOPEDAL_FOOT_ARRIVED        0.01    //foot this close to the pedal it eases to = turn done
 #define AUTOPEDAL_HDG_SETTLE_DPS      2.0     //deg/s - hover heading captured once the turn stops
-//Auto-pedal on the wheels (TAXI, by the squat switch): the nose on the direction of travel, forwards or
-//backwards; the feet rest at neutral below TAXI_SPD. The pilot's pedal is scaled by weight on wheels -
-//TAXI_AUTHORITY at static load, full as the squat strut unloads - so nothing steps at the switch.
+//Auto-pedal on the wheels (TAXI, by the squat switch): the heading held under NTT_SPD, the nose on the
+//direction of travel above it; the feet rest at neutral below TAXI_SPD with the collective down. The pilot's
+//pedal is scaled by weight on wheels - TAXI_AUTHORITY at static load, full as the squat strut unloads.
 #define AUTOPEDAL_TAXI_AUTHORITY      0.5     //pilot pedal fraction at static load
-#define AUTOPEDAL_TAXI_SPD            1.0     //m/s ground speed - below it the feet rest
+#define AUTOPEDAL_TAXI_SPD            1.0     //m/s ground speed - below it the aircraft is stopped
 
 //The aircraft flies on velocities and body rates as the engine gives them. The copies a display
 //reads (bmkhs_vel*Filtered) and the accelerations are smoothed over a time, the same at any frame rate.
