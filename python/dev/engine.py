@@ -1,14 +1,19 @@
-"""The HeliSim engine, drivetrain and simple rotors, outside Arma. A 1:1 port of Core.
+"""The HeliSim engine, drivetrain and rotors - simple and blade element - outside Arma. A 1:1
+port of Core.
 
-Run it:  python python/dev/engine.py
+Run it:  python python/dev/engine.py          simple rotors
+         python python/dev/engine.py bet      blade element rotors
 
 Every function below is named after the SQF function it ports and carries its inputs, outputs
 and expressions line for line. The frame runs in fn_coreUpdate's order: environment ->
-engineUpdate -> transmissionUpdate -> simpleRotorUpdate. Values are read from the AH-64D's
-own config files, so there is no third copy of any number.
+engineUpdate -> transmissionUpdate -> coreUpdateFlightModel, which runs the rotor model that
+bmkhs_rotorModel selects, as Core's setting does. Values are read from the AH-64D's own config
+files, so there is no third copy of any number.
 
 Not ported, because nothing on the engine's path reads it: systems circuits (gates are
-scenario inputs), damage, torque jitter and the rotor's lift/force path.
+scenario inputs), damage, torque jitter and the simple rotor's lift/force path. The blade
+element rotor's torque comes out of its force path, so that is ported whole; what it hands to
+addForce is summed per rotor in rotorForceN / rotorMomentNm for reading.
 
 If this file and the SQF ever disagree, the SQF is right and this file is the bug.
 """
@@ -59,6 +64,8 @@ GT_PT_STALL_TQ = 2.5
 GT_SPOOL_UNIT_LOAD = 2.91244
 #rotor.hpp
 MAIN, TAIL, PROPELLER, PROPROTOR = 0, 1, 2, 3
+#The CBA setting bmkhs_rotorModel (fn_eventPreInit): 0 Simple, 1 BET. fn_coreUpdateFlightModel reads it.
+bmkhs_rotorModel = 0
 
 
 def rotor_type(name):
@@ -129,7 +136,7 @@ def parse_hpp(path):
 
 def load_config():
     cfg = {}
-    for f in ('helisim_engine.hpp', 'helisim_simpleRotor.hpp'):
+    for f in ('helisim_engine.hpp', 'helisim_simpleRotor.hpp', 'helisim_rotor.hpp', 'helisim_airfoils.hpp'):
         cfg.update(parse_hpp(AH64_CONFIG + '\\' + f))
     return cfg
 
@@ -201,6 +208,61 @@ def pid_reset(pid):
     """fn_pidReset."""
     pid.pop('prevError', None)
     pid['integral'], pid['derivFilt'] = 0.0, 0.0
+
+
+#Arma's vector commands and trigonometry - degrees, as SQF.
+def sqf_sin(d): return math.sin(math.radians(d))
+def sqf_cos(d): return math.cos(math.radians(d))
+def sqf_acos(x): return math.degrees(math.acos(x))
+def vector_add(a, b): return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
+def vector_diff(a, b): return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
+def vector_multiply(a, k): return [a[0] * k, a[1] * k, a[2] * k]
+def vector_dot_product(a, b): return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+def vector_magnitude(a): return math.sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2])
+
+
+def vector_cross_product(a, b):
+    return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
+
+
+def vector_normalized(a):
+    m = vector_magnitude(a)
+    return [0.0, 0.0, 0.0] if m == 0.0 else [a[0] / m, a[1] / m, a[2] / m]
+
+
+def math_vector_rotate(v, p, r, y):
+    """fn_mathVectorRotate."""
+    sinP, sinY, sinR = sqf_sin(p), sqf_sin(y), sqf_sin(r)
+    cosP, cosY, cosR = sqf_cos(p), sqf_cos(y), sqf_cos(r)
+    m = [[cosR * cosY + sinR * sinP * sinY, -cosR * sinY + sinR * sinP * cosY, sinR * cosP],
+         [cosP * sinY, cosP * cosY, -sinP],
+         [-sinR * cosY + cosR * sinP * sinY, sinR * sinY + cosR * sinP * cosY, cosR * cosP]]
+    return [vector_dot_product(row, v) for row in m]
+
+
+def math_vector_rotate_around_axis(v, axis, angle):
+    """fn_mathVectorRotateAroundAxis."""
+    s, c = sqf_sin(angle), sqf_cos(angle)
+    dot = vector_dot_product(v, axis)
+    cross = vector_cross_product(v, axis)
+    return [v[i] * c + cross[i] * s + axis[i] * dot * (1 - c) for i in range(3)]
+
+
+def math_get_area(A, B, C, D):
+    """fn_mathGetArea."""
+    AB = vector_magnitude(vector_diff(B, A))
+    BC = vector_magnitude(vector_diff(B, C))
+    CD = vector_magnitude(vector_diff(C, D))
+    DA = vector_magnitude(vector_diff(A, D))
+    s = (AB + BC + CD + DA) * 0.5
+    return math.sqrt((s - AB) * (s - BC) * (s - CD) * (s - DA))
+
+
+def math_linear_interp_from_center(inMin, inMax, x, outMin, outMid, outMax):
+    """fn_mathLinearInterpFromCenter."""
+    if x < 0:
+        return linear_conversion(inMin, 0, x, outMin, outMid, True)
+    return linear_conversion(0, inMax, x, outMid, outMax, True)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -332,7 +394,66 @@ def simple_rotor_variables(H, cfg):
     H['bmkhs_simpleRotors'] = rotors
     H['bmkhs_drivetrainDrag'] = float(CFG.get('drivetrainDrag', 0.0))
     H['bmkhs_reqEngTorque'] = [0.0] * len(rotors)
+    H['bmkhs_rtrThrust'] = [0.0] * len(rotors)
     H['bmkhs_rtrMoi'] = [0.0] * len(rotors)
+
+
+#fn_rotorVariables' config reads - the aircraft variable and the config array it mirrors.
+ROTOR_CONFIG = [('bmkhs_rotorType', 'rotorType'), ('bmkhs_rotorDirection', 'rotorDirection'),
+                ('bmkhs_rotorNumBlades', 'rotorNumBlades'), ('bmkhs_rotorNumElements', 'rotorNumElements'),
+                ('bmkhs_rotorMastLength', 'rotorMastLength'), ('bmkhs_rotorGearRatioArr', 'rotorGearRatio'),
+                ('bmkhs_rotorPivot', 'rotorPivot'), ('bmkhs_rotorRotation', 'rotorRotation'),
+                ('bmkhs_rotorFlapTimeConst', 'rotorFlapTimeConst'), ('bmkhs_rotorAirfoil', 'rotorAirfoil'),
+                ('bmkhs_rotorBladeCutout', 'rotorBladeCutout'), ('bmkhs_rotorBladeLength', 'rotorBladeLength'),
+                ('bmkhs_rotorBladeChordArr', 'rotorBladeChord'), ('bmkhs_rotorBladeTwist', 'rotorBladeTwist'),
+                ('bmkhs_rotorBladeMassArr', 'rotorBladeMass'), ('bmkhs_rotorDelta3', 'rotorDelta3'),
+                ('bmkhs_rotorPitchMin', 'rotorPitchMin'), ('bmkhs_rotorPitchMid', 'rotorPitchMid'),
+                ('bmkhs_rotorPitchMax', 'rotorPitchMax'), ('bmkhs_rotorRollMin', 'rotorRollMin'),
+                ('bmkhs_rotorRollMid', 'rotorRollMid'), ('bmkhs_rotorRollMax', 'rotorRollMax'),
+                ('bmkhs_rotorCollMin', 'rotorCollMin'), ('bmkhs_rotorCollMid', 'rotorCollMid'),
+                ('bmkhs_rotorCollMax', 'rotorCollMax'), ('bmkhs_rotorAnimSource', 'rotorAnimSource'),
+                ('bmkhs_rotorHitPoint', 'rotorHitPoint')]
+
+
+def airfoil_variables(H, cfg):
+    """fn_airfoilVariables - config errors omitted, the config is known good."""
+    airfoils = {}
+    for i in range(1, int(cfg['numAirfoils']) + 1):
+        a = cfg['Airfoils']['Airfoil%02d' % i]
+        airfoils[a['name']] = a['table']
+    H['bmkhs_airfoils'] = airfoils
+
+
+def airfoil_get(H, name):
+    """fn_airfoilGet - a name that matches nothing returns an empty table, as Core does after its error."""
+    return H['bmkhs_airfoils'].get(name, [])
+
+
+def rotor_variables(H, cfg):
+    """fn_rotorVariables."""
+    H['bmkhs_numRotors'] = cfg['numRotors']
+    for var, key in ROTOR_CONFIG:
+        H[var] = cfg[key]
+    for k in ('bmkhs_rotorFlapMoment', 'bmkhs_rotorBladeAzimuth', 'bmkhs_rotorInducedFlow',
+              'bmkhs_rotorInducedFlowAccum'):
+        H[k] = [[0.0, 0.0, 0.0, 0.0] for _ in range(6)]
+    H['bmkhs_rotorReactionTorque'] = [0.0] * 6
+    H['bmkhs_rotorThrustAccum'] = [0.0] * 6
+    H['bmkhs_rotorRateDampScalar'] = 0.1
+    betBands = [0.00, 10.29, 20.58, 36.01, 46.30, 51.44, 61.73, 66.88, 72.02]
+    H['bmkhs_betMainLiftTable'] = [[x, 1.0] for x in betBands]
+    H['bmkhs_betTailLiftTable'] = [[x, 1.0] for x in betBands]
+    for k in ('bmkhs_rotorBeta0', 'bmkhs_rotorA1', 'bmkhs_rotorB1',
+              'bmkhs_rotorBeta0Target', 'bmkhs_rotorA1Target', 'bmkhs_rotorB1Target'):
+        H[k] = [0.0] * 6
+    #Rig only. Arma turns the rotor animation source and holds the hitpoints and the centre of mass;
+    #here the phase turns at the rotor's own rpm and nothing is damaged. What the rotor hands to
+    #addForce and addTorque is summed per rotor, in N and in Nm about the centre of mass.
+    H['rotorAnimPhase'] = [0.0] * 6
+    H['hitPointDamage'] = {}
+    H['centerOfMass'] = [0.0, 0.0, 0.0]
+    H['rotorForceN'] = [[0.0, 0.0, 0.0] for _ in range(6)]
+    H['rotorMomentNm'] = [[0.0, 0.0, 0.0] for _ in range(6)]
 
 
 # ---------------------------------------------------------------------------------------------
@@ -736,6 +857,371 @@ def simple_rotor_update(H):
 
 
 # ---------------------------------------------------------------------------------------------
+# rotor/ - the blade element rotor: fn_rotorControl, fn_rotorFlapDynamics, fn_rotorBlade, fn_rotor,
+# fn_rotorUpdate. The debug drawing and the systemChat readout are not ported.
+# ---------------------------------------------------------------------------------------------
+
+def rotor_control(H, type_, pitchMin, pitchMid, pitchMax, rollMin, rollMid, rollMax, collMin, collMid, collMax):
+    """fn_rotorControl."""
+    pitchInput = H['bmkhs_fltCtrlPitchOut']
+    pitchFeather = 0.0
+    rollInput = H['bmkhs_fltCtrlRollOut']
+    rollFeather = 0.0
+    yawInput = H['bmkhs_fltCtrlYawOut']
+    collInput = H['bmkhs_fltCtrlCollOut']
+    collFeather = 0.0
+    if type_ == MAIN:
+        pitchFeather = math_linear_interp_from_center(-1, 1, pitchInput, pitchMin, pitchMid, pitchMax)
+        rollFeather = math_linear_interp_from_center(-1, 1, rollInput, rollMin, rollMid, rollMax)
+        collFeather = linear_conversion(0, 1, collInput, collMin, collMax, True)
+    elif type_ == TAIL:
+        collFeather = math_linear_interp_from_center(-1, 1, -yawInput, collMin, collMid, collMax)
+    return pitchFeather, rollFeather, collFeather
+
+
+def rotor_flap_dynamics(H, rotorIndex, type_, deltaTime, numBlades, omega, bladeMass, bladeLength,
+                        bladeCutout, flapTimeConst, rVec, fVec, uVec):
+    """fn_rotorFlapDynamics."""
+    flapTimeConstPitch = flapTimeConst[0]
+    flapTimeConstRoll = flapTimeConst[1]
+
+    Ib = (1.0 / 3.0) * bladeMass * (bladeLength * bladeLength)
+    bladeCGR = bladeCutout + ((bladeLength - bladeCutout) * 0.5)
+    M_grav = -bladeMass * 9.806 * bladeCGR
+    denom = Ib * (omega * omega) if omega > 1.0 else 0.0
+
+    flapMoments = H['bmkhs_rotorFlapMoment'][rotorIndex]
+    bladeAzimuths = H['bmkhs_rotorBladeAzimuth'][rotorIndex]
+    M0 = Mlat = Mlon = 0.0
+    for bladeIndex in range(int(numBlades)):
+        bDir_i = math_vector_rotate_around_axis(rVec, uVec, bladeAzimuths[bladeIndex])
+        m = flapMoments[bladeIndex]
+        M0 = M0 + m
+        Mlat = Mlat + (m * vector_dot_product(bDir_i, rVec))
+        Mlon = Mlon + (m * vector_dot_product(bDir_i, fVec))
+    M0 = M0 / numBlades
+    Mlat = Mlat / (numBlades / 2.0)
+    Mlon = Mlon / (numBlades / 2.0)
+
+    beta0Raw = clamp((M0 / denom + M_grav / denom) * (180 / math.pi), -15.0, 15.0) if denom > 0.0 else 0.0
+    a1Raw = clamp(Mlat / denom * (180 / math.pi), -15.0, 15.0) if denom > 0.0 else 0.0
+    b1Raw = clamp(Mlon / denom * (180 / math.pi), -15.0, 15.0) if denom > 0.0 else 0.0
+
+    isTeetering = (type_ == MAIN) and (numBlades == 2)
+
+    revPeriod = (2.0 * math.pi) / omega if omega > 1.0 else flapTimeConstPitch
+    if isTeetering:
+        bladePeriod = revPeriod
+    else:
+        bladePeriod = revPeriod / numBlades if numBlades > 0 else revPeriod
+    bladeAlpha = clamp(deltaTime / bladePeriod, 0.0, 1.0) if bladePeriod > 0.0 else 1.0
+    beta0Target = beta0Raw if isTeetering else lerp(H['bmkhs_rotorBeta0Target'][rotorIndex], beta0Raw, bladeAlpha)
+    a1Target = a1Raw if isTeetering else lerp(H['bmkhs_rotorA1Target'][rotorIndex], a1Raw, bladeAlpha)
+    b1Target = b1Raw if isTeetering else lerp(H['bmkhs_rotorB1Target'][rotorIndex], b1Raw, bladeAlpha)
+    H['bmkhs_rotorBeta0Target'][rotorIndex] = beta0Target
+    H['bmkhs_rotorA1Target'][rotorIndex] = a1Target
+    H['bmkhs_rotorB1Target'][rotorIndex] = b1Target
+
+    if type_ == TAIL or isTeetering:
+        beta0 = 0.0
+    else:
+        beta0 = lerp(H['bmkhs_rotorBeta0'][rotorIndex], beta0Target, deltaTime / flapTimeConstPitch)
+    if type_ == TAIL:
+        a1 = 0.0
+        b1 = 0.0
+    else:
+        a1 = a1Target if isTeetering else lerp(H['bmkhs_rotorA1'][rotorIndex], a1Target, deltaTime / flapTimeConstPitch)
+        b1 = b1Target if isTeetering else lerp(H['bmkhs_rotorB1'][rotorIndex], b1Target, deltaTime / flapTimeConstRoll)
+    H['bmkhs_rotorBeta0'][rotorIndex] = beta0
+    H['bmkhs_rotorA1'][rotorIndex] = a1
+    H['bmkhs_rotorB1'][rotorIndex] = b1
+
+    return beta0, a1, b1
+
+
+def rotor_blade(H, bladeIndex, rotorIndex, deltaTime, numElements, numBlades, pos, uVec, omega, airfoilTable,
+                bladeCutout, bladeLength, inflowAlpha, a_rootPos, b_tipPos, c_rootLeadingEdge,
+                d_tipLeadingEdge, e_tipTrailingEdge, f_rootTrailingEdge):
+    """fn_rotorBlade."""
+    rho = H['bmkhs_rho']
+    dissymetryOfLift = False
+    totalFlapMoment = 0.0
+    totalPower = H['bmkhs_rotorReactionTorque'][rotorIndex]
+
+    velBet = vector_magnitude([H['bmkhs_velModelSpace'][0], H['bmkhs_velModelSpace'][1], 0.0])
+    isTail = rotorIndex == 1
+    liftTbl = H['bmkhs_betTailLiftTable'] if isTail else H['bmkhs_betMainLiftTable']
+    bladeScale = 1.0 if liftTbl == [] else math_linear_interp(liftTbl, velBet)[1]
+    H['bmkhs_rotorFlapMoment'][rotorIndex][bladeIndex] = 0.0
+
+    numElements = int(numElements)
+    for i in range(numElements):
+        spanInboard = i / numElements
+        spanOutboard = (i + 1) / numElements
+
+        a = vector_add(a_rootPos, vector_multiply(vector_diff(b_tipPos, a_rootPos), spanInboard))
+        b = vector_add(a_rootPos, vector_multiply(vector_diff(b_tipPos, a_rootPos), spanOutboard))
+
+        c = vector_add(c_rootLeadingEdge, vector_multiply(vector_diff(d_tipLeadingEdge, c_rootLeadingEdge), spanInboard))
+        d = vector_add(c_rootLeadingEdge, vector_multiply(vector_diff(d_tipLeadingEdge, c_rootLeadingEdge), spanOutboard))
+        e = vector_add(f_rootTrailingEdge, vector_multiply(vector_diff(e_tipTrailingEdge, f_rootTrailingEdge), spanOutboard))
+        f = vector_add(f_rootTrailingEdge, vector_multiply(vector_diff(e_tipTrailingEdge, f_rootTrailingEdge), spanInboard))
+
+        liftFraction = 0.75 if numElements == 1 else 0.5
+        liftPos = vector_add(a, vector_multiply(vector_diff(b, a), liftFraction))
+
+        chordLine = vector_diff(vector_add(c, vector_multiply(vector_diff(d, c), 0.5)),
+                                vector_add(f, vector_multiply(vector_diff(e, f), 0.5)))
+        chordLine = vector_normalized(chordLine)
+
+        #Induced inflow from the previous frame
+        vi = H['bmkhs_rotorInducedFlow'][rotorIndex][i]
+
+        velModel = H['bmkhs_velModelSpace']
+        if dissymetryOfLift:
+            relWind = vector_multiply(velModel, -1.0)
+        else:
+            relWind = [0.0, 0.0, -velModel[2]]
+
+        spanDir = vector_normalized(vector_diff(b, a))
+
+        fromHub = vector_diff(liftPos, pos)
+        radialVec = vector_diff(fromHub, vector_multiply(uVec, vector_dot_product(fromHub, uVec)))
+        r = vector_magnitude(radialVec)
+        rotRelWind = vector_multiply(vector_cross_product(uVec, spanDir), r * omega * -1.0)
+
+        up = vector_normalized(vector_cross_product(spanDir, chordLine))
+        if vector_dot_product(up, uVec) < 0.0:
+            up = vector_multiply(up, -1.0)
+
+        bodyRate = H['bmkhs_angVelModelSpace']
+        rateDampScalar = H['bmkhs_rotorRateDampScalar']
+        bodyRateWind = vector_multiply(vector_cross_product(bodyRate, vector_diff(liftPos, H['centerOfMass'])),
+                                       rateDampScalar)
+
+        localWind = vector_add(vector_add(relWind, rotRelWind), bodyRateWind)
+
+        vc = vector_dot_product(uVec, relWind)
+        localAxial = vector_multiply(uVec, vc)
+        localLatVel = vector_magnitude(vector_diff(relWind, localAxial))
+
+        inducedWind = vector_multiply(uVec, -vi)
+        relWind = vector_add(localWind, inducedWind)
+
+        relWindY = vector_dot_product(chordLine, relWind)
+        relWindZ = vector_dot_product(up, relWind)
+        relWind = vector_add(vector_multiply(chordLine, relWindY), vector_multiply(up, relWindZ))
+
+        relWindNormalized = vector_normalized(relWind)
+        AoA = vector_dot_product(chordLine, vector_multiply(relWindNormalized, -1.0))
+        AoA = clamp(AoA, -1.0, 1.0)
+        AoA = sqf_acos(AoA)
+
+        if vector_dot_product(up, relWindNormalized) < 0.0:
+            AoA = AoA * -1.0
+
+        area = math_get_area(c, d, e, f)
+        v = vector_magnitude(relWind)
+        q = 0.5 * rho * area * (v * v)
+
+        _, CL, CD = math_linear_interp(airfoilTable, AoA)
+
+        lift = CL * q
+        drag = min(CD, 0.15) * q
+
+        r_in = bladeCutout + (spanInboard * (bladeLength - bladeCutout))
+        r_out = bladeCutout + (spanOutboard * (bladeLength - bladeCutout))
+        annularArea = math.pi * ((r_out * r_out) - (r_in * r_in))
+        if annularArea > 0.0 and rho > 0.0:
+            T_elem = lift * bladeScale
+            denom = 2.0 * rho * annularArea * math.sqrt(((vc + vi) * (vc + vi)) + (localLatVel * localLatVel))
+            raw = T_elem / denom if denom > 0.0 else 0.0
+            viRaw = clamp(raw, -25.0, 25.0)
+        else:
+            viRaw = 0.0
+        H['bmkhs_rotorInducedFlowAccum'][rotorIndex][i] += viRaw
+
+        totalFlapMoment = totalFlapMoment + (lift * r)
+
+        liftVector = vector_cross_product(relWindNormalized, up)
+        liftVector = vector_cross_product(liftVector, relWindNormalized)
+        liftDir = vector_normalized(liftVector)
+        dragDir = vector_normalized(relWind)
+
+        vTangential = r * omega
+        P_induced = lift * vi
+        P_profile = drag * vTangential
+        totalPower = totalPower + (P_induced + P_profile)
+
+        H['bmkhs_rotorThrustAccum'][rotorIndex] += lift * bladeScale
+
+        liftVector = vector_multiply(liftDir, lift * deltaTime * bladeScale)
+        dragVector = vector_multiply(dragDir, drag * deltaTime * bladeScale)
+
+        #addForce [liftVector, liftPos] and [dragVector, liftPos] - the rig sums them, per second
+        if deltaTime > 0.0:
+            arm = vector_diff(liftPos, H['centerOfMass'])
+            for impulse in (liftVector, dragVector):
+                force = vector_multiply(impulse, 1.0 / deltaTime)
+                H['rotorForceN'][rotorIndex] = vector_add(H['rotorForceN'][rotorIndex], force)
+                H['rotorMomentNm'][rotorIndex] = vector_add(H['rotorMomentNm'][rotorIndex],
+                                                            vector_cross_product(arm, force))
+
+    H['bmkhs_rotorFlapMoment'][rotorIndex][bladeIndex] = totalFlapMoment
+
+    H['bmkhs_rotorReactionTorque'][rotorIndex] = totalPower
+
+
+def rotor(H, rotorIndex, pivot, rot, type_, dir_, numBlades, numElements, mastLength, gearRatio, flapTimeConst,
+          inflowAlpha, delta3, airfoilTable, bladeCutout, bladeLength, bladeChord, bladeTwist, bladeMass,
+          pitchMin, pitchMid, pitchMax, rollMin, rollMid, rollMax, collMin, collMid, collMax,
+          animSource, hitPoint, dmgThreshold):
+    """fn_rotor."""
+    deltaTime = H['bmkhs_deltaTime']
+
+    pitchFeather, rollFeather, collFeather = rotor_control(
+        H, type_, pitchMin, pitchMid, pitchMax, rollMin, rollMid, rollMax, collMin, collMid, collMax)
+
+    p, r, y = rot
+
+    fVec = math_vector_rotate([0.0, 1.0, 0.0], p, r, y)
+    rVec = math_vector_rotate([1.0, 0.0, 0.0], p, r, y)
+    uVec = math_vector_rotate([0.0, 0.0, 1.0], p, r, y)
+
+    pos = vector_add(pivot, vector_multiply(uVec, mastLength))
+    xmsnRpm = H['bmkhs_xmsnOutputRpm']
+    rpm = xmsnRpm / gearRatio
+    omega = 0.0 if rpm == 0.0 else (2.0 * math.pi) * (rpm / 60.0)
+    #animationSourcePhase animSource - rig: the phase turns at the rotor's own rpm
+    H['rotorAnimPhase'][rotorIndex] = (H['rotorAnimPhase'][rotorIndex] + ((rpm / 60.0) * deltaTime)) % 1.0
+    rotorAzimuth = H['rotorAnimPhase'][rotorIndex] * 360.0 * (1 if dir_ == CW else -1)
+
+    H['rotorForceN'][rotorIndex] = [0.0, 0.0, 0.0]
+    H['rotorMomentNm'][rotorIndex] = [0.0, 0.0, 0.0]
+
+    if H['hitPointDamage'].get(hitPoint, 0.0) < dmgThreshold:
+
+        H['bmkhs_rotorReactionTorque'][rotorIndex] = 0.0
+        H['bmkhs_rotorThrustAccum'][rotorIndex] = 0.0
+        for ei in range(int(numElements)):
+            H['bmkhs_rotorInducedFlowAccum'][rotorIndex][ei] = 0.0
+
+        beta0, a1, b1 = rotor_flap_dynamics(H, rotorIndex, type_, deltaTime, numBlades, omega, bladeMass,
+                                            bladeLength, bladeCutout, flapTimeConst, rVec, fVec, uVec)
+
+        if type_ == TAIL:
+            beta0 = 0.0
+            a1 = 0.0
+            b1 = 0.0
+
+        bladeSpacing = 360.0 / numBlades
+        for bladeIndex in range(int(numBlades)):
+            psi = rotorAzimuth + (bladeSpacing * bladeIndex)
+
+            bladeDir = math_vector_rotate_around_axis(rVec, uVec, psi)
+            chordDir = math_vector_rotate_around_axis(fVec, uVec, psi)
+            if dir_ == CW:
+                chordDir = vector_multiply(chordDir, -1)
+                dirSign = -1
+            else:
+                dirSign = 1
+
+            flapAngle = (beta0 + (a1 * vector_dot_product(bladeDir, fVec))
+                         + (b1 * vector_dot_product(bladeDir, rVec)))
+            featherAngle = dirSign * (rollFeather * sqf_cos(psi) + pitchFeather * sqf_sin(psi) + collFeather
+                                      - (flapAngle * delta3))
+
+            tipTwist = bladeTwist * dirSign
+
+            rootIncidence = -tipTwist * 0.5 if type_ == MAIN else 0.0
+
+            a_rootPos = vector_add(pos, math_vector_rotate_around_axis(
+                vector_multiply(bladeDir, bladeCutout), chordDir, flapAngle))
+            b_tipPos = vector_add(pos, math_vector_rotate_around_axis(
+                vector_multiply(bladeDir, bladeLength), chordDir, flapAngle))
+            c_rootLeadingEdge = vector_add(a_rootPos, math_vector_rotate_around_axis(
+                vector_multiply(chordDir, bladeChord * 0.25), bladeDir, -(featherAngle + rootIncidence)))
+            d_tipLeadingEdge = vector_add(b_tipPos, math_vector_rotate_around_axis(
+                vector_multiply(chordDir, bladeChord * 0.25), bladeDir, -(featherAngle + rootIncidence + tipTwist)))
+            e_tipTrailingEdge = vector_diff(b_tipPos, math_vector_rotate_around_axis(
+                vector_multiply(chordDir, bladeChord * 0.75), bladeDir, -(featherAngle + rootIncidence + tipTwist)))
+            f_rootTrailingEdge = vector_diff(a_rootPos, math_vector_rotate_around_axis(
+                vector_multiply(chordDir, bladeChord * 0.75), bladeDir, -(featherAngle + rootIncidence)))
+
+            H['bmkhs_rotorBladeAzimuth'][rotorIndex][bladeIndex] = psi
+
+            rotor_blade(H, bladeIndex, rotorIndex, deltaTime, numElements, numBlades, pos, uVec, omega,
+                        airfoilTable, bladeCutout, bladeLength, inflowAlpha, a_rootPos, b_tipPos,
+                        c_rootLeadingEdge, d_tipLeadingEdge, e_tipTrailingEdge, f_rootTrailingEdge)
+
+        viAccum = H['bmkhs_rotorInducedFlowAccum'][rotorIndex]
+        for ei in range(int(numElements)):
+            viRawAvg = viAccum[ei]
+            viPrev = H['bmkhs_rotorInducedFlow'][rotorIndex][ei]
+            viNext = lerp(viPrev, viRawAvg, inflowAlpha)
+            H['bmkhs_rotorInducedFlow'][rotorIndex][ei] = viNext
+
+        totalPower = H['bmkhs_rotorReactionTorque'][rotorIndex]
+        reactionTorque = totalPower / omega if omega > 0.0 else 0.0
+        reqEngTorque = reactionTorque / gearRatio if gearRatio > 0.0 else 0.0
+
+        tqSmoothed = H['bmkhs_reqEngTorque'][rotorIndex]
+        tqAlpha = 1.0 - math.exp(-deltaTime / 0.1)
+        tqSmoothed = tqSmoothed + (reqEngTorque - tqSmoothed) * tqAlpha
+        H['bmkhs_reqEngTorque'][rotorIndex] = tqSmoothed
+
+        rotorThrust = H['bmkhs_rotorThrustAccum'][rotorIndex]
+        H['bmkhs_rtrThrust'][rotorIndex] = rotorThrust
+
+        Icm = (1.0 / 3.0) * bladeMass * (bladeLength * bladeLength)
+        Iy = (1.0 / 12.0) * bladeMass * (bladeChord * bladeChord)
+        Itot = Icm
+        Jtot = (Iy + Itot) * numBlades
+        H['bmkhs_rtrMoi'][rotorIndex] = Jtot
+
+        #The torque reaction on the fuselage needs no addTorque: the blade forces carry it
+
+
+def rotor_update(H):
+    """fn_rotorUpdate."""
+    numRotor = int(H['bmkhs_numRotors'])
+    inflowAlpha = [0.05, 0.01]
+    airfoilTable = [airfoil_get(H, name) for name in H['bmkhs_rotorAirfoil']]
+    dmgThreshold = [0.99, 0.85]
+
+    for rotorIndex in range(numRotor):
+        rotor(H, rotorIndex,
+              H['bmkhs_rotorPivot'][rotorIndex], H['bmkhs_rotorRotation'][rotorIndex],
+              H['bmkhs_rotorType'][rotorIndex], H['bmkhs_rotorDirection'][rotorIndex],
+              H['bmkhs_rotorNumBlades'][rotorIndex], H['bmkhs_rotorNumElements'][rotorIndex],
+              H['bmkhs_rotorMastLength'][rotorIndex], H['bmkhs_rotorGearRatioArr'][rotorIndex],
+              H['bmkhs_rotorFlapTimeConst'][rotorIndex], inflowAlpha[rotorIndex],
+              H['bmkhs_rotorDelta3'][rotorIndex], airfoilTable[rotorIndex],
+              H['bmkhs_rotorBladeCutout'][rotorIndex], H['bmkhs_rotorBladeLength'][rotorIndex],
+              H['bmkhs_rotorBladeChordArr'][rotorIndex], H['bmkhs_rotorBladeTwist'][rotorIndex],
+              H['bmkhs_rotorBladeMassArr'][rotorIndex],
+              H['bmkhs_rotorPitchMin'][rotorIndex], H['bmkhs_rotorPitchMid'][rotorIndex],
+              H['bmkhs_rotorPitchMax'][rotorIndex],
+              H['bmkhs_rotorRollMin'][rotorIndex], H['bmkhs_rotorRollMid'][rotorIndex],
+              H['bmkhs_rotorRollMax'][rotorIndex],
+              H['bmkhs_rotorCollMin'][rotorIndex], H['bmkhs_rotorCollMid'][rotorIndex],
+              H['bmkhs_rotorCollMax'][rotorIndex],
+              H['bmkhs_rotorAnimSource'][rotorIndex], H['bmkhs_rotorHitPoint'][rotorIndex],
+              dmgThreshold[rotorIndex])
+
+
+# ---------------------------------------------------------------------------------------------
+# fn_coreUpdateFlightModel - the rotors; the fuselage and wings are not on the engine's path
+# ---------------------------------------------------------------------------------------------
+
+def core_update_flight_model(H):
+    if bmkhs_rotorModel == 1:
+        rotor_update(H)
+    else:
+        simple_rotor_update(H)
+
+
+# ---------------------------------------------------------------------------------------------
 # The aircraft, and one frame in fn_coreUpdate's order
 # ---------------------------------------------------------------------------------------------
 
@@ -752,13 +1238,19 @@ class Heli:
         H['baroAltM'] = baroAltM
         environment(H)
         engine_variables(H, CFG, dict(OVERRIDES, **(overrides or {})))
+        airfoil_variables(H, CFG)
         simple_rotor_variables(H, CFG)
+        rotor_variables(H, CFG)
         H['bmkhs_xmsnOutputRpm'] = 0.0
         H['bmkhs_xmsnDeltaRpm'] = 0.0
         H['bmkhs_collectiveOutput'] = 0.0
         H['bmkhs_velModelSpace'] = [0.0, 0.0, 0.0]
+        H['bmkhs_angVelModelSpace'] = [0.0, 0.0, 0.0]
         H['hubVelXY'] = H['hubVelZ'] = 0.0
         H['pedal'] = 0.0
+        #fn_inputWrite's sums, which the blade element rotor's control reads. The rig flies no cyclic.
+        H['bmkhs_fltCtrlPitchOut'] = H['bmkhs_fltCtrlRollOut'] = 0.0
+        H['bmkhs_fltCtrlYawOut'] = H['bmkhs_fltCtrlCollOut'] = 0.0
         n = len(H['bmkhs_engines'])
         H['startSw'] = [0] * n
         H['pwrLvr'] = [0.0] * n
@@ -785,9 +1277,11 @@ class Heli:
         if velZ is not None:
             H['hubVelZ'] = velZ
             H['bmkhs_velModelSpace'][2] = velZ
+        H['bmkhs_fltCtrlCollOut'] = H['bmkhs_collectiveOutput']
+        H['bmkhs_fltCtrlYawOut'] = H['pedal']
         engine_controller(H, CFG)
         transmission_update(H)
-        simple_rotor_update(H)
+        core_update_flight_model(H)
         self.t += dt
 
     #Readouts, engine i.
@@ -1118,10 +1612,11 @@ def collective_for(tqPerEngine):
         a = Heli()
         e = a.H['bmkhs_engines'][0]
         a.H['bmkhs_xmsnOutputRpm'] = e['designRpm'] * e['npFly']
-        a.H['bmkhs_collectiveOutput'] = mid
+        a.H['bmkhs_collectiveOutput'] = a.H['bmkhs_fltCtrlCollOut'] = mid
         a.H['bmkhs_deltaTime'] = DT
-        for _ in range(300):
-            simple_rotor_update(a.H)
+        #The blade element rotor's inflow and coning take longer to settle than the torque filter
+        for _ in range(300 if bmkhs_rotorModel == 0 else 900):
+            core_update_flight_model(a.H)
         if a.demand() < tqPerEngine:
             lo = mid
         else:
@@ -1316,6 +1811,18 @@ def level_flight(v):
     return v * math.cos(pitch), -v * math.sin(pitch), pitch
 
 
+def main_rotor_thrust(H, main):
+    """Main rotor thrust from the rotor model selected. The simple rotor's is its blade lift summed;
+    the blade element rotor's is bmkhs_rtrThrust once its inflow and coning have settled."""
+    if bmkhs_rotorModel == 0:
+        return simple_rotor_thrust(H, main)
+    H['bmkhs_velModelSpace'] = [0.0, H['hubVelXY'], H['hubVelZ']]
+    H['bmkhs_deltaTime'] = DT
+    for _ in range(900):
+        rotor_update(H)
+    return H['bmkhs_rtrThrust'][0]
+
+
 def trim_collective(velXY, velZ=0.0, pitch=0.0, weightLb=GROSS_WEIGHT_LB):
     """Collective at which main rotor thrust, on governed speed, carries the weight."""
     a = Heli()
@@ -1326,9 +1833,9 @@ def trim_collective(velXY, velZ=0.0, pitch=0.0, weightLb=GROSS_WEIGHT_LB):
     main = a.H['bmkhs_simpleRotors'][0]
     need = weightLb * LB_TO_N / math.cos(pitch)
     lo, hi = 0.0, 1.0
-    for _ in range(40):
-        a.H['bmkhs_collectiveOutput'] = (lo + hi) / 2.0
-        if simple_rotor_thrust(a.H, main) < need:
+    for _ in range(40 if bmkhs_rotorModel == 0 else 14):
+        a.H['bmkhs_collectiveOutput'] = a.H['bmkhs_fltCtrlCollOut'] = (lo + hi) / 2.0
+        if main_rotor_thrust(a.H, main) < need:
             lo = a.H['bmkhs_collectiveOutput']
         else:
             hi = a.H['bmkhs_collectiveOutput']
@@ -1534,6 +2041,10 @@ def perf_report(jsonPath=None):
 
 if __name__ == '__main__':
     import sys
+    if 'bet' in sys.argv:
+        #python engine.py bet [...] - the blade element rotors in place of the simple ones
+        bmkhs_rotorModel = 1
+        print('ROTOR MODEL: BET (bmkhs_rotorModel = 1)')
     if 'perf' in sys.argv:
         #python engine.py perf [results.json]
         i = sys.argv.index('perf')

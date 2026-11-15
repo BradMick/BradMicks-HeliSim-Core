@@ -646,8 +646,7 @@ with `*`.
   in place of `FM_P3D` and `BMKHS_CONFIG` and run it from `@bmkhs/python/`.
 - **A rotor** - its `pivot[]`, `rotation[]` and `mastLength` lines for
   `helisim_simpleRotor.hpp`.
-- **Centre of mass** - `comCorrection[]` (REALISTIC) or `casualModeCom[]` (other
-  modes) for `helisim_mass.hpp`.
+- **Centre of mass** - `comCorrection[]` for `helisim_mass.hpp`.
 
 It counts from what is loaded. Re-enter the aircraft before pasting it again.
 
@@ -818,9 +817,6 @@ tilted, coned disc, changes its lift - the forward blade lifts more than the aft
 holds forward cyclic against it. A tandem's `lctSchedule[]` is longitudinal cyclic on that disc,
 deg, - forward, + aft; the masts stay where `rotation[]` puts them.
 
-Outside REALISTIC Core sets every tail rotor upright - pitch 0, roll 90 - so a canted tail rotor
-yaws without pitching or rolling the aircraft. Nothing to declare.
-
 **Cyclic authority fades with collective.** `cyclicFade[]` (aircraft level, beside `nrLimits[]`)
 is {scale at the floor, collective at or below which the floor applies, collective at or above
 which authority is full}. Core scales `rollLiftCoef` and `pitchLiftCoef` by it, linear between
@@ -885,7 +881,7 @@ and it solves cyclic for zero pitching moment. Without them it only balances for
 cyclic you hand it, and the pitch attitudes it prints are not the aircraft's.
 
 Check the CoM against the game before fitting: load the aircraft as above, then read
-`getCenterOfMass vehicle player` in REALISTIC (CASUAL sets `casualModeCom` instead). Fit with the
+`getCenterOfMass vehicle player`. Fit with the
 game's value. The UH-60 at 18,000 lb reads [0.028, 1.787, 0.300]; the sum above gave 1.578, and
 the logged attitudes matched only the game's.
 
@@ -1246,7 +1242,7 @@ hold or flight director adds - so the mixes work against coupled power changes t
 entry must hold, in the same form as a component gate. Gate an FCC-driven mix on its FMC
 channel and the bus that powers the computer, so it drops out with either.
 
-Mixes apply in REALISTIC only - casual has none. The per-axis totals are published as `bmkhs_mix<Axis>Out` and
+The per-axis totals are published as `bmkhs_mix<Axis>Out` and
 added to the rotor's control sum (see the Reference). Use the signs above - they are Core's
 control conventions, not the aircraft manual's.
 
@@ -1384,7 +1380,6 @@ that replaces the whole empty mass and moment rather than adding to them.
 An empty seat, an uninstalled removable tank, an empty pylon and a removed
 piece of equipment add nothing.
 Fuel moves the CG as it burns, because each tank's mass sits at its own arm.
-Casual mode skips all of this and sets `casualModeCom` directly, in the Arma frame.
 
 **7. Reading it back.** Core publishes the CG in the model frame as `bmkhs_cg`.
 Compare that against your limits. The FM debug overlay's `_centerOfMass` is Arma's
@@ -1406,6 +1401,11 @@ so `emptyMom = 6314 x 5.207 = 32877`, which puts the empty CG at model y
 `bmkhs_config/helisim_wheels.hpp`, for an aircraft on wheels. Delete the aircraft's land
 contacts: Core's wheels carry it. An aircraft on skids declares no `class Wheels`, keeps its
 land contacts and changes nothing.
+
+An aircraft whose wheels Arma runs keeps its land contacts and declares `class Wheels` with
+`hasArmaWheels = 1`, its `brakeControl` and no wheels of its own. Core runs no suspension for it,
+and what goes with wheels still applies: auto taxi, the taxi pedal regime, the roll hold, and the
+rows wheels require. Weight on its gear is the `isTouchingGround` / radar altitude test.
 
 ```cpp
 class Wheels {
@@ -1495,8 +1495,8 @@ Core's (`suspension/suspension.hpp`).
 while the wheel named by `weightOnWheels` is compressed (the AH-64D's is on the left main). With
 no wheel named, any compressed wheel counts; a name that matches no wheel is a WHEELS CONFIG ERROR
 and any wheel counts. The compressions are `bmkhs_wheelCompression`, one
-value per wheel, -1 off the ground, in the net state. Without wheels it is the
-`isTouchingGround` / radar altitude test it always was.
+value per wheel, -1 off the ground, in the net state. Without wheels, or on Arma's
+(`hasArmaWheels`), it is the `isTouchingGround` / radar altitude test it always was.
 
 ---
 
@@ -2143,7 +2143,7 @@ Fuselage and airfoil folders publish no designer-facing values.
 | `bmkhs_hdgHoldSubMode` | String `"hdg"` / `"trn"` / `"yaw"` / `"aut"` | net | Heading hold law, only updated while engaged. `hdg` = hold heading, below `hdgBelowKts` GS. `trn` = turn coordination: attitude hold on and bank over 7° (drops at under 3°). `yaw` = ball-centring yaw damping. `aut` = the auto-pedal assist owns the yaw axis. (set in `fmc/fn_fmcHeadingHold.sqf`) |
 | `bmkhs_hdgHoldDesiredHdg` | Number, deg 0..360 (`getDir`) | net | Heading hold reference. Captured when the hold engages, when it re-enters `hdg`, and on force-trim release. (set in `fmc/fn_fmcHeadingHold.sqf`, `trim/fn_trimForceRelease.sqf`) |
 | `bmkhs_hdgHoldDesiredSideslip` | Number, lateral g | net | Sideslip (ball) reference. Core always sets it to 0. (set in `trim/fn_trimForceRelease.sqf`) |
-| `bmkhs_mixPitchOut` | Number, cyclic fraction, + = forward | local (owner only) | Sum of the aircraft's `ControlMixing` mixes targeting pitch, added to the cyclic pitch at the rotor. 0 with no mixes, while a mix's gate is shut, or outside REALISTIC. (set in `fmc/fn_fmc.sqf`, from `fmc/fn_fmcControlMixing.sqf`) |
+| `bmkhs_mixPitchOut` | Number, cyclic fraction, + = forward | local (owner only) | Sum of the aircraft's `ControlMixing` mixes targeting pitch, added to the cyclic pitch at the rotor. 0 with no mixes or while a mix's gate is shut. (set in `fmc/fn_fmc.sqf`, from `fmc/fn_fmcControlMixing.sqf`) |
 | `bmkhs_mixRollOut` | Number, cyclic fraction, + = left | local (owner only) | As above, for roll. |
 | `bmkhs_mixYawOut` | Number, pedal fraction, + = right | local (owner only) | As above, for the pedals. |
 | `bmkhs_mixCollOut` | Number, collective fraction, + = up | local (owner only) | As above, for the collective - added to the collective the rotor gets. |
@@ -2189,7 +2189,6 @@ Registered in `event/fn_eventPreInit.sqf`. These are missionNamespace globals, n
 
 | Variable | Type / units | Net | Meaning |
 |---|---|---|---|
-| `bmkhs_helisimRealismSetting` | Number, 0 = CASUAL, 2 = REALISTIC | CBA setting | Realism level. |
 | `bmkhs_helisimEnvironment` | Number 0..6 (ISA_STD, EUROPE_SUMMER, EUROPE_WINTER, MIDDLE_EAST, CENTRAL_ASIA_SUMMER, CENTRAL_ASIA_WINTER, ASIA) | CBA setting | Environment preset. |
 | `bmkhs_rotorModel` | Number, 0 = Simple, 1 = BET | CBA setting | Rotor model. BET is listed as INOP; Simple is the default and the one the packs are fitted to. |
 | `bmkhs_vrsWarning` | Bool | CBA setting | VRS warning on. |
@@ -2333,7 +2332,6 @@ Working state, solver bookkeeping, filters and debug. These change without notic
 - `bmkhs_emptyMom` - raw config moment, frame-specific.
 - `bmkhs_emptyMassVariants` - cached config table.
 - `bmkhs_comCorrection` - config centre-of-mass offset.
-- `bmkhs_casualModeCom` - config casual-mode centre of mass.
 - `bmkhs_seats` - cached config table.
 - `bmkhs_stations` - cached config table.
 - `bmkhs_stores` - cached config table.

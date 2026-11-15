@@ -172,9 +172,8 @@ if (bmkhs_fmDebug && {!bmkhs_sysDebug} && {vehicle player == _heli}) then {
     \nPitch = %38 Roll = %39
     \nYaw = %41  Sideslip = %40
     \n--------------------
-    \nCasual = %42
-    \nPitchActive = %43 APTarget = %44
-    \nRollActive = %45  ARTarget = %46
+    \nPitchActive = %42 APTarget = %43
+    \nRollActive = %44  ARTarget = %45
     ",
     _heli getVariable "bmkhs_cyclicFwdAft" toFixed 3,                    //1
     _heli getVariable "bmkhs_cyclicLeftRight" toFixed 3,                 //2
@@ -217,10 +216,9 @@ if (bmkhs_fmDebug && {!bmkhs_sysDebug} && {vehicle player == _heli}) then {
     _heli call BIS_fnc_getPitchBank select 1 toFixed 2,                       //39
     _heli getVariable "bmkhs_aero_beta_deg" toFixed 2,                  //40
     ([player getRelDir _heli] call CBA_fnc_simplifyAngle180) toFixed 2,       //41
-    bmkhs_helisimRealismSetting != REALISTIC,                              //42
-    _heli getVariable "bmkhs_prestonPitchActive",                          //43
-    _heli getVariable "bmkhs_prestonPitchTarget" toFixed 1,                //44
-    _heli getVariable "bmkhs_prestonRollActive",                           //45
-    _heli getVariable "bmkhs_prestonRollTarget" toFixed 1                  //46
+    _heli getVariable "bmkhs_prestonPitchActive",                          //42
+    _heli getVariable "bmkhs_prestonPitchTarget" toFixed 1,                //43
+    _heli getVariable "bmkhs_prestonRollActive",                           //44
+    _heli getVariable "bmkhs_prestonRollTarget" toFixed 1                  //45
     ];
 };

@@ -3,15 +3,6 @@
 #define BMKHS_SETTINGS_CATEGORY "BradMick's HeliSim"
 
 [
-    "bmkhs_helisimRealismSetting",
-    "LIST",
-    ["Aircraft Realism Settings", "Switch helisim between different realism levels, Casual recomneded for keyboard"],
-    [BMKHS_SETTINGS_CATEGORY, "Flight model"],
-    [[CASUAL, REALISTIC],["Casual", "Realistic"],0],
-    0
-] call CBA_fnc_addSetting;
-
-[
     "bmkhs_cyclicCenterTrimMode",
     "CHECKBOX",
     ["Cyclic Center Trim Mode", "When enabled, the cyclic is locked out until re-centered"],

@@ -24,8 +24,8 @@ neither --bc nor --cg; moments do. Both come from the game:
 The stabilator (a surface named "stabilator") sits where fn_wing's schedule settles it - trim is
 steady, so the 1.5 s lerp has arrived - undamaged and on a live DC bus.
 
-Not ported: ground effect (out of ground effect only), damage, CASUAL's overrides (REALISTIC
-only), rotation-rate terms (trim is steady, so they are zero).
+Not ported: ground effect (out of ground effect only), damage, rotation-rate terms (trim is
+steady, so they are zero).
 
 If this file and the SQF ever disagree, the SQF is right and this file is the bug.
 """

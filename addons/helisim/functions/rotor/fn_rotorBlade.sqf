@@ -6,11 +6,9 @@ private _dissymetryOfLift = false;
 private _totalFlapMoment  = 0.0;
 private _totalPower       = (_heli getVariable "bmkhs_rotorReactionTorque") select _rotorIndex;
 
-//BET FORCE-OUTPUT TUNING SCALARS (physics-derived forces, multiplied at the output so the master
-//(main uses betMainLiftTable, tail uses betTailLiftTable). A SEPARATE _torqueScale (-> reaction
-//couple, applied to _totalPower below) lets thrust and yaw tune independently. Both default 1.0
-//Looked up once here per blade from the aircraft's fwd speed.
-//LIFT scalar only (thrust). The TORQUE scalar is applied to the reaction couple in fn_rotor.
+//BET force-output tuning scalar: the physics-derived forces are multiplied at the output (main
+//uses betMainLiftTable, tail uses betTailLiftTable). Default 1.0. Looked up once here per blade
+//from the aircraft's fwd speed.
 private _velBet   = vectorMagnitude [(_heli getVariable "bmkhs_velModelSpace" select 0), (_heli getVariable "bmkhs_velModelSpace" select 1)];
 private _isTail   = _rotorIndex == 1;
 private _liftTbl  = _heli getVariable [(["bmkhs_betMainLiftTable", "bmkhs_betTailLiftTable"] select _isTail), []];
@@ -148,8 +146,7 @@ for "_i" from 0 to (_numElements - 1) do {
 	private _vTangential  = _r * _omega;
 	private _P_induced    = _lift * _vi;
 	private _P_profile    = _drag * _vTangential;
-	//Power stays PHYSICS-TRUE here (drives engine load/governor). The TORQUE tuning scalar is
-	//applied ONLY to the fuselage reaction couple in fn_rotor (the yaw knob), NOT to engine load.
+	//Power stays physics-true here: it drives the engine load and the governor.
 	_totalPower = _totalPower + (_P_induced + _P_profile);
 
 
@@ -158,10 +155,17 @@ for "_i" from 0 to (_numElements - 1) do {
 
 	_liftVector = _liftDir vectorMultiply (_lift * _deltaTime * _bladeScale);
 
-	private _dragVector = _dragDir vectorMultiply (_drag * _deltaTime * _bladeScale * -1.0);
+	private _dragVector = _dragDir vectorMultiply (_drag * _deltaTime * _bladeScale);
 
 	_heli addForce [_heli vectorModelToWorld _liftVector, _liftPos];
 	_heli addForce [_heli vectorModelToWorld _dragVector, _liftPos];
+
+	//One row per element under the blade's name, as the simple rotor names its blades
+	if (BMKHS_FORCES_DEBUG) then {
+		private _acc = _heli getVariable "bmkhs_dbgForces";
+		_acc pushBack [format ["%1%2 blade %3", ["main","tail"] select _isTail, _rotorIndex, _bladeIndex], _liftVector vectorAdd _dragVector, _liftPos vectorDiff (getCenterOfMass _heli)];
+		_heli setVariable ["bmkhs_dbgForces", _acc];
+	};
 
 	if (BMKHS_FM_DEBUG) then {
 	[_heli, _liftPos, _liftPos vectorAdd (_liftVector vectorMultiply (1.0 / 30.0)), "green"] call bmkhs_fnc_debugDrawLine;

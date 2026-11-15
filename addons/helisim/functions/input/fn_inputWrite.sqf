@@ -59,7 +59,9 @@ if (_piloted) then {
     // Auto Taxi           /////////////////////////////////////////////////////////////////////
     /////////////////////////////////////////////////////////////////////////////////////////////
     private _onGround = [_heli] call bmkhs_fnc_stateOnGround;
-    private _autoTaxi = _ratePitch && {bmkhs_autoTaxi} && {(_heli getVariable "bmkhs_numWheels") > 0};
+    //Core's wheels or Arma's
+    private _hasWheels = (_heli getVariable "bmkhs_numWheels") > 0 || {_heli getVariable "bmkhs_hasArmaWheels"};
+    private _autoTaxi = _ratePitch && {bmkhs_autoTaxi} && {_hasWheels};
     private _regime   = _heli getVariable "bmkhs_autoTaxiRegime";
     private _radAltFt = ((_heli getVariable "bmkhs_radAlt") * METERS_TO_FEET) max 0.0;
     //Leaving the wheels with the forward key or mouse held is a rolling takeoff. Up to AUTOTAXI_BLEND_FT the key blends into the rate command.
@@ -120,7 +122,7 @@ if (_piloted) then {
     //cyclic into a turn as the aircraft leans out of it, and back off as it stands up
     private _pidTaxiRoll = _heli getVariable "bmkhs_pid_autoTaxiRoll";
     private _taxiRoll    = _heli getVariable "bmkhs_autoTaxiRollOut";
-    if (_rateRoll && {bmkhs_autoTaxi} && {_onGround} && {(_heli getVariable "bmkhs_numWheels") > 0}
+    if (_rateRoll && {bmkhs_autoTaxi} && {_onGround} && {_hasWheels}
         && {abs (_heli getVariable "bmkhs_inputRoll") < RATECMD_DEADBAND}
         && {(_heli getVariable "bmkhs_gndSpeed") >= AUTOPEDAL_TAXI_SPD}) then {
         //Roll rate + left, the cyclic's own sense

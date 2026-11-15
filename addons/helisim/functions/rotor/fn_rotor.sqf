@@ -185,19 +185,8 @@ private _Itot = _Icm;
 private _Jtot = (_Iy + _Itot) * _numBlades;
 [_heli, "bmkhs_rtrMoi", _rotorIndex, _Jtot, true] call bmkhs_fnc_utilSetArrayVariable;
 
-// Apply rotor drag torque reaction to fuselage — main rotor only.
-// Use the smoothed value so BET noise doesn't shake the airframe.
-private _reactionMoment = [0,0,0];
-if (_type == MAIN) then {
-    private _torqueSign = [-1.0, 1.0] select (_dir == CW);
-    //BET TORQUE tuning scalar (yaw knob) - multiplies ONLY this fuselage reaction couple, NOT the
-    //engine load (_totalPower stays physics-true). Airspeed-banded; 1.0 = pure physics. Lets the
-    private _velBet   = vectorMagnitude [(_heli getVariable "bmkhs_velModelSpace" select 0), (_heli getVariable "bmkhs_velModelSpace" select 1)];
-    private _torqTbl  = [];
-    private _torqueScale = if (_torqTbl isEqualTo []) then { 1.0 } else { [_torqTbl, _velBet] call bmkhs_fnc_mathLinearInterp select 1 };
-    _reactionMoment = _uVec vectorMultiply (_tqSmoothed * _gearRatio * _torqueSign * _deltaTime * _torqueScale);
-    _heli addTorque (_heli vectorModelToWorld _reactionMoment);
-};
+//The torque reaction on the fuselage needs no addTorque: the blade forces are applied at the
+//blades and carry it.
 
 }; // end damage check
 

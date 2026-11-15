@@ -87,8 +87,7 @@ _heli setVariable ["bmkhs_rotorThrustAccum",    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]];
 // snap-back (the rotor over-damps and fights the return to center). Tunable live.
 _heli setVariable ["bmkhs_rotorRateDampScalar", 0.1];
 // BET FORCE-OUTPUT TUNING SCALARS (per airspeed band). BET forces are physics-derived; these
-// tables. 1.0 = pure physics. LIFT scalar -> thrust; TORQUE scalar -> the reaction couple (yaw),
-// SPLIT so thrust and yaw tune independently. Applied in fn_rotorBlade (lift) / fn_rotor (torque).
+// tables. 1.0 = pure physics. Applied to the blade forces in fn_rotorBlade.
 private _betBands = [0.00, 10.29, 20.58, 36.01, 46.30, 51.44, 61.73, 66.88, 72.02];
 _heli setVariable ["bmkhs_betMainLiftTable",   _betBands apply {[_x, 1.0]}];  // main thrust
 _heli setVariable ["bmkhs_betTailLiftTable",   _betBands apply {[_x, 1.0]}];  // tail thrust

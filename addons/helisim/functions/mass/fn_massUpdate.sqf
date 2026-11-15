@@ -27,7 +27,6 @@ private _fs0       = _heli getVariable "bmkhs_fsDatum";
 private _fwdCg     = _heli getVariable "bmkhs_fwdCgLimit";
 private _aftCg     = _heli getVariable "bmkhs_aftCgLimit";
 private _comCorr   = _heli getVariable "bmkhs_comCorrection";
-private _casualCom = _heli getVariable "bmkhs_casualModeCom";
 
 private _curMass = 0;
 private _latMom  = 0;
@@ -153,15 +152,11 @@ private _curLatCG  = _latMom  / _curMass;
 //Get the bounding center
 private _comDatum = boundingCenter _heli;
 //Update the center of mass
-if (bmkhs_helisimRealismSetting != REALISTIC) then {
-    _heli setCenterOfMass (_casualCom vectorAdd [0.0, _cgShift, 0.0]);
-} else {
-    _heli setCenterOfMass [
-          _curLatCG  - (_comDatum select 0) + (_comCorr select 0)
-        , _curLongCG - (_comDatum select 1) + (_comCorr select 1)
-        ,            - (_comDatum select 2) + (_comCorr select 2)
-    ];
-};
+_heli setCenterOfMass [
+      _curLatCG  - (_comDatum select 0) + (_comCorr select 0)
+    , _curLongCG - (_comDatum select 1) + (_comCorr select 1)
+    ,            - (_comDatum select 2) + (_comCorr select 2)
+];
 
 //Update mass
 _heli setMass _curMass;

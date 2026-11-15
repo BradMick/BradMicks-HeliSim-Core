@@ -4,7 +4,7 @@ A 1:1 port of fn_simpleRotor's force path.
 Run it:  set BMKHS_CONFIG=<pack>\\config\\bmkhs_config
          python python/dev/forces.py --cg X Y Z [--gwt KG]
 
---cg is the centre of mass in model space - `getCenterOfMass vehicle player` in game, REALISTIC.
+--cg is the centre of mass in model space - `getCenterOfMass vehicle player` in game.
 Moments are taken about it, as fn_simpleRotor's own forces debug does (position - COM).
 
 What it answers: at each collective, in a hover out of ground effect at 100% Nr, the pedal and

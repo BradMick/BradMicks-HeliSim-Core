@@ -21,9 +21,6 @@
 #define CENTRAL_ASIA_WINTER     5
 #define ASIA                    6
 
-#define CASUAL					0
-#define REALISTIC				2
-
 #define MIN_TIME_BETWEEN_UPDATES 0.3
 
 #define EPSILON                 0.000001

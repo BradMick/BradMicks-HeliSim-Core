@@ -6,8 +6,7 @@ bmkhs_nudgeAeroOff = [0, 0, 0];
 bmkhs_nudgeAeroRot = [0, 0, 0];
 bmkhs_nudgeStart   = [
     ((vehicle player) getVariable ["bmkhs_simpleRotors", []]) apply { [+(_x get "pivot"), +(_x get "rotation"), _x get "mastLength"] },
-    +((vehicle player) getVariable ["bmkhs_comCorrection", [0, 0, 0]]),
-    +((vehicle player) getVariable ["bmkhs_casualModeCom", [0, 0, 0]])
+    +((vehicle player) getVariable ["bmkhs_comCorrection", [0, 0, 0]])
 ];
 
 bmkhs_nudgePlacement = getArray (configOf (vehicle player) >> "BMKHS_HeliSim" >> "fmPlacement");
@@ -86,12 +85,9 @@ bmkhs_nudgeLines = {
             }]
         };
         case "cg": {
-            private _real = bmkhs_helisimRealismSetting == 2;
-            private _var  = ["bmkhs_casualModeCom", "bmkhs_comCorrection"] select _real;
-            private _now  = (_heli getVariable _var) call bmkhs_nudgeFmt;
-            private _was  = (bmkhs_nudgeStart select ([2, 1] select _real)) call bmkhs_nudgeFmt;
-            private _line = ["casualModeCom[] = %1;   //centre of mass, casual modes - helisim_mass.hpp", "comCorrection[] = %1;   //centre of mass, Realistic - helisim_mass.hpp"] select _real;
-            [["Centre of mass (casual)", "Centre of mass (Realistic)"] select _real, [[format [_line, _now], _now != _was]]]
+            private _now  = (_heli getVariable "bmkhs_comCorrection") call bmkhs_nudgeFmt;
+            private _was  = (bmkhs_nudgeStart select 1) call bmkhs_nudgeFmt;
+            ["Centre of mass", [[format ["comCorrection[] = %1;   //centre of mass - helisim_mass.hpp", _now], _now != _was]]]
         };
     };
 };
@@ -161,8 +157,7 @@ bmkhs_nudgeEH = (findDisplay 46) displayAddEventHandler ["KeyDown", {
                 };
             };
             case "cg": {
-                private _var = ["bmkhs_casualModeCom", "bmkhs_comCorrection"] select (bmkhs_helisimRealismSetting == 2);
-                _heli setVariable [_var, (_heli getVariable _var) vectorAdd _d];
+                _heli setVariable ["bmkhs_comCorrection", (_heli getVariable "bmkhs_comCorrection") vectorAdd _d];
             };
         };
     };

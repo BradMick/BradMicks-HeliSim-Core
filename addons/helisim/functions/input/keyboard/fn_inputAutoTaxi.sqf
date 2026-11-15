@@ -55,6 +55,8 @@ private _weight      = 0.0;
         _weight = _weight max ((_compression select _forEachIndex) / (_x get "sag"));
     };
 } forEach (_heli getVariable "bmkhs_wheels");
+//Arma's wheels have no strut to read - on the ground is full weight
+if (_heli getVariable "bmkhs_hasArmaWheels") then { _weight = [0.0, 1.0] select ([_heli] call bmkhs_fnc_stateOnGround) };
 _weight = _weight min 1.0;
 
 private _brakeCtl = (_heli getVariable "bmkhs_wheelSettings") get "brakeControl";

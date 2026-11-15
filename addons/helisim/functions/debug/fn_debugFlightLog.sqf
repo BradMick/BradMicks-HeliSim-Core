@@ -51,12 +51,14 @@ private _sysVars = [];
     forEach ["bmkhs_sysProducers", "bmkhs_sysConverters", "bmkhs_sysStorage", "bmkhs_sysNamed", "bmkhs_sysConsumers"];
 
 private _cols = [
-    "t", "id", "type", "realism",
+    "t", "id", "type",
     "kts", "gsKts", "altFt", "radAltFt", "baroAltFt", "fatC", "vsFpm", "pitch", "bank", "hdg", "betaG", "betaDeg",
     "pRateDps", "rRateDps", "yRateDps",
     "tq1", "tq2", "np1", "np2", "nr",
     "cyc", "cycLR", "pedal", "coll", "ftPitch", "ftRoll", "ftYaw", "pedalInL", "pedalInR",
     "pitchScheme", "rollScheme", "pedalScheme",
+    "kbPitch", "kbRoll", "kbPedal", "hotasGamepadPitch", "hotasGamepadRoll", "hotasGamepadPedal",
+    "mousePitch", "mouseRoll", "mousePedal",
     "sasP", "sasR", "sasY", "attP", "attR", "hdgY", "altC", "mixP", "mixR", "mixY",
     "sasAv", "attAv", "altAv", "hdgAv", "fdAv",
     "attOn", "attSub", "altOn", "altSub", "hdgOn", "hdgSub", "ftInt",
@@ -122,11 +124,22 @@ private _forceItems = [];
     _forceItems pushBack (_x + ":" + (((_fv + _mv) apply {_x toFixed 0}) joinString "|"));
 } forEach _fNames;
 private _forces = _forceItems joinString ";";
+//Every control scheme's own cyclic and pedal, whichever scheme has the axis, summed as
+//fn_inputRead sums them: + forward, + left, + right pedal
+private _schemeIn = [];
+{
+    private _in = "bmkhs_" + _x;
+    _schemeIn append [
+        ((_heli getVariable (_in + "PitchForwardOut")) - (_heli getVariable (_in + "PitchBackwardOut"))) call _f,
+        ((_heli getVariable (_in + "RollLeftOut"))     - (_heli getVariable (_in + "RollRightOut")))     call _f,
+        ((_heli getVariable (_in + "PedalRightOut"))   - (_heli getVariable (_in + "PedalLeftOut")))     call _f
+    ];
+} forEach ["kb", "hotasGamepad", "mouse"];
 //Targets in ft and kt, like the rest of the log
 private _tgtUnits = createHashMapFromArray [["ralt", METERS_TO_FEET], ["alt", METERS_TO_FEET], ["altp", METERS_TO_FEET], ["ias", MPS_TO_KNOTS]];
 
 private _row = [
-    time toFixed 2, netId _heli, typeOf _heli, str bmkhs_helisimRealismSetting,
+    time toFixed 2, netId _heli, typeOf _heli,
     (((_heli getVariable "bmkhs_velModelSpace") select 1) * MPS_TO_KNOTS) toFixed 1,
     ((_heli getVariable "bmkhs_gndSpeed") * MPS_TO_KNOTS) toFixed 1,
     (((getPosASL _heli) select 2) * METERS_TO_FEET) toFixed 1,
@@ -144,7 +157,8 @@ private _row = [
     (_heli getVariable "bmkhs_forceTrimPosYaw") call _f,
     (_heli getVariable ("bmkhs_" + bmkhs_pedalScheme + "PedalLeftOut")) call _f, (_heli getVariable ("bmkhs_" + bmkhs_pedalScheme + "PedalRightOut")) call _f,
     //The control scheme that has each axis: kb / hotasGamepad / mouse
-    bmkhs_pitchScheme, bmkhs_rollScheme, bmkhs_pedalScheme,
+    bmkhs_pitchScheme, bmkhs_rollScheme, bmkhs_pedalScheme
+] + _schemeIn + [
     (_heli getVariable "bmkhs_fmcSasPitchOut") call _f, (_heli getVariable "bmkhs_fmcSasRollOut") call _f,
     (_heli getVariable "bmkhs_fmcSasYawOut") call _f,
     (_heli getVariable "bmkhs_fmcAttHoldCycPitchOut") call _f, (_heli getVariable "bmkhs_fmcAttHoldCycRollOut") call _f,

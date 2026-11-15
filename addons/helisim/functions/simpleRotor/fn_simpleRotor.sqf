@@ -34,10 +34,6 @@ private _gearRatio        = _rotor get "gearRatio";
 private _pivot            = _rotor get "pivot";
 private _mastLength       = _rotor get "mastLength";
 private _rot              = _rotor get "rotation";
-//Casual sets a tail rotor upright - no cant, so it yaws without pitching or rolling the aircraft.
-if (bmkhs_helisimRealismSetting != REALISTIC && {_type == TAIL}) then {
-    _rot = [0.0, [90.0, -90.0] select ((_rot select 1) < 0), _rot select 2];
-};
 private _flapLonMin       = _rotor get "pitchFlapMin";
 private _flapLonMid       = _rotor get "pitchFlapMid";
 private _flapLonMax       = _rotor get "pitchFlapMax";
@@ -126,12 +122,6 @@ private _tableKey       = if (_controlMap isEqualTo []) then { _collOutput } els
     ([_controlMap, _collOutput] call bmkhs_fnc_mathLinearInterp) select 1
 };
 
-//Dissymetry of lift - casual has none, the disc does not tilt with speed
-private _realistic      = bmkhs_helisimRealismSetting == REALISTIC;
-if (!_realistic) then {
-    _reacTqScalar       = 0.0;
-};
-
 //Gross weight over the weight the tables were fitted at - 1.0 where the pack names none
 private _fitGrossMass   = _heli getVariable "bmkhs_fitGrossMass";
 private _weightRatio    = if (_fitGrossMass > 0.0) then { (_heli getVariable "bmkhs_gwt") / _fitGrossMass } else { 1.0 };
@@ -208,7 +198,7 @@ private _bladeDynPressure = 0.5 * _dryAirDensity * _bladeArea * (_bladeVel_75 * 
 //Flap back - the disc tilts aft with speed and sideways with coning, main rotors only
 private _lonTilt        = _flapLon;
 private _latTilt        = _flapLat;
-if (_realistic && {_type == MAIN} && {_tipVel > 1.0}) then {
+if (_type == MAIN && {_tipVel > 1.0}) then {
     private _mu          = _velXY / _tipVel;
     private _windAzimuth = if (_velXY > 0.01) then { _velX atan2 _velY } else { 0.0 };
     //Induced velocity - momentum theory on this rotor's thrust
@@ -250,7 +240,7 @@ for "_i" from 0 to 3 do {
     private _locFVec    = [_discFVec, _discUVec, _psi] call bmkhs_fnc_mathVectorRotateAroundAxis;
     private _liftDir    = [_discUVec, _locFVec, _collCone] call bmkhs_fnc_mathVectorRotateAroundAxis;
     _bladeFrames pushBack [_locRVec, _locFVec, _liftDir];
-    _bladeInflow pushBack ([0.0, -((((_velModel vectorDotProduct _liftDir) * _thrustSign) - _axialVel) / VEL_VRS)] select _realistic);
+    _bladeInflow pushBack (-((((_velModel vectorDotProduct _liftDir) * _thrustSign) - _axialVel) / VEL_VRS));
 };
 //Average held to the hub's
 private _inflowMean     = 0.0;

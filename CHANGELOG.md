@@ -16,6 +16,11 @@
   switch: true while the wheel `weightOnWheels` names is compressed, or any wheel if none is named.
   Aircraft without wheels keep the `isTouchingGround` / radar altitude test.
   `bmkhs_wheelCompression` rides in the net state, so the answer holds on the crew's machines.
+- **Arma's wheels.** An aircraft whose wheels Arma runs declares `class Wheels` with
+  `hasArmaWheels = 1`, its `brakeControl` and no wheels. Core runs no suspension for it; auto taxi,
+  the taxi pedal regime and the roll hold run as on Core's wheels, with weight on the gear taken
+  from the `isTouchingGround` / radar altitude test. The taxi rows and `cyclicFade[]` are required
+  as with any `class Wheels`.
 
 ### Flight controls
 - **Auto pedal taxis.** A fourth regime, `taxi`, in and out on the squat switch. Under 10 kt it
@@ -57,8 +62,7 @@
   the stick. A key's tap commands a slow rate and its hold a quick one; the mouse commands a rate in
   proportion to its travel. On release the aircraft holds the pitch and bank it has.
   Core flies the cyclic from the difference between the commanded rate and the aircraft's measured
-  rate, as a pilot would - through the primary control, not trim or the SAS - at both realism
-  levels. Gains are the aircraft's `pidRateCommandPitch[]` and `pidRateCommandRoll[]`
+  rate, as a pilot would - through the primary control, not trim or the SAS. Gains are the aircraft's `pidRateCommandPitch[]` and `pidRateCommandRoll[]`
   {kp, ki, kd, limit}, sized to its control authority and **required in every pack**: a missing
   row is a config error and the keyboard cyclic does nothing on that axis. The rates are Core's
   (`RATECMD_*`, `core.hpp`).
@@ -89,7 +93,7 @@
   backs off as the squat strut unloads. Lifting off with the forward key held is a rolling takeoff:
   up to 50 ft the key blends from that hold into the rate command's nose-down rate, by the square
   of the height, so the key does not change meaning in one step. The setting is
-  "Keyboard & Mouse Auto Taxi", on by default, at both realism levels; it and sticky pitch clear each
+  "Keyboard & Mouse Auto Taxi", on by default; it and sticky pitch clear each
   other. Gains are the aircraft's `pidAutoTaxi[]` {kp, ki, kd, limit}, cyclic per m/s, **required
   in every pack with wheels**. Rolling with the roll key or mouse at rest it also holds the roll rate
   at zero, so the cyclic goes into a turn as the aircraft leans out of it: `pidAutoTaxiRoll[]`
@@ -98,6 +102,13 @@
 - **Sticky keys are the keyboard's only.** Sticky pitch, roll and yaw apply only while the keyboard
   has that axis, and each turns the rate command off on its axis. A keyboard or mouse axis takes
   no force trim.
+
+### Flight model
+- **One flight model.** The "Aircraft Realism Settings" selection is gone, and Casual with it.
+  Every aircraft flies what Realistic was: a canted tail rotor keeps its cant, the disc flaps back
+  with speed, blade inflow counts, control mixing applies, and the centre of mass is worked out
+  from the load. `casualModeCom[]` is no longer read and can come out of a pack. The flight log
+  loses its `realism` column.
 
 ### Rotor
 - **Torque follows gross weight in forward flight.** A pack names the weight its main rotor tables
@@ -114,6 +125,11 @@
   coefficients by it, so full authority at taxi power does not lift a wheel while an autorotation
   keeps the floor. Required with `class Wheels`, a config error without it; optional otherwise,
   and a pack that does not declare it flies as before. The AH-64D's, moved out of its pack.
+
+### Flight log
+- **Every control scheme's input.** `kbPitch` / `kbRoll` / `kbPedal`, `hotasGamepadPitch` /
+  `hotasGamepadRoll` / `hotasGamepadPedal` and `mousePitch` / `mouseRoll` / `mousePedal`: each
+  scheme's own cyclic and pedal, whichever scheme has the axis (+ forward, + left, + right pedal).
 
 ### State
 - **The aircraft flies on this frame's values.** The 10-frame moving average is gone. It was a

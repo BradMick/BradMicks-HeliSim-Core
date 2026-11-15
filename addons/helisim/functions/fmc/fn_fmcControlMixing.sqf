@@ -13,8 +13,6 @@ Description:
     what the collective-sourced yaw mixes add - the mixing unit sees tail rotor pitch, not
     the pedals. So collective mixes are summed first, then pedal mixes read that.
 
-    Mixing is a REALISTIC feature - outside it there is none.
-
 Parameters:
     _heli - The helicopter [Object]
     _coll - The collective the rotor gets, pilot's and holds', 0..1 [Number]
@@ -30,7 +28,6 @@ Author:
 params ["_heli", "_coll"];
 
 private _out = [0.0, 0.0, 0.0, 0.0];
-if (bmkhs_helisimRealismSetting != REALISTIC) exitWith {_out};
 
 private _pedal = [_heli getVariable "bmkhs_pedalLeftRight", _heli getVariable "bmkhs_forceTrimPosYaw"] call bmkhs_fnc_inputGetInterp;
 private _kts   = (_heli getVariable "bmkhs_vel2D") * MPS_TO_KNOTS;   //the airspeed[] table is in knots

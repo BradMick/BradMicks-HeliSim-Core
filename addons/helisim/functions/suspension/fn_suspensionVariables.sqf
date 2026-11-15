@@ -4,6 +4,7 @@ Function: bmkhs_fnc_suspensionVariables
 Description:
     Loads class Wheels - every wheel the aircraft declares, or none - and seeds
     the suspension's state. Fits the static load split and the wheel plane once.
+    With hasArmaWheels the wheels are Arma's: Core runs none.
 
 Parameters:
     _heli   - The helicopter [Object]
@@ -30,6 +31,11 @@ private _settings = createHashMap;
     ["muRoll", "muBrake", "muSide", "muCastorFree", "muCastorLocked", "castorTrail", "castorPinAngle"];
 _settings set ["brakeControl",   getText (_cfg >> "brakeControl")];
 _settings set ["weightOnWheels", getText (_cfg >> "weightOnWheels")];
+//Arma runs these wheels - Core runs none, and what goes with wheels still applies
+private _armaWheels = getNumber (_cfg >> "hasArmaWheels") > 0;
+if (_armaWheels && {("true" configClasses _cfg) isNotEqualTo []}) then {
+    "[BMKHS] WHEELS CONFIG ERROR: hasArmaWheels is set and class Wheels declares wheels. Arma runs the wheels; Core's are off." call bmkhs_fnc_utilConfigError;
+};
 
 if ((_settings get "brakeControl") isNotEqualTo "" && {!((_settings get "brakeControl") in _ctrlIndex)}) then {
     [format [
@@ -80,7 +86,7 @@ private _wheels = [];
     };
 
     _wheels pushBack _wheel;
-} forEach ("true" configClasses _cfg);
+} forEach ([("true" configClasses _cfg), []] select _armaWheels);
 
 //The static load split and the wheel plane, about the wheels' centroid
 private _loadFit = [];
@@ -124,6 +130,7 @@ if (_wheels isNotEqualTo [] && {(_settings get "weightOnWheels") isNotEqualTo ""
 };
 
 _heli setVariable ["bmkhs_numWheels",           count _wheels];
+_heli setVariable ["bmkhs_hasArmaWheels",       _armaWheels];
 _heli setVariable ["bmkhs_wheels",              _wheels];
 _heli setVariable ["bmkhs_wheelWow",            _wow];
 _heli setVariable ["bmkhs_wheelSettings",       _settings];

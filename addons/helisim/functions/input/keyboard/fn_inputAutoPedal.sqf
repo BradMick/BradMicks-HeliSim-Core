@@ -68,7 +68,7 @@ private _velFwd = (_heli getVariable "bmkhs_velModelSpaceNoWind") select 1;
 private _regime = _heli getVariable "bmkhs_autoPedalRegime";
 //TAXI <-> the air, on the squat switch. Weight on wheels needs wheels; a skid aircraft never taxis.
 //Off the wheels it lands in the regime the speed says - HDG from a hover lift-off, NTT from a roll.
-private _wheels   = (_heli getVariable "bmkhs_numWheels") > 0;
+private _wheels   = (_heli getVariable "bmkhs_numWheels") > 0 || {_heli getVariable "bmkhs_hasArmaWheels"};
 private _onGround = [_heli] call bmkhs_fnc_stateOnGround;
 private _onWheels = _wheels && _onGround;
 if (_regime != "taxi" && _onWheels) then {
@@ -123,6 +123,8 @@ if (_wheels) then {
             _frac = _frac max ((_compression select _forEachIndex) / (_x get "sag"));
         };
     } forEach _wheelList;
+    //Arma's wheels have no strut to read - on the ground is full weight
+    if (_heli getVariable "bmkhs_hasArmaWheels") then { _frac = [0.0, 1.0] select _onGround };
     _frac      = _frac min 1.0;
     _authority = 1.0 - (1.0 - AUTOPEDAL_TAXI_AUTHORITY) * _frac;
 };
