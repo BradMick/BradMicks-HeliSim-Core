@@ -238,6 +238,8 @@ _heli setVariable ["bmkhs_engNp",                 +_zeros];
 _heli setVariable ["bmkhs_engPctNp",              +_zeros];
 //The freewheel - true while the turbine is driving the rotor.
 _heli setVariable ["bmkhs_engClutch",             _engines apply {false}];
+//How much of the time it has been gripping, 0 to 1 - what the torque gauge is scaled by.
+_heli setVariable ["bmkhs_engFreewheelGrip",      +_zeros];
 _heli setVariable ["bmkhs_engPctTq",              +_zeros];
 //TGT is state, so it starts at ambient.
 _heli setVariable ["bmkhs_engTgt",                _engines apply {_heli getVariable "bmkhs_fat"}];

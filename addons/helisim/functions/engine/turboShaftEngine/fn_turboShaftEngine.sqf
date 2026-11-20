@@ -145,7 +145,13 @@ _tqOut = _tqOut * ((_heli getVariable "bmkhs_engClutchSlip") select _index);
 [_heli, "bmkhs_engPctNg",    _index, _ngNew] call bmkhs_fnc_utilSetArrayVariable;
 [_heli, "bmkhs_engTgt",      _index, _tgt] call bmkhs_fnc_utilSetArrayVariable;
 [_heli, "bmkhs_engOutputTq", _index, _tqOut] call bmkhs_fnc_utilSetArrayVariable;
-[_heli, "bmkhs_engPctTq",    _index, _tqOut / _refTq] call bmkhs_fnc_utilSetArrayVariable;
+
+//The gauge reads what passes through the freewheel. A released turbine drives nothing, whatever gas
+//holds its Np; a rotor needing less than that is driven in pulses, so the grip is taken over time.
+private _grip = [(_heli getVariable "bmkhs_engFreewheelGrip") select _index, [0.0, 1.0] select _clutch,
+    _deltaTime, GT_FREEWHEEL_GRIP_TIME] call bmkhs_fnc_utilSmooth;
+[_heli, "bmkhs_engFreewheelGrip", _index, _grip] call bmkhs_fnc_utilSetArrayVariable;
+[_heli, "bmkhs_engPctTq",    _index, (_tqOut * _grip) / _refTq] call bmkhs_fnc_utilSetArrayVariable;
 
 [_heli, "bmkhs_engNp",     _index, _npNew] call bmkhs_fnc_utilSetArrayVariable;
 [_heli, "bmkhs_engClutch", _index, _clutch] call bmkhs_fnc_utilSetArrayVariable;

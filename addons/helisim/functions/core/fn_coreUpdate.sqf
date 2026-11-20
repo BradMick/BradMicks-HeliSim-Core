@@ -43,7 +43,8 @@ if (((crew _heli) findIf {isPlayer _x}) < 0
     && {(_heli getVariable "bmkhs_rtrRpm") <= 0.01}
     && {!(_heli getVariable "bmkhs_apuOn")}
     && {!(_heli getVariable "bmkhs_battBusOn")}) exitWith {
-    _heli setVariable ["bmkhs_previousTime", diag_tickTime];
+    //The frame clock keeps running: the wheels need the frame time, and the first frame awake does not see the whole wait
+    [_heli] call bmkhs_fnc_stateDeltaTime;
     //The wheels hold a parked aircraft
     [_heli] call bmkhs_fnc_suspensionUpdate;
 };

@@ -126,6 +126,13 @@
   keeps the floor. Required with `class Wheels`, a config error without it; optional otherwise,
   and a pack that does not declare it flies as before. The AH-64D's, moved out of its pack.
 
+### Engine
+- **Torque reads what reaches the rotor.** `bmkhs_engPctTq` is the torque passed through the
+  freewheel, not the gas torque on the turbine. With the rotor overrunning the engines - an
+  autorotation at FLY - it reads 0%, where it sat at the released turbine's own drag (`ptDrag`, 6%
+  on the AH-64D), and it reaches 0% as the air takes the rotor over, before the collective is fully
+  down. Readings with the engines driving are unchanged.
+
 ### Flight log
 - **Every control scheme's input.** `kbPitch` / `kbRoll` / `kbPedal`, `hotasGamepadPitch` /
   `hotasGamepadRoll` / `hotasGamepadPedal` and `mousePitch` / `mouseRoll` / `mousePedal`: each

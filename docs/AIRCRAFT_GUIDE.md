@@ -1475,8 +1475,8 @@ class ParkBrake {
     wraps        = 1;
     networked    = 1;
     class Positions {
-        class Off { displayName = "Parking Brake - Off"; value = 0; };
-        class On  { displayName = "Parking Brake - On";  value = 1; };
+        class Off { displayName = "Parking Brake - Release"; value = 0; };
+        class On  { displayName = "Parking Brake - Set";     value = 1; };
     };
 };
 ```
@@ -1883,8 +1883,9 @@ machines, and what it means. Inputs are the config field references
 | `bmkhs_engPowerLeverState` | array of strings, per engine: `"OFF"`, `"IDLE"`, `"FLY"` | net on change | Power lever detent. With useSystems = 1 it follows `bmkhs_eng<N>PwrLvrVal` (>= 1 FLY, > 0 IDLE, else OFF). With useSystems = 0 Core moves it to IDLE on Arma engine-on, then to FLY once Ng has held idle for 1 s (set in `engine/fn_engineUpdate.sqf`). |
 | `bmkhs_engPctNg` | array of numbers, per engine, fraction (1.0 = 100% Ng) | 10 Hz | Gas generator speed. Clamped 0 to 1.1 (set in `engine/turboShaftEngine/fn_turboShaftEngine.sqf`). |
 | `bmkhs_engPctNp` | array of numbers, per engine, fraction of `designRpm` (1.0 = 100%) | 10 Hz | Power turbine speed as the gauge reads it. Governed Np shows `npFly` (e.g. 1.01 = 101%) (set in `engine/turboShaftEngine/fn_turboShaftEngine.sqf`). |
-| `bmkhs_engPctTq` | array of numbers, per engine, fraction (1.0 = 100%) | 10 Hz | Engine torque against `refTq` (torque at `powerKw` at `designRpm * npFly`). Includes clutch slip (set in `engine/turboShaftEngine/fn_turboShaftEngine.sqf`). |
-| `bmkhs_engOutputTq` | array of numbers, per engine, Nm | local | Power turbine output torque, after clutch slip. Same value as `bmkhs_engPctTq` but in Nm. Not broadcast (set in `engine/turboShaftEngine/fn_turboShaftEngine.sqf`). |
+| `bmkhs_engPctTq` | array of numbers, per engine, fraction (1.0 = 100%) | 10 Hz | Engine torque delivered through the freewheel, against `refTq` (torque at `powerKw` at `designRpm * npFly`). Includes clutch slip, and reads 0 while the rotor overruns the turbine - an autorotation with the engines at FLY (set in `engine/turboShaftEngine/fn_turboShaftEngine.sqf`). |
+| `bmkhs_engOutputTq` | array of numbers, per engine, Nm | local | Power turbine output torque, after clutch slip, whether or not the freewheel is engaged - a released turbine still makes the torque that holds its own Np. Not broadcast (set in `engine/turboShaftEngine/fn_turboShaftEngine.sqf`). |
+| `bmkhs_engFreewheelGrip` | array of numbers, per engine, 0 to 1 | local | Share of the last quarter second the freewheel has been engaged; `bmkhs_engPctTq` is scaled by it (set in `engine/turboShaftEngine/fn_turboShaftEngine.sqf`). |
 | `bmkhs_engTgt` | array of numbers, per engine, °C | 10 Hz | Turbine gas temperature as the gauge reads it (lagged). Starts at free air temperature (set in `engine/turboShaftEngine/fn_turboShaftEngine.sqf`). |
 | `bmkhs_engOilPsi` | array of numbers, per engine, gauge fraction (not psi) | 10 Hz | Oil pressure = Ng × 0.90 × oil health. Same units as config `oilPsiLimits[] = {min, max}` (e.g. {0.23, 1.20}) (set in `engine/turboShaftEngine/fn_turboShaftEngine.sqf`). |
 | `bmkhs_engFuelFlow` | array of numbers, per engine, kg/s | 10 Hz | Fuel flow = commanded fuel units × config `maxFuelFlow`. Also what the fuel pump draws from the tank (set in `engine/turboShaftEngine/fn_turboShaftEngine.sqf`). |

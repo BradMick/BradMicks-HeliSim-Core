@@ -49,6 +49,9 @@
 //infinity as Np falls to zero, and a real turbine's does not.
 #define GT_PT_STALL_TQ      2.5
 
+//The freewheel's grip as the torque gauge reads it, taken over this long
+#define GT_FREEWHEEL_GRIP_TIME  0.25    //s
+
 //Compressor power at Ng 1.0, ISA, in spool units - the spool's torque scale.
 #define GT_SPOOL_UNIT_LOAD  2.91244
 

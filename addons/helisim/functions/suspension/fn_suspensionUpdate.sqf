@@ -25,7 +25,7 @@ params ["_heli"];
 private _wheels = _heli getVariable "bmkhs_wheels";
 if (_wheels isEqualTo []) exitWith {};
 
-//The idle gate returns before bmkhs_deltaTime is published, so an aircraft nobody has boarded reads 0.0
+//0.0 until the frame clock has run once; the strut and grip divide by it
 private _deltaTime = _heli getVariable "bmkhs_deltaTime";
 if (_deltaTime <= 0.0) exitWith {};
 
