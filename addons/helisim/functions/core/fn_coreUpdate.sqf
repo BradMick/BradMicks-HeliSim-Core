@@ -185,7 +185,7 @@ if (bmkhs_fmDebug && {!bmkhs_sysDebug} && {vehicle player == _heli}) then {
     bmkhs_springlessPedals,                                          //7
     bmkhs_keyboardStickyPitch,                                       //8
     bmkhs_keyboardStickyRoll,                                        //9
-    bmkhs_keyboardStickyYaw,                                         //10
+    bmkhs_keyboardGamepadStickyYaw,                                  //10
     bmkhs_autoPedal,                                                 //11
     bmkhs_cyclicCenterTrimMode,                                          //12
     bmkhs_pedalCenterTrimMode,                                           //13

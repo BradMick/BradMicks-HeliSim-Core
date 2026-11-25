@@ -42,7 +42,10 @@
   and its speed state are gone.
 - **A set of binds per control scheme.** Cyclic and pedals are now bound separately for keyboard,
   mouse and HOTAS or gamepad - `Keyboard Pitch Forward`, `Mouse Pitch Forward`,
-  `HOTAS/Gamepad Pitch Forward` and so on, for pitch, roll and pedal. Whichever scheme was last used on an axis has that axis, as the
+  `HOTAS/Gamepad Pitch Forward` and so on, for pitch and roll. The pedal's are
+  `Keyboard/Gamepad Pedal Left`, `HOTAS Pedal Left` and `Mouse Pedal Left`, and their rights: a
+  gamepad's pedal is a button, pressed or not, so it binds with the keys and auto pedal works it,
+  where on a pedal axis bind every press is full pedal. Whichever scheme was last used on an axis has that axis, as the
   collective already works, so any mix flies. **The old Cyclic / Pedal binds are gone: rebind
   HOTAS, gamepad and mouse axes on the new binds.** The keyboard binds default to W/S/A/D and Q/E.
 - **Mouse as Joystick setting removed.** Binding the Mouse binds is the switch.
@@ -76,16 +79,18 @@
   instead of a jump. The force trim switch does nothing on an axis the rate command has, and the
   trim eases to neutral on the ground.
 - **The pedal is a rate command too, and the feet work the pedal.** With auto pedal on and off the
-  wheels, a held pedal asks for a rate of yaw - a key's tap 15 deg/s, its hold 45, the mouse or
-  gamepad in proportion to travel - and the foot strokes to the pedal that gives it, from the
+  wheels, a held pedal asks for a rate of yaw - a key's or gamepad button's tap 15 deg/s, its
+  hold 45, the mouse in proportion to travel - and the foot strokes to the pedal that gives it, from the
   measured yaw rate. Released, the regimes carry on as before: heading hold in the hover,
   nose-to-tail, ball centred, taxi. On the wheels a held pedal is still the pedal itself. The foot
   now moves the primary pedal, not the yaw trim; once settled its pedal is moved into the trim, as
   the cyclic's is. Gains are the aircraft's `pidRateCommandYaw[]` {kp, ki, kd, limit}, **required
-  in every pack**. The setting is now "Keyboard & Mouse Auto Pedal". It is ignored
-  while the HOTAS/Gamepad pedal binds have the pedals - the pedals are then the pilot's and the FMC's, as
-  with it off - and it takes the pedal back from where it is when a key or the mouse does.
-  Selecting sticky yaw clears it, as selecting it clears sticky yaw.
+  in every pack**. The setting is now "Keyboard/Gamepad & Mouse Auto Pedal". It is ignored
+  while the HOTAS pedal binds have the pedals - the pedals are then the pilot's and the FMC's, as
+  with it off - and it takes the pedal back from where it is when a key, a gamepad button or the
+  mouse does. Selecting sticky yaw clears it, as selecting it clears sticky yaw. Sticky yaw is now
+  "Keyboard/Gamepad Sticky Yaw" (`bmkhs_keyboardGamepadStickyYaw`), as it acts on those binds.
+  **It is a new setting: a saved Keyboard Sticky Yaw choice returns to off - set it again.**
 - **Keyboard and mouse auto taxi.** On the wheels a pitch key or the mouse was a rate of pitch the aircraft could not give
   on its gear, and it put in full cyclic and tipped the aircraft. On the wheels the forward key now
   holds 6 kt of taxi speed, the back key 6 kt backward, and released the aircraft is brought to a
@@ -136,8 +141,8 @@
   down. Readings with the engines driving are unchanged.
 
 ### Flight log
-- **Every control scheme's input.** `kbPitch` / `kbRoll` / `kbPedal`, `hotasGamepadPitch` /
-  `hotasGamepadRoll` / `hotasGamepadPedal` and `mousePitch` / `mouseRoll` / `mousePedal`: each
+- **Every control scheme's input.** `kbPitch` / `kbRoll` / `kbGamepadPedal`, `hotasGamepadPitch` /
+  `hotasGamepadRoll` / `hotasPedal` and `mousePitch` / `mouseRoll` / `mousePedal`: each
   scheme's own cyclic and pedal, whichever scheme has the axis (+ forward, + left, + right pedal).
 
 ### State

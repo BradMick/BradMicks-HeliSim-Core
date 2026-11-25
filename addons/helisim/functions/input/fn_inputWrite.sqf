@@ -37,8 +37,8 @@ if (!_rateRoll)  then { _heli setVariable ["bmkhs_rateCommandRollOn",  false] };
 //Frozen controls stay where they were
 if (_frozen) exitWith {};
 
-//Auto pedal is the feet of a player without pedals - HOTAS/Gamepad pedals in use, it is ignored
-private _autoPedal = bmkhs_autoPedal && {bmkhs_pedalScheme != "hotasGamepad"};
+//Auto pedal is the feet of a player without pedals - HOTAS pedals in use, it is ignored
+private _autoPedal = bmkhs_autoPedal && {bmkhs_pedalScheme != "hotas"};
 
 if (_piloted) then {
     private _deltaTime         = _heli getVariable "bmkhs_deltaTime";

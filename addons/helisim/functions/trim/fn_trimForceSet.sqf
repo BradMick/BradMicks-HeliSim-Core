@@ -42,12 +42,12 @@ if !(_heli getVariable "bmkhs_rateCommandRollOn") then {
         _heli setVariable ["bmkhs_forceTrimPosRoll", _rollTrimVal];
     };
 };
-//Pedal trim - the feet keep their own (auto pedal, unless HOTAS/Gamepad pedals are in use)
-if !(bmkhs_autoPedal && {bmkhs_pedalScheme != "hotasGamepad"}) then {
+//Pedal trim - the feet keep their own (auto pedal, unless HOTAS pedals are in use)
+if !(bmkhs_autoPedal && {bmkhs_pedalScheme != "hotas"}) then {
     private _curPedalLeftRight  = (_heli getVariable "bmkhs_pedalLeftRight");
     private _prevPedalLeftRight = _heli getVariable "bmkhs_forceTrimPosYaw";
     private _pedalTrimVal       = [_curPedalLeftRight, _prevPedalLeftRight] call bmkhs_fnc_inputGetInterp;
-    if (bmkhs_springlessPedals || {bmkhs_keyboardStickyYaw && {bmkhs_pedalScheme == "kb"}}) then {
+    if (bmkhs_springlessPedals || {bmkhs_keyboardGamepadStickyYaw && {bmkhs_pedalScheme == "kbGamepad"}}) then {
         _heli setVariable ["bmkhs_forceTrimPosYaw", 0.0];
     } else {
         _heli setVariable ["bmkhs_forceTrimPosYaw", _pedalTrimVal];

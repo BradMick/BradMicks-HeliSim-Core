@@ -291,7 +291,7 @@ private _asksRate = _engaged && {_regime != "taxi"} && {_pedalLeftRight != 0.0} 
 if (_asksRate) then {
     //The rate command releases under its deadband; the foot is on the pedal
     private _key = ((abs _pedalLeftRight) max RATECMD_DEADBAND) * ([1, -1] select (_pedalLeftRight < 0.0));
-    private _out = [_heli, _deltaTime, "Yaw", _key, bmkhs_pedalScheme == "kb", _yawRate, -_curHdg, _onGround] call bmkhs_fnc_inputRateCommand;
+    private _out = [_heli, _deltaTime, "Yaw", _key, bmkhs_pedalScheme == "kbGamepad", _yawRate, -_curHdg, _onGround] call bmkhs_fnc_inputRateCommand;
     _target = [_trim + _out, -1.0, 1.0] call BIS_fnc_clamp;
 } else {
     _heli setVariable ["bmkhs_rateCommandYawOn",   false];

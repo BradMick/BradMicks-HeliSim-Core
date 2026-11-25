@@ -113,7 +113,7 @@ if (bmkhs_keyboardStickyRoll && {bmkhs_rollScheme == "kb"}) then {
     };
 };
 //Pedal yaw
-if (bmkhs_keyboardStickyYaw && {bmkhs_pedalScheme == "kb"} && {!bmkhs_autoPedal}) then {
+if (bmkhs_keyboardGamepadStickyYaw && {bmkhs_pedalScheme == "kbGamepad"} && {!bmkhs_autoPedal}) then {
     private _pedalYawValue     = _heli getVariable "bmkhs_pedalYawValue";
     private _prevPedalYawValue = _heli getVariable "bmkhs_prevPedalYawValue";
 

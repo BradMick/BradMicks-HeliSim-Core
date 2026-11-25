@@ -57,7 +57,7 @@ private _cols = [
     "tq1", "tq2", "np1", "np2", "nr",
     "cyc", "cycLR", "pedal", "coll", "ftPitch", "ftRoll", "ftYaw", "pedalInL", "pedalInR",
     "pitchScheme", "rollScheme", "pedalScheme",
-    "kbPitch", "kbRoll", "kbPedal", "hotasGamepadPitch", "hotasGamepadRoll", "hotasGamepadPedal",
+    "kbPitch", "kbRoll", "kbGamepadPedal", "hotasGamepadPitch", "hotasGamepadRoll", "hotasPedal",
     "mousePitch", "mouseRoll", "mousePedal",
     "sasP", "sasR", "sasY", "attP", "attR", "hdgY", "altC", "mixP", "mixR", "mixY",
     "sasAv", "attAv", "altAv", "hdgAv", "fdAv",
@@ -125,16 +125,18 @@ private _forceItems = [];
 } forEach _fNames;
 private _forces = _forceItems joinString ";";
 //Every control scheme's own cyclic and pedal, whichever scheme has the axis, summed as
-//fn_inputRead sums them: + forward, + left, + right pedal
+//fn_inputRead sums them: + forward, + left, + right pedal. [the cyclic's scheme, the pedal's]
 private _schemeIn = [];
 {
-    private _in = "bmkhs_" + _x;
+    _x params ["_cyclicScheme", "_pedalScheme"];
+    private _in    = "bmkhs_" + _cyclicScheme;
+    private _pedIn = "bmkhs_" + _pedalScheme;
     _schemeIn append [
         ((_heli getVariable (_in + "PitchForwardOut")) - (_heli getVariable (_in + "PitchBackwardOut"))) call _f,
         ((_heli getVariable (_in + "RollLeftOut"))     - (_heli getVariable (_in + "RollRightOut")))     call _f,
-        ((_heli getVariable (_in + "PedalRightOut"))   - (_heli getVariable (_in + "PedalLeftOut")))     call _f
+        ((_heli getVariable (_pedIn + "PedalRightOut")) - (_heli getVariable (_pedIn + "PedalLeftOut"))) call _f
     ];
-} forEach ["kb", "hotasGamepad", "mouse"];
+} forEach [["kb", "kbGamepad"], ["hotasGamepad", "hotas"], ["mouse", "mouse"]];
 //Targets in ft and kt, like the rest of the log
 private _tgtUnits = createHashMapFromArray [["ralt", METERS_TO_FEET], ["alt", METERS_TO_FEET], ["altp", METERS_TO_FEET], ["ias", MPS_TO_KNOTS]];
 
@@ -156,7 +158,7 @@ private _row = [
     (_heli getVariable "bmkhs_forceTrimPosPitch") call _f, (_heli getVariable "bmkhs_forceTrimPosRoll") call _f,
     (_heli getVariable "bmkhs_forceTrimPosYaw") call _f,
     (_heli getVariable ("bmkhs_" + bmkhs_pedalScheme + "PedalLeftOut")) call _f, (_heli getVariable ("bmkhs_" + bmkhs_pedalScheme + "PedalRightOut")) call _f,
-    //The control scheme that has each axis: kb / hotasGamepad / mouse
+    //The control scheme that has each axis: kb / hotasGamepad / mouse - the pedal's, kbGamepad / hotas / mouse
     bmkhs_pitchScheme, bmkhs_rollScheme, bmkhs_pedalScheme
 ] + _schemeIn + [
     (_heli getVariable "bmkhs_fmcSasPitchOut") call _f, (_heli getVariable "bmkhs_fmcSasRollOut") call _f,
@@ -173,7 +175,7 @@ private _row = [
     str ((_heli getVariable "bmkhs_hdgHoldActive") call _b), _heli getVariable "bmkhs_hdgHoldSubMode",
     str ((_heli getVariable "bmkhs_forceTrimInterupted") call _b),
     //Auto pedal: on, regime (hdg / ntt / aero), hover heading captured, that heading, the foot's pedal
-    str ((bmkhs_autoPedal && {bmkhs_pedalScheme != "hotasGamepad"}) call _b), _heli getVariable ["bmkhs_autoPedalRegime", ""],
+    str ((bmkhs_autoPedal && {bmkhs_pedalScheme != "hotas"}) call _b), _heli getVariable ["bmkhs_autoPedalRegime", ""],
     str ((_heli getVariable ["bmkhs_autoPedalHdgSet", false]) call _b),
     (_heli getVariable ["bmkhs_autoPedalHdg", 0]) toFixed 1, (_heli getVariable ["bmkhs_autoPedalPos", 0]) call _f,
     //Keyboard rate command: has the axis, the attitude it holds (deg), the rate it asks for (deg/s, + nose down / left)

@@ -57,9 +57,9 @@
 ] call CBA_fnc_addSetting;
 
 [
-    "bmkhs_keyboardStickyYaw",
+    "bmkhs_keyboardGamepadStickyYaw",
     "CHECKBOX",
-    ["Keyboard Sticky Yaw", "Keyboard only. When enabled, the key accumulates control position while held, in place of the rate command on this axis"],
+    ["Keyboard/Gamepad Sticky Yaw", "Keyboard/Gamepad pedals only. When enabled, the key or button accumulates control position while held, in place of the rate command on this axis"],
     [BMKHS_SETTINGS_CATEGORY, "Keyboard"],
     [false],
     2
@@ -68,7 +68,7 @@
 [
     "bmkhs_autoPedal",
     "CHECKBOX",
-    ["Keyboard & Mouse Auto Pedal", "Keyboard and Mouse pedals only - ignored while HOTAS/Gamepad pedals are in use. DOES NOT WORK WITH STICKY YAW! When enabled, the pedals are automatically managed by AI"],
+    ["Keyboard/Gamepad & Mouse Auto Pedal", "Keyboard/Gamepad and Mouse pedals only - ignored while HOTAS pedals are in use. DOES NOT WORK WITH STICKY YAW! When enabled, the pedals are automatically managed by AI"],
     [BMKHS_SETTINGS_CATEGORY, "Keyboard"],
     [true],
     2
@@ -212,10 +212,10 @@
 ["bmkhs_autoPedal", {
     params ["_value"];
     if (_value) then {
-        ["bmkhs_keyboardStickyYaw", false, false, true] call CBA_settings_fnc_set;
+        ["bmkhs_keyboardGamepadStickyYaw", false, false, true] call CBA_settings_fnc_set;
     };
 }] call CBA_settings_fnc_addEventHandler;
-["bmkhs_keyboardStickyYaw", {
+["bmkhs_keyboardGamepadStickyYaw", {
     params ["_value"];
     if (_value) then {
         ["bmkhs_autoPedal", false, false, true] call CBA_settings_fnc_set;
@@ -237,10 +237,10 @@
 
 bmkhs_keyboardCollective         = true;
 bmkhs_keyboardCollectivePrevious = true;
-//Control scheme last used on each axis: kb | hotasGamepad | mouse
+//Control scheme last used on each axis: kb | hotasGamepad | mouse - the pedal's, kbGamepad | hotas | mouse
 bmkhs_pitchScheme                = "kb";
 bmkhs_rollScheme                 = "kb";
-bmkhs_pedalScheme                = "kb";
+bmkhs_pedalScheme                = "kbGamepad";
 bmkhs_lastFrameGetIn            = false;
 
 //The aircraft this player crews but does not own. A pack ticks only what its machine owns, so

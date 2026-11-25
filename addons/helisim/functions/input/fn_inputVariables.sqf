@@ -13,13 +13,20 @@ Returns:
 ---------------------------------------------------------------------------- */
 params ["_heli", "_config"];
 
-//Cyclic and pedal input, per control scheme
+//Cyclic and pedal input, per control scheme. The pedal's schemes are its own: a gamepad's
+//pedal is a button, with the keys, where its stick is an axis, with the HOTAS.
 {
-    private _scheme = _x;
+    _x params ["_schemes", "_binds"];
     {
-        _heli setVariable ["bmkhs_" + _scheme + _x + "Out", 0.0];
-    } forEach ["PitchForward", "PitchBackward", "RollLeft", "RollRight", "PedalLeft", "PedalRight"];
-} forEach ["kb", "hotasGamepad", "mouse"];
+        private _scheme = _x;
+        {
+            _heli setVariable ["bmkhs_" + _scheme + _x + "Out", 0.0];
+        } forEach _binds;
+    } forEach _schemes;
+} forEach [
+    [["kb", "hotasGamepad", "mouse"], ["PitchForward", "PitchBackward", "RollLeft", "RollRight"]],
+    [["kbGamepad", "hotas", "mouse"], ["PedalLeft", "PedalRight"]]
+];
 //Collective input
 _heli setVariable ["bmkhs_heliCollectiveRaiseOut", 0.0];
 _heli setVariable ["bmkhs_heliCollectiveLowerOut", 0.0];

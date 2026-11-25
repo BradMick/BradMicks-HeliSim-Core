@@ -25,19 +25,21 @@ class vname {\
 #include "\bmkhs_helisim\controlMacros.hpp"
 
 class CfgUserActions {
-    //Cyclic and pedals, a set per control scheme - the last one used on an axis has it
+    //Cyclic and pedals, a set per control scheme - the last one used on an axis has it.
+    //A gamepad's stick is an axis, so its cyclic binds with the HOTAS. Its pedal is a button -
+    //pressed or not - so it binds with the keys, and the pedal axis binds are the HOTAS's alone.
     BMKHS_NONANALOG(bmkhs_kbPitchForward,"Keyboard Pitch Forward","Keyboard Pitch Forward");
     BMKHS_NONANALOG(bmkhs_kbPitchBackward,"Keyboard Pitch Backward","Keyboard Pitch Backward");
     BMKHS_NONANALOG(bmkhs_kbRollLeft,"Keyboard Roll Left","Keyboard Roll Left");
     BMKHS_NONANALOG(bmkhs_kbRollRight,"Keyboard Roll Right","Keyboard Roll Right");
-    BMKHS_NONANALOG(bmkhs_kbPedalLeft,"Keyboard Pedal Left","Keyboard Pedal Left");
-    BMKHS_NONANALOG(bmkhs_kbPedalRight,"Keyboard Pedal Right","Keyboard Pedal Right");
+    BMKHS_NONANALOG(bmkhs_kbGamepadPedalLeft,"Keyboard/Gamepad Pedal Left","Keyboard/Gamepad Pedal Left");
+    BMKHS_NONANALOG(bmkhs_kbGamepadPedalRight,"Keyboard/Gamepad Pedal Right","Keyboard/Gamepad Pedal Right");
     BMKHS_ANALOG(bmkhs_hotasGamepadPitchForward,"HOTAS/Gamepad Pitch Forward","HOTAS/Gamepad Pitch Forward");
     BMKHS_ANALOG(bmkhs_hotasGamepadPitchBackward,"HOTAS/Gamepad Pitch Backward","HOTAS/Gamepad Pitch Backward");
     BMKHS_ANALOG(bmkhs_hotasGamepadRollLeft,"HOTAS/Gamepad Roll Left","HOTAS/Gamepad Roll Left");
     BMKHS_ANALOG(bmkhs_hotasGamepadRollRight,"HOTAS/Gamepad Roll Right","HOTAS/Gamepad Roll Right");
-    BMKHS_ANALOG(bmkhs_hotasGamepadPedalLeft,"HOTAS/Gamepad Pedal Left","HOTAS/Gamepad Pedal Left");
-    BMKHS_ANALOG(bmkhs_hotasGamepadPedalRight,"HOTAS/Gamepad Pedal Right","HOTAS/Gamepad Pedal Right");
+    BMKHS_ANALOG(bmkhs_hotasPedalLeft,"HOTAS Pedal Left","HOTAS Pedal Left");
+    BMKHS_ANALOG(bmkhs_hotasPedalRight,"HOTAS Pedal Right","HOTAS Pedal Right");
     BMKHS_ANALOG(bmkhs_mousePitchForward,"Mouse Pitch Forward","Mouse Pitch Forward");
     BMKHS_ANALOG(bmkhs_mousePitchBackward,"Mouse Pitch Backward","Mouse Pitch Backward");
     BMKHS_ANALOG(bmkhs_mouseRollLeft,"Mouse Roll Left","Mouse Roll Left");
