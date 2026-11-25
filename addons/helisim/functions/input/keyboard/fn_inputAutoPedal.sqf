@@ -6,9 +6,10 @@ Description:
 
     Four regimes, selected by hysteresis:
         TAXI (on the wheels) - under the hover gate, hold HEADING as the hover does, against the
-                               torque as the collective comes up; above it, the nose on the
-                               direction of travel. Stopped with the collective down the feet
-                               rest at neutral. In and out on the squat switch.
+                               torque as the collective comes up, so the aircraft rolls straight
+                               on a castoring tail wheel; above it, the nose on the direction of
+                               travel. Stopped with the collective down the feet rest at neutral.
+                               In and out on the squat switch.
         HDG  (hover)        - hold HEADING (deg); the ball is meaningless without airflow
         NTT  (accel, <50ft) - NOSE-TO-TAIL: drive the ground track's angle off the nose to zero
         AERO (>50ft AGL)    - AERODYNAMIC: drive lateral accel (beta_g) to zero, ball centred
@@ -18,8 +19,9 @@ Description:
     pedal: off the wheels a held pedal asks for a rate of yaw (bmkhs_fnc_inputRateCommand) and
     the foot strokes toward the pedal that gives it; on the wheels it strokes toward the
     pilot's pedal, scaled by weight on wheels. On release it strokes toward the loop's - in the
-    hover, the pedal that stops the yaw, then the heading hold. An analog pedal springing back
-    faster than a foot moves is a release, the same as a key.
+    hover and on the wheels, the pedal that stops the yaw, then the heading hold on the heading
+    the turn stopped on. An analog pedal springing back faster than a foot moves is a release,
+    the same as a key.
 
     The foot works the primary pedal. Settled with the pedal released, its position becomes the
     yaw trim, so another crew member takes the controls without a jump.
@@ -157,18 +159,34 @@ if (_engaged || _velFwd > AUTOPEDAL_NTT_SPD || _taxiRest) then {
     _desiredHdg = getDir _heli;
     _heli setVariable ["bmkhs_autoPedalHdg", _desiredHdg];
     _heli setVariable ["bmkhs_autoPedalHdgSet", !_engaged];   //slowing into the hover holds at once
+    _heli setVariable ["bmkhs_autoPedalEaseTime", 0.0];
     //The pedal before the turn: the foot, until the press is underway - the foot moves during it
     if (!_sprung && {!_onPedals || !_wasEngaged}) then {
         _trim = _pos;
         _heli setVariable ["bmkhs_autoPedalTrim", _trim];
     };
 } else {
-    //Hold where the turn stopped - or where the foot reached the pedal it was easing to
-    private _feel = [_trim - AUTOPEDAL_FEEL * _yawRate, -1.0, 1.0] call BIS_fnc_clamp;
-    if (!(_heli getVariable "bmkhs_autoPedalHdgSet") && {abs _yawRate < AUTOPEDAL_HDG_SETTLE_DPS || {abs (_pos - _feel) < AUTOPEDAL_FOOT_ARRIVED}}) then {
-        _desiredHdg = getDir _heli;
-        _heli setVariable ["bmkhs_autoPedalHdg", _desiredHdg];
-        _heli setVariable ["bmkhs_autoPedalHdgSet", true];
+    if !(_heli getVariable "bmkhs_autoPedalHdgSet") then {
+        //Released, the foot is easing the turn to a stop
+        private _feel    = [_trim - AUTOPEDAL_FEEL * _yawRate, -1.0, 1.0] call BIS_fnc_clamp;
+        private _slow    = abs _yawRate < AUTOPEDAL_HDG_SETTLE_DPS;
+        private _arrived = abs (_pos - _feel) < AUTOPEDAL_FOOT_ARRIVED;
+        private _easing  = (_heli getVariable "bmkhs_autoPedalEaseTime") + _deltaTime;
+        _heli setVariable ["bmkhs_autoPedalEaseTime", _easing];
+        //Hold where the turn stopped. In the hover: the yaw stopped, or the foot on the pedal it was
+        //easing to. On the wheels it takes both - at the release of a tap the yaw has not built yet,
+        //and a foot that arrives early is on a pedal the yaw has not answered. A turn that pedal has
+        //not stopped by AUTOPEDAL_TAXI_STOP_TIME is held where it is, and the loop stops it.
+        private _stopped = if (_regime == "taxi") then {
+            (_slow && _arrived) || {_easing > AUTOPEDAL_TAXI_STOP_TIME}
+        } else {
+            _slow || _arrived
+        };
+        if (_stopped) then {
+            _desiredHdg = getDir _heli;
+            _heli setVariable ["bmkhs_autoPedalHdg", _desiredHdg];
+            _heli setVariable ["bmkhs_autoPedalHdgSet", true];
+        };
     };
 };
 
@@ -187,11 +205,11 @@ private _trackDeg = if (_gndVelXY > 0.0) then { asin (_gndVelX / _gndVelXY) } el
 private _hdgError  = [_curHdg - _desiredHdg] call CBA_fnc_simplifyAngle180;
 private _nttError  = 0.0 - _trackDeg;
 private _aeroError = 0.0 - _betaG;
-//On the wheels a pilot does not chase a fraction of a degree of heading
-private _taxiHdgError = _hdgError;
 
 //PILOT DEADBAND. Subtracting the band rather than zeroing inside it keeps the response
 //continuous - the correction just starts from zero once the error is worth correcting.
+//The slip channels only. A heading has none: inside a band nothing straightens the aircraft -
+//on a castoring tail wheel least of all - and it wanders from one edge to the other.
 if (abs _aeroError <= AUTOPEDAL_AERO_DEADBAND_G) then {
     _aeroError = 0.0;
 } else {
@@ -201,11 +219,6 @@ if (abs _nttError <= AUTOPEDAL_NTT_DEADBAND_DEG) then {
     _nttError = 0.0;
 } else {
     _nttError = _nttError - (AUTOPEDAL_NTT_DEADBAND_DEG * ([1, -1] select (_nttError < 0)));
-};
-if (abs _taxiHdgError <= AUTOPEDAL_NTT_DEADBAND_DEG) then {
-    _taxiHdgError = 0.0;
-} else {
-    _taxiHdgError = _taxiHdgError - (AUTOPEDAL_NTT_DEADBAND_DEG * ([1, -1] select (_taxiHdgError < 0)));
 };
 
 //Hand-off: a loop fresh from reset starts from the pedal the foot holds - nothing moves at the switch
@@ -255,8 +268,8 @@ switch (_regime) do {
                 [_pidAutoPedalTaxiHdg] call bmkhs_fnc_pidReset;
             } else {
                 if (_heli getVariable "bmkhs_autoPedalHdgSet") then {
-                    [_pidAutoPedalTaxiHdg, -_taxiHdgError] call _takeOver;
-                    _taxiOut = [_pidAutoPedalTaxiHdg, _deltaTime, 0.0, _taxiHdgError] call bmkhs_fnc_pidRun;
+                    [_pidAutoPedalTaxiHdg, -_hdgError] call _takeOver;
+                    _taxiOut = [_pidAutoPedalTaxiHdg, _deltaTime, 0.0, _hdgError] call bmkhs_fnc_pidRun;
                     _taxiOut = [_taxiOut, -1.0, 1.0] call BIS_fnc_clamp;
                 } else {
                     //Ease toward the pedal that stops the yaw, as in the hover

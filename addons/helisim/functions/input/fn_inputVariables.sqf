@@ -99,6 +99,7 @@ _heli setVariable ["bmkhs_autoPedalHdg",       getDir _heli];
 _heli setVariable ["bmkhs_autoPedalRegime",    "hdg"];   //hdg | ntt | aero | taxi (live regime)
 _heli setVariable ["bmkhs_autoPedalPos",       0.0];     //where the feet have the pedals
 _heli setVariable ["bmkhs_autoPedalTrim",      0.0];     //pedal before the pilot's turn
-_heli setVariable ["bmkhs_autoPedalHdgSet",    true];    //hover heading captured
+_heli setVariable ["bmkhs_autoPedalHdgSet",    true];    //heading captured
+_heli setVariable ["bmkhs_autoPedalEaseTime",  0.0];     //s since the pedal was released, until it is
 _heli setVariable ["bmkhs_autoPedalRawPrev",   0.0];     //pilot's raw pedal, last frame
 _heli setVariable ["bmkhs_autoPedalSprung",    false];   //analog pedal springing back - released

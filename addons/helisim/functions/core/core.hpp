@@ -281,7 +281,8 @@
 #define AUTOPEDAL_AERO_OUT_KTS        45.0    //kt ground speed
 
 //Auto-pedal deadbands - error inside is ignored (a pilot accepts a small standing skid); the band
-//is subtracted outside it so the response has no step at the edge.
+//is subtracted outside it so the response has no step at the edge. The slip channels only: a held
+//heading has no band, in the hover or on the wheels.
 #define AUTOPEDAL_AERO_DEADBAND_G     0.004
 #define AUTOPEDAL_NTT_DEADBAND_DEG    0.750
 //Forward speed at which the pedals hand over from heading hold to nose-to-tail trim
@@ -295,13 +296,16 @@
 #define AUTOPEDAL_FOOT_RATE_PER       8.0     //pedal/s per unit of pedal still to go
 #define AUTOPEDAL_FOOT_RATE_MAX       1.0     //pedal/s - a full stroke
 #define AUTOPEDAL_FEEL               0.01    //pedal per deg/s of yaw left - foot settles where the yaw stops
-#define AUTOPEDAL_FOOT_ARRIVED        0.01    //foot this close to the pedal it eases to = turn done
-#define AUTOPEDAL_HDG_SETTLE_DPS      2.0     //deg/s - hover heading captured once the turn stops
+#define AUTOPEDAL_FOOT_ARRIVED        0.01    //foot this close to the pedal it eases to is on it
+#define AUTOPEDAL_HDG_SETTLE_DPS      2.0     //deg/s - under it the yaw has stopped
 //Auto-pedal on the wheels (TAXI, by the squat switch): the heading held under NTT_SPD, the nose on the
 //direction of travel above it; the feet rest at neutral below TAXI_SPD with the collective down. The pilot's
 //pedal is scaled by weight on wheels - TAXI_AUTHORITY at static load, full as the squat strut unloads.
+//The heading held is the one a released turn stops on: the foot on the pedal it eases to AND the yaw
+//stopped, where the hover takes either.
 #define AUTOPEDAL_TAXI_AUTHORITY      0.5     //pilot pedal fraction at static load
 #define AUTOPEDAL_TAXI_SPD            1.0     //m/s ground speed - below it the aircraft is stopped
+#define AUTOPEDAL_TAXI_STOP_TIME      2.0     //s after release - a turn still going is held where it is
 
 //The aircraft flies on velocities and body rates as the engine gives them. The copies a display
 //reads (bmkhs_vel*Filtered) and the accelerations are smoothed over a time, the same at any frame rate.

@@ -24,7 +24,9 @@
 
 ### Flight controls
 - **Auto pedal taxis.** A fourth regime, `taxi`, in and out on the squat switch. Under 10 kt it
-  holds the heading, as the hover regime does, against the torque as the collective comes up;
+  holds the heading, as the hover regime does, against the torque as the collective comes up - the
+  heading a released pedal turn stops on, held with no dead band, so the aircraft rolls straight on
+  a castoring tail wheel;
   above 10 kt, on a takeoff or landing roll, it holds the nose on the direction of travel. Stopped
   with the collective down, the feet rest at neutral. The pilot's pedal is scaled by weight on wheels, half at static load and full as the
   squat strut unloads, so pedal turns on the ground are steady and a rolling takeoff or landing
