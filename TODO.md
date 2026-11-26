@@ -36,3 +36,9 @@ the config says so.
   `helisim_engine.hpp`): fields grouped under section headers in the same order, a header listing
   each field by group, and comments pruned to one short description per term - no sourcing,
   history, rescale notes, TODOs or explanations.
+
+## Rain: one thing to measure
+Rain is in the environment model (AIRCRAFT_GUIDE, "How the air is solved"). Still to measure in game:
+what Arma's `rain` reads when the rain slider is up but overcast is under 0.7, where the BI wiki
+says rain cannot fall. If it reads above 0 with no rain falling, the model cools air under a dry sky.
+

@@ -104,11 +104,9 @@ def get_area(a, b, c, d):
 
 
 def density(paFt, fat):
-    """fn_environment's density at a pressure altitude and the temperature there."""
-    exp_ = (-E.GRAVITY * E.MOLAR_MASS_OF_AIR * (paFt * FT)
-            / (E.UNIVERSAL_GAS_CONSTANT * (fat + E.DEG_C_TO_KELVIN)))
-    pressure = ((E.SEA_LEVEL_PRESSURE * E.IN_MG_TO_HPA / 0.01) * math.exp(exp_)) * 0.01
-    return (pressure / 0.01) / (287.05 * (fat + E.DEG_C_TO_KELVIN))
+    """fn_environment's density, dry, at a pressure altitude and the temperature there."""
+    pressure = E.environment_pressure(paFt * FT)
+    return (pressure * 100.0) / (E.GAS_CONSTANT_DRY_AIR * (fat + E.DEG_C_TO_KELVIN))
 
 
 # ---------------------------------------------------------------------------------------------
@@ -381,7 +379,9 @@ class Airframe:
         torque per engine (fraction). parts returns each contributor too."""
         out = {}
         tq = 0.0
-        weightRatio = (gwt / self.fitGwt) if (gwt and self.fitGwt > 0.0) else 1.0
+        #fn_simpleRotor: gross weight over the fitted weight, and the air the tables were fitted in -
+        #sea level, 15 C - over the air it is flown in
+        weightRatio = ((gwt / self.fitGwt) * (E.ISA_STD_DAY_AIR_DENSITY / rho)) if (gwt and self.fitGwt > 0.0) else 1.0
         for r in self.rotors:
             ctl = FO.simple_rotor_control(r, pitch, roll, yaw, coll, math.hypot(vel[0], vel[1]) * MPS_TO_KNOTS, paFt)
             f, m, rt = simple_rotor(r, ctl, vel, rho, self.rpm, self.cg, weightRatio)
@@ -477,7 +477,9 @@ def report_trim(af, a, kts):
     g = (-1.0, 0.6, 0.0)
     for kt in kts:
         t = trim(af, kt / MPS_TO_KNOTS, a.gwt, rho, a.pa, a.cyc, a.cycLR, a.pedal, a.solve, g)
-        g = (t['pitch'], t['coll'], t['cyc'])
+        #A speed that does not trim leaves the next one starting from the last that did
+        if t['ok']:
+            g = (t['pitch'], t['coll'], t['cyc'])
         print('  %6.0f   %6.1f   %+5.2f  %.3f  %+.3f  %5.1f   %s' % (
             kt, t['bodyKt'], t['pitch'], t['coll'], t['cyc'], t['tq'] * 100, 'yes' if t['ok'] else 'NO'))
     return t
@@ -535,8 +537,9 @@ def replay(af, path, gwt):
         cycP = ctl('cyc', 'ftPitch', 'sasP', 'attP', 'mixP')
         cycR = ctl('cycLR', 'ftRoll', 'sasR', 'attR', 'mixR')
         yaw = ctl('pedal', 'ftYaw', 'sasY', 'hdgY', 'mixY')
-        paFt = m('altFt')
-        rho = density(paFt, 15.0 - 2.0 * paFt / 1000.0)
+        #The air as the log has it: pressure altitude and FAT, as the environment solved them
+        paFt = m('baroAltFt')
+        rho = density(paFt, m('fatC'))
         F, M, g = af.forces(vel, cycP, cycR, yaw, m('coll'), rho, paFt, gwt=gwt)
         print('  %5.1f-%5.1f %6.1f  %+5.2f  %.3f  %+.3f  %5.1f   %5.1f   %+.4f  %+.4f' % (
             fl(s[0], 't'), fl(s[-1], 't'), m('kts'), pitch, m('coll'), cycP, m('tq1') * 100, g * 100,

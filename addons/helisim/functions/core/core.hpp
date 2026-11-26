@@ -13,13 +13,16 @@
 #define ROTOR_BRAKE_STOP_SEC    45
 #define ROTOR_BRAKE_MAX_NR      0.5
 
+//The environment setting bmkhs_helisimEnvironment, in the order of fn_environmentWeather's table
 #define ISA_STD                 0
 #define EUROPE_SUMMER           1
 #define EUROPE_WINTER           2
-#define MIDDLE_EAST             3
-#define CENTRAL_ASIA_SUMMER     4
-#define CENTRAL_ASIA_WINTER     5
-#define ASIA                    6
+#define MIDDLE_EAST_SUMMER      3
+#define MIDDLE_EAST_WINTER      4
+#define CENTRAL_ASIA_SUMMER     5
+#define CENTRAL_ASIA_WINTER     6
+#define ASIA_SUMMER             7
+#define ASIA_WINTER             8
 
 #define MIN_TIME_BETWEEN_UPDATES 0.3
 
@@ -35,12 +38,47 @@
 #define RAD_TO_DEG              57.29578
 
 #define GRAVITY                 9.806
-#define MOLAR_MASS_OF_AIR       0.0289644
-#define UNIVERSAL_GAS_CONSTANT  8.31432
 #define DEG_C_TO_KELVIN         273.15
-#define SEA_LEVEL_PRESSURE      29.92
-#define STANDARD_TEMP           15
-#define IN_MG_TO_HPA            33.8639
+
+//The standard atmosphere (U.S. Standard Atmosphere 1976), which pressure altitude is read against
+#define ISA_PRESSURE_HPA        1013.25
+#define ISA_TEMP_K              288.15
+#define ISA_LAPSE               0.0065  //K per m - 1.98 C per 1,000 ft
+#define ISA_EXPONENT            5.25588
+#define DRY_ADIABATIC_LAPSE     0.0098  //K per m - 3 C per 1,000 ft, the afternoon's air above the ground
+#define GAS_CONSTANT_DRY_AIR    287.05  //J/kg K
+#define VAPOUR_DENSITY_DEFICIT  0.378   //the share of its own pressure by which vapour lightens the air
+#define VAPOUR_MASS_RATIO       0.622   //water vapour's molar mass over dry air's
+#define LATENT_HEAT_VAPOUR      2.5e6   //J/kg, taken from the air by the water it evaporates
+#define SPECIFIC_HEAT_AIR       1004.0  //J/kg K
+
+//The environment's day. fn_environmentWeather solves the clock and the sky once every WEATHER_PERIOD.
+//Arma's overcast is read as middle cloud: the share of sunlight a full cover stops by day and of the
+//ground's heat it keeps in by night (Stull, Practical Meteorology, eq. 2.35 and 2.39).
+#define ENV_WEATHER_PERIOD      1.0     //s
+#define ENV_CLOUD_DAY           0.7
+#define ENV_CLOUD_NIGHT         0.3
+//The night's cold layer above the ground (Stull 18.4): its constant, and the least wind it is solved for
+#define ENV_NIGHT_LAYER_A       0.15    //m^1/4 s^1/4
+#define ENV_NIGHT_WIND_MIN      1.0     //m/s
+#define ENV_FOG_TOP             91.44   //m - 300 ft above the ground, the top of full fog
+//Rain. The mission's rain, 0..1, is three even bands - light, moderate and heavy - smooth through their
+//edges: the AMS Glossary's limits for light and moderate, and the rate at full rain.
+#define ENV_RAIN_LIGHT          2.5     //mm/h - 0.10 in/h, the top of light rain
+#define ENV_RAIN_MODERATE       7.6     //mm/h - 0.30 in/h, the top of moderate rain
+#define ENV_RAIN_TOP            50.0    //mm/h at full rain
+#define ENV_RAIN_RECOVERY       1800.0  //s - rain-cooled air mixes back out to within 5% in 1.5 h
+//Height above ground and the mission's wind are eased, so a cliff edge or a jump in the wind is a drift
+#define ENV_AGL_TIME            3.0     //s
+#define ENV_WIND_TIME           5.0     //s
+//Gusts (MIL-F-8785C). Metres and metres per second, because the flight model works in metres - the feet
+//and knots are what the specification gives them in.
+#define GUST_HEIGHT_MIN         3.048   //10 ft - its height functions stop here
+#define GUST_LOW_TOP            304.8   //1,000 ft - below it the gusts' strength is the wind's
+#define GUST_HIGH_BASE          609.6   //2,000 ft - above it their strength is its table's
+#define GUST_HIGH_SIZE          533.4   //1,750 ft - a gust's size above it
+#define GUST_WIND_STEP          7.717   //15 kt - the wind between its table's none, light, moderate and severe
+#define GUST_AIRSPEED_MIN       1.0     //m/s - a gust is crossed no slower than this
 
 #define VEL_ETL                 12.347
 #define VEL_VBE                 38.583  //75 kts

@@ -52,7 +52,8 @@ private _sysVars = [];
 
 private _cols = [
     "t", "id", "type",
-    "kts", "gsKts", "altFt", "radAltFt", "baroAltFt", "fatC", "vsFpm", "pitch", "bank", "hdg", "betaG", "betaDeg",
+    "kts", "gsKts", "altFt", "radAltFt", "baroAltFt", "fatC", "pressHpa", "rho", "dewC", "gustKts", "rainMmH", "rainC",
+    "vsFpm", "pitch", "bank", "hdg", "betaG", "betaDeg",
     "pRateDps", "rRateDps", "yRateDps",
     "tq1", "tq2", "np1", "np2", "nr",
     "cyc", "cycLR", "pedal", "coll", "ftPitch", "ftRoll", "ftYaw", "pedalInL", "pedalInR",
@@ -148,6 +149,12 @@ private _row = [
     ((_heli getVariable "bmkhs_radAlt") * METERS_TO_FEET) toFixed 1,
     //Pressure altitude and FAT as the environment solves them - already ft and deg C
     (_heli getVariable "bmkhs_barAlt") toFixed 1, (_heli getVariable "bmkhs_fat") toFixed 1,
+    //The air there: pressure hPa, density kg/m3, dew point deg C, and the gust on the wind, kt east|north|up
+    (_heli getVariable "bmkhs_pressure") toFixed 1, (_heli getVariable "bmkhs_rho") toFixed 4,
+    (_heli getVariable "bmkhs_dewPoint") toFixed 1,
+    ((_heli getVariable "bmkhs_velGustWorldSpace") apply {(_x * MPS_TO_KNOTS) toFixed 1}) joinString "|",
+    //The rain: its rate, mm/h, and what it has taken off the FAT here, deg C
+    bmkhs_envRainRate toFixed 1, (_heli getVariable "bmkhs_rainCooling") toFixed 1,
     ((_heli getVariable "bmkhs_velClimb") * MPS_TO_FPM) toFixed 0,
     _pitch toFixed 2, _bank toFixed 2, (getDir _heli) toFixed 2,
     (_heli getVariable "bmkhs_aero_beta_g") call _f, (_heli getVariable "bmkhs_aero_beta_deg") toFixed 2,

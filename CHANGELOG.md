@@ -127,6 +127,18 @@
   are set against the AH-64D's charts at 15,000 and 21,000 lb, within 5 points of torque from 75 to
   140 kt. The fitted weight and the hover at every weight are unchanged, and no table needs
   refitting. A pack that does not declare it flies as before.
+- **Thin air counts as weight.** That adjustment is now by gross weight over air density, against
+  the fitted weight at sea level and 15 deg C. Before, torque at a given speed fell with the air's
+  density and an aircraft cruised far faster at altitude than its charts. **Every pack that
+  declares `fitGrossMass` flies differently away from sea level, 15 deg C**: more torque at speed
+  in thin air, less in dense. Standard Day at sea level and the hover are unchanged.
+- **`rotortables.py` no longer flattens the front drag table.** With `--cruise-pitch` it solved the
+  sea level front drag and wrote it into every pressure-altitude row, so a refitted aircraft lost
+  its altitude rows and flew fast at altitude. It now solves the 0 ft row only.
+- **New `drag_trim.py`: the front drag rows above 0 ft.** Those rows are the altitude fit. It
+  solves each against the aircraft's max range chart at `fitGrossMass` - the mean across the
+  chart's FATs - and never moves the 0 ft row; `check` flies the pack as declared (AIRCRAFT_GUIDE,
+  "Fitting the main rotor tables", step 7).
 - **Cyclic authority fades with collective.** A pack declares `cyclicFade[]` - {scale at the
   floor, collective at the floor, collective at full} - and Core scales the cyclic lift
   coefficients by it, so full authority at taxi power does not lift a wheel while an autorotation
@@ -140,10 +152,54 @@
   on the AH-64D), and it reaches 0% as the air takes the rotor over, before the collective is fully
   down. Readings with the engines driving are unchanged.
 
+### Environment
+- **Nine selections, and the numbers changed. Check your setting.** Every region now has a summer
+  and a winter, in order - Standard Day, Europe, Middle East, Central Asia, Asia, summer then
+  winter - so a saved Middle East, Central Asia or Asia setting may now select a different one.
+  Each selection's mean temperature is its region's measured mean, where some were nearer the
+  daily maximum: Europe 18 and -3 deg C, the Middle East 31 and 14, Central Asia 22 and -4,
+  Asia 21 and -2. Base altitudes are unchanged. `MIDDLE_EAST` and `ASIA` are now
+  `MIDDLE_EAST_SUMMER` / `MIDDLE_EAST_WINTER` and `ASIA_SUMMER` / `ASIA_WINTER`.
+- **The environment is the server's.** The setting is now shared by every client, so every
+  aircraft in a mission is in the same environment. A player no longer picks their own.
+- **Standard Day is fixed.** Sea level and 15 deg C, dry, whatever the mission's time or weather:
+  the test and fitting reference.
+- **Temperature follows the time of day.** Every other selection carries its region's measured
+  daily swing. The surface is warmest through the afternoon and coldest at sunrise, by the
+  mission's clock and its sunrise and sunset.
+- **The swing is in the air near the ground.** By day the heated air falls 3 deg C per 1,000 ft
+  above the ground until it meets the free air; at night the ground cools a layer a few hundred
+  feet deep under it, so at dawn it is colder on the pad than at 500 ft, and the air at altitude
+  hardly changes with the clock. The free air lapses 1.98 deg C per 1,000 ft, where it was 2.
+- **Overcast and wind set the size of the swing.** More overcast than the region's average cools
+  the afternoon and keeps the night milder. More wind keeps the night milder too, and a calm
+  night is colder - no colder than the dew point.
+- **Moisture.** Each selection carries its region's dew point, and density is that of the moist
+  air: up to about 1% less on a warm humid day. In fog the air is saturated below a top that
+  rises with the fog, 300 ft above the ground at full fog. New: `bmkhs_dewPoint`.
+- **Rain.** Rain cools the air and wets it, toward the temperature it is saturated at. The
+  mission's rain setting is a rain rate - light to 2.5 mm/h at one third, moderate to 7.6 mm/h at
+  two thirds, heavy to 50 mm/h at full - and the heavier it is the faster and further the air
+  goes: about a third of the way to saturation in light rain, a little over half in moderate,
+  four fifths in heavy, settling in 5 to 20 minutes and mixing back out over 1.5 hours once it
+  stops. On a Middle East summer afternoon that is 5, 9 and 13 deg C cooler, and up to 4% more
+  air density. A mission that opens in rain starts settled. New: `bmkhs_rainCooling`.
+- **Pressure is the standard atmosphere's at the pressure altitude**, where it was worked from the
+  temperature. On a hot day at 5,000 ft that was 1 to 2% too much density, and as much too little
+  on a cold one. New: `bmkhs_pressure`, hPa, which the engine now reads.
+- **Gusts.** Core generates them - the Dryden turbulence of MIL-F-8785C - on the mission's wind.
+  Their strength follows the wind's speed and the height above ground, scaled by the mission's
+  gusts setting, none at 0. They reach the rotors, fuselage, wings and airspeed, not the
+  cockpit's wind readout. Disable Wind removes them with the wind. New:
+  `bmkhs_velGustWorldSpace`.
+- **The wind is eased.** A jump in the mission's wind reaches the aircraft over about 5 seconds.
+
 ### Flight log
 - **Every control scheme's input.** `kbPitch` / `kbRoll` / `kbGamepadPedal`, `hotasGamepadPitch` /
   `hotasGamepadRoll` / `hotasPedal` and `mousePitch` / `mouseRoll` / `mousePedal`: each
   scheme's own cyclic and pedal, whichever scheme has the axis (+ forward, + left, + right pedal).
+- **The air.** `pressHpa`, `rho`, `dewC`, `gustKts` (east|north|up), `rainMmH` and `rainC` - the rain
+  rate and what it has taken off the FAT - follow `fatC`.
 
 ### State
 - **The aircraft flies on this frame's values.** The 10-frame moving average is gone. It was a

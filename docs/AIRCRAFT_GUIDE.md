@@ -587,7 +587,7 @@ Both files are included from `class BMKHS_HeliSim` (see the top of this step).
 | `class FuselagePanels` | three classes | One per fuselage surface |
 | ... `name` | the surface | `fuselageTop`, `fuselageSide`, `fuselageFront` - Core finds each set by it |
 | ... `facing` | from the model | See section 3 |
-| ... `dragCoefTable[]` | `{altitude ft, CD}` rows | Drag coefficient against pressure altitude. Top and side: 0.200 at sea level rising to 0.750 at 8,000 ft; front: 0.800 rising to 3.000 |
+| ... `dragCoefTable[]` | `{altitude ft, CD}` rows | Drag coefficient against pressure altitude. Top and side: 0.200 at sea level rising to 0.750 at 8,000 ft; front: 0.800 rising to 3.000. The front's 0 ft row is the sea level fit and the rows above it the altitude fit - "Fitting the main rotor tables", steps 3 and 7 |
 | ... `panels[]` | from the model | Each quad's four corners `{right, forward, up}` in m, leading edge first |
 
 **`helisim_wings.hpp`:**
@@ -829,7 +829,9 @@ it Core reports a config error and does not fade. Optional otherwise.
 Declare the fit's mid gross weight in the pack as `fitGrossMass` (kg, beside `nrLimits[]`). The fit pins that one
 weight in forward flight; away from it Core adjusts lift for gross weight from this value, so a heavier aircraft
 takes more torque at every speed and a lighter one less. Without it there is no adjustment, and above about
-100 kt torque falls as weight rises.
+100 kt torque falls as weight rises. The adjustment is by weight over air density, against `fitGrossMass` at
+sea level and 15 C, so thin air counts as weight: 18,000 lb at 6,000 ft and 0 C flies as 21,300 lb does at
+sea level, its torque scaled by the density.
 
 The main rotor's `liftCoefTable` and `dragCoefTable` are solved in `python/dev/airframe.py` - the
 rig, the virtual wind tunnel. The rig is a 1:1 port of Core's force path (`fn_simpleRotor`, the
@@ -899,8 +901,11 @@ The attitude itself comes from the force balance. The disc must lean forward far
 thrust to pull against the airframe's drag, and the airframe follows the disc; with the rotor's
 values as Core has them, the front fuselage drag sets how far. Solve it with the rotor tables
 (step 5) so the cruise anchor trims at the mast tilt with the stabilator at that incidence. The
-UH-60's front drag coefficient came out 0.497 at sea level, written flat across altitude.
-`fn_fuselageFront` reads that table by `bmkhs_barAlt`; altitude is not fitted yet.
+UH-60's front drag coefficient came out 0.497 at sea level.
+
+`fn_fuselageFront` reads that table by `bmkhs_barAlt`. This step solves its 0 ft row and nothing
+else; the rows above 0 ft are the altitude fit (step 7). The UH-60's are written flat - its
+altitude is not fitted yet.
 
 `--cruise-pitch` is the attitude and `--cruise-kt` the speed it is flown at, max range by
 default; give the speed when the data gives the attitude at another - the fastest speed it gives
@@ -1089,7 +1094,7 @@ in the same commit as the pack's tables, so a fit can always be rerun and its ta
 | `--peak C` | The peak collective `cp`. With `--hover-coll`, only the first guess. | 0.85 |
 | `--hover-coll C` | The mid gross weight's hover collective: solves `cp` to land it (step 4). | - |
 | `--etl-drop F` | How far torque at a held collective falls through ETL (step 6.3). | 0.05 |
-| `--cruise-pitch DEG` | Cruise attitude, nose up positive: solves the front fuselage drag (step 3). | not solved |
+| `--cruise-pitch DEG` | Cruise attitude, nose up positive: solves the 0 ft row of the front fuselage drag (step 3). | not solved |
 | `--cruise-kt KT` | The speed `--cruise-pitch` is flown at, when the data gives the attitude near max range rather than at it. | max range |
 | `--extra-cols KT ...` | Columns past the curve's last point, extrapolated rather than fitted (step 6.5). | 180 |
 
@@ -1097,7 +1102,9 @@ It prints, in order: max range; each peak tried, with `--hover-coll`; the hover 
 each front drag tried, with `--cruise-pitch`; both tables as `helisim_simpleRotor.hpp` blocks; the
 front drag; then the written (rounded) tables flown against every curve point, every extra
 column and every hover. It does not edit the pack - paste the blocks in, and write the front
-drag flat across altitude in `helisim_fuselage.hpp`.
+drag into the 0 ft row of `fuselageFront`'s `dragCoefTable[]` in `helisim_fuselage.hpp`. Leave
+the rows above 0 ft as they are, then solve them again (step 7): they were solved on the old
+sea level fit.
 
 **When it fails, it says so.** Every column prints a line with its torque and time as it is
 solved, so a slow one shows. Anything that misses or does not converge - a column that cannot
@@ -1132,7 +1139,55 @@ python python/dev/rotortables.py --bc -0.00205 -0.7246 1.39499 --cg 0.002 1.976 
 
 Its first fit found the peak and the drag with `--hover-coll 0.64 --cruise-pitch -10 --cruise-kt 130`.
 
-**7. Control mixing.** The collective mixes in `ControlMixing` (`CollectiveToYaw`,
+**7. Altitude - the front drag rows above 0 ft.** Steps 3 to 6 are the sea level fit. It is the
+baseline, and nothing in this step moves it. `fuselageFront`'s `dragCoefTable[]` is read by
+pressure altitude: its 0 ft row is step 3's, and the rows above it are how the aircraft is fitted
+away from sea level.
+
+Solve each row above 0 ft against the aircraft's max range chart at `fitGrossMass`: the front
+drag coefficient at which, at that pressure altitude, level flight at the chart's max range speed
+takes the chart's max range torque. A row serves every temperature, so take the mean across the
+chart's FATs.
+
+Judge the result where the aircraft can fly: max range speed and torque, and the speed where
+torque runs out - the lower of 100% and dual engine max torque available. A chart torque above
+that limit cannot be reached and is not a target.
+
+The AH-64D (18,000 lb, its `TASTable` max range points): 1.247 at 0 ft, then 1.502, 1.589, 1.715
+and 1.912 at 2,000, 4,000, 6,000 and 8,000 ft. From 2,000 to 8,000 ft max range lands within
+3.5 kt of the chart at every FAT but -40 C at 2,000 ft (4.9 kt), and the speed where torque runs
+out within 9 kt. Away from `fitGrossMass` the rows cost: at 15,000 lb torque runs out 6 to 25 kt
+early.
+
+`python/dev/drag_trim.py` does it. Write the chart as a file: one FAT per row, a column per
+pressure altitude, each cell max range as `kt:torque%`, true airspeed. The first line names the
+altitude columns, ft.
+
+    #FAT_C  0       2000    4000    6000    8000
+    -40     111:83  110:81  111:80  111:80  111:79
+    -20     116:81  116:80  116:79  116:78  115:78
+
+```
+set BMKHS_CONFIG=<pack>\config\bmkhs_config
+python python/dev/drag_trim.py solve --chart chart.txt --bc <boundingCenter> --cg <CoM>
+python python/dev/drag_trim.py check --chart chart.txt --bc <boundingCenter> --cg <CoM>
+```
+
+`solve` prints the 0 ft row back as the pack has it and solves a row for every chart altitude
+above it. It then prints the `dragCoefTable[]` block for `fuselageFront` and flies the written
+(rounded) table: each cell's torque at the chart's speed, its speed at the chart's torque, and
+each altitude's mean. `check` flies the pack as it is declared. Neither edits the pack. Use the
+rotor fit's `--bc` and `--cg`; `--gwt` gives a chart weight other than `fitGrossMass`. Add the run
+- its chart, command and output - to the aircraft's record in `python/dev/fits/`.
+
+For the speed where torque runs out, sweep that altitude and temperature (`airframe.py sweep
+--pa --fat --gwt`, step 9) and read where torque crosses the limit.
+
+A refit of the sea level drag (step 3) leaves these rows as the pack has them: solve them again
+after it. Before 1.6.0 `rotortables.py` wrote its sea level drag into every row, so a pack fitted
+with `--cruise-pitch` before then has a flat front table and flies fast at altitude.
+
+**8. Control mixing.** The collective mixes in `ControlMixing` (`CollectiveToYaw`,
 `CollectiveToRoll`, `CollectiveToPitch`) are the hover trims of these tables, so they change
 with them. Regenerate them with `forces.py` at the same CoM and the pack's compensation
 fraction (the UH-60 uses 0.8, so the pilot still holds left pedal with power):
@@ -1145,9 +1200,9 @@ did.
 An aircraft without mechanical mixing - the AH-64D has none - declares no `ControlMixing`, and
 this step does not apply.
 
-**8. Check.** The written tables are rounded to four places: sweep again with the written
+**9. Check.** The written tables are rounded to four places: sweep again with the written
 values, not the solver's. The fit is sea level; sweep at altitude (`--pa`, `--fat`) to see what
-it does there. A trim that reports `NO` at collective 1.0 past the cruise anchor may
+it does there. `replay` flies the log in the air it recorded - its `baroAltFt` and `fatC`. A trim that reports `NO` at collective 1.0 past the cruise anchor may
 be the solver's starting guess, not the aircraft: the command line starts `trim` at pitch -1,
 collective 0.6, cyclic 0, and a sweep starts each speed from the last one's answer. Start it from
 the cruise anchor's trim before believing it:
@@ -2055,7 +2110,7 @@ A separated blade's centrifugal pull (`m × r × ω²`) is applied at the hub, t
 | `bmkhs_vel3D` | Number, m/s | local (owner only) | Magnitude of the air-relative model-space velocity. (set in `state/fn_stateVelocities.sqf`) |
 | `bmkhs_gndSpeed` | Number, m/s | local (owner only) | Ground speed. Magnitude of model-space x and y ground velocity (no wind). Body axes, so it reads low when pitched or rolled. (set in `state/fn_stateVelocities.sqf`) |
 | `bmkhs_velClimb` | Number, m/s | local (owner only) | Vertical speed. World z of smoothed velocity. Positive = climbing. Wind has no vertical part, so this is ground-referenced. (set in `state/fn_stateVelocities.sqf`) |
-| `bmkhs_velModelSpace` | Array [x, y, z], m/s, model space | local (owner only) | Smoothed air-relative velocity (ground velocity minus wind). Wind is rotated by heading only, not pitch or roll. (set in `state/fn_stateVelocities.sqf`) |
+| `bmkhs_velModelSpace` | Array [x, y, z], m/s, model space | local (owner only) | Smoothed air-relative velocity (ground velocity minus wind and the gust on it, `bmkhs_velGustWorldSpace`). Wind and gust are rotated by heading only, not pitch or roll. (set in `state/fn_stateVelocities.sqf`) |
 | `bmkhs_velModelSpaceNoWind` | Array [x, y, z], m/s, model space | local (owner only) | Ground-relative velocity in body axes, the engine's value for the frame - zero while the aircraft is held on its wheels (`bmkhs_suspHeldPose`), as are the other velocities and the body rates. What the aircraft flies on; a display reads `bmkhs_velModelSpaceNoWindFiltered`. (set in `state/fn_stateVelocities.sqf`) |
 | `bmkhs_velWorldSpace` | Array [x, y, z], m/s, world space | local (owner only) | Air-relative velocity in world axes (velocity minus wind), the engine's value for the frame. A display reads `bmkhs_velWorldSpaceFiltered`. (set in `state/fn_stateVelocities.sqf`) |
 | `bmkhs_velWorldSpaceNoWind` | Array [x, y, z], m/s, world space | local (owner only) | Ground-relative velocity in world axes, the engine's value for the frame. A display reads `bmkhs_velWorldSpaceNoWindFiltered`. (set in `state/fn_stateVelocities.sqf`) |
@@ -2082,14 +2137,46 @@ Ground contact is not a variable. Call `[_heli] call bmkhs_fnc_stateOnGround` (`
 
 | Variable | Type / units | Net | Meaning |
 |---|---|---|---|
-| `bmkhs_barAlt` | Number, feet, exact | 10 Hz | Pressure altitude - what the barometric altimeter reads, before any display rounding, which is the reader's. MSL height in feet plus a base altitude set by the CBA setting `bmkhs_helisimEnvironment` (ISA 0, Europe 800, Middle East 1800, Central Asia 5000, Asia 3100 ft). Altimeter setting is fixed at 29.92 inHg; mission weather does not change it. (set in `environment/fn_environment.sqf`) |
-| `bmkhs_fat` | Number, °C, exact | 10 Hz | Free air temperature. Base temperature of the selected environment (ISA 15, Europe summer 20 / winter 0, Middle East 30, Central Asia summer 30 / winter -5, Asia 25) minus 2 °C per 1000 ft of MSL height. (set in `environment/fn_environment.sqf`) |
-| `bmkhs_rho` | Number, kg/m³ | local (owner only) | Dry air density from barometric pressure at `bmkhs_barAlt` and `bmkhs_fat`, both exact (p / (287.05 × T)). Init value is 1.225. (set in `environment/fn_environment.sqf`) |
-| `bmkhs_windSpeed` | Number, m/s | 10 Hz | Mission wind speed (`vectorMagnitude wind`). 0 when `bmkhs_windDisabled` is set. (set in `environment/fn_environment.sqf`) |
-| `bmkhs_windDirFrom` | Number, degrees true 0-359, integer | 10 Hz | The direction the wind blows FROM - the meteorological convention a pilot reads (a wind from the west is 270). It is already converted from Arma's `windDir`, `(windDir + 180) mod 360` - a readout of where the wind is from uses it as published. A wind arrow drawn pointing the way the wind BLOWS needs the opposite, `(bmkhs_windDirFrom + 180) mod 360`, converted in the pack (the UH-60's PFD / ND arrows do this). 0 when `bmkhs_windDisabled` is set. (set in `environment/fn_environment.sqf`) |
-| `bmkhs_velWindWorldSpace` | Array [east, north, 0], m/s | local (owner only) | Wind velocity vector (direction the air moves toward). [0,0,0] unless `bmkhs_rotorModel == 0`; also zero when wind is disabled. (set in `environment/fn_environment.sqf`) |
+| `bmkhs_barAlt` | Number, feet, exact | 10 Hz | Pressure altitude - what the barometric altimeter reads, before any display rounding, which is the reader's. MSL height in feet plus the base altitude of the CBA setting `bmkhs_helisimEnvironment` (Standard Day 0, Europe 800, Middle East 1800, Central Asia 5000, Asia 3100 ft). Altimeter setting is fixed at 29.92 inHg; mission weather does not change it. (set in `environment/fn_environment.sqf`) |
+| `bmkhs_fat` | Number, °C, exact | 10 Hz | Free air temperature where the aircraft is: the setting's mean lapsed 1.98 °C per 1000 ft of MSL height, with the day's swing in the air near the ground - see *How the air is solved* below. On Standard Day it is the lapse alone, 15 °C at sea level. (set in `environment/fn_environment.sqf`) |
+| `bmkhs_pressure` | Number, hPa | local (owner only) | The standard atmosphere's pressure at `bmkhs_barAlt`. The engine's inlet starts from it. Init value is 1013.25. (set in `environment/fn_environment.sqf`) |
+| `bmkhs_dewPoint` | Number, °C | local (owner only) | Dew point of the air there. Equal to `bmkhs_fat` where the air is saturated - in fog, or cooled to it. -273.15 in dry air, which is Standard Day. (set in `environment/fn_environment.sqf`) |
+| `bmkhs_rho` | Number, kg/m³ | local (owner only) | Air density from `bmkhs_pressure`, `bmkhs_fat` and the vapour pressure e of `bmkhs_dewPoint`: (p - 0.378 e) / (287.05 × T). Init value is 1.225. (set in `environment/fn_environment.sqf`) |
+| `bmkhs_rainCooling` | Number, °C | local (owner only) | What rain has taken off `bmkhs_fat` where the aircraft is. 0 with no rain, and on Standard Day. |
+| `bmkhs_windSpeed` | Number, m/s | 10 Hz | The steady wind's speed: the mission's `wind` with its jumps eased over `ENV_WIND_TIME`. No gust is in it. 0 when `bmkhs_windDisabled` is set. (set in `environment/fn_environment.sqf`) |
+| `bmkhs_windDirFrom` | Number, degrees true 0-359, integer | 10 Hz | The direction the wind blows FROM - the meteorological convention a pilot reads (a wind from the west is 270). It is the steady wind's, already turned round from the way Arma's `wind` blows - a readout of where the wind is from uses it as published. A wind arrow drawn pointing the way the wind BLOWS needs the opposite, `(bmkhs_windDirFrom + 180) mod 360`, converted in the pack (the UH-60's PFD / ND arrows do this). 0 with no wind, and when `bmkhs_windDisabled` is set. (set in `environment/fn_environment.sqf`) |
+| `bmkhs_velWindWorldSpace` | Array [east, north, 0], m/s | local (owner only) | The steady wind's velocity vector (direction the air moves toward). [0,0,0] unless `bmkhs_rotorModel == 0`; also zero when wind is disabled. (set in `environment/fn_environment.sqf`) |
+| `bmkhs_velGustWorldSpace` | Array [east, north, up], m/s | local (owner only) | The gust on the steady wind: the Dryden turbulence of MIL-F-8785C, its strength from the wind's speed and the height above ground, scaled by Arma's `gusts` (none at 0, the specification's own at 1). Zero with no wind, with wind disabled, and unless `bmkhs_rotorModel == 0`. Only `bmkhs_velModelSpace` and the airspeeds read from it carry the gust - the climb rate and the display velocities do not. (set in `environment/fn_environmentGusts.sqf`) |
 
-Pressure (hPa) and density altitude are computed in `fn_environment.sqf` but not stored.
+#### How the air is solved
+
+The setting is the base and the mission moves it. The setting is the server's, shared by every client, so every aircraft in a mission is in the same environment. `environment/fn_environmentWeather.sqf` holds each setting's numbers and solves, once a second and once for every aircraft the machine flies, what the mission's clock and sky make of the day; `environment/fn_environment.sqf` solves the air where each aircraft is, every frame. Core reads Arma's own values only - `dayTime`, `BIS_fnc_sunriseSunsetTime`, `overcast`, `wind`, `gusts`, `fog` - whatever mod drives them.
+
+| `bmkhs_helisimEnvironment` | Base altitude, ft | Mean FAT, °C | Swing, °C | Dew point, °C | Average wind, m/s | Average cloud |
+|---|---|---|---|---|---|---|
+| 0 Standard Day | 0 | 15 | none | dry | - | - |
+| 1 Europe - Summer | 800 | 18 | ±5 | 12 | 2.7 | 55 % |
+| 2 Europe - Winter | 800 | -3 | ±3 | -4 | 3.6 | 79 % |
+| 3 Middle East - Summer | 1800 | 31 | ±7 | 14 | 3.2 | 25 % |
+| 4 Middle East - Winter | 1800 | 14 | ±5 | 6 | 2.7 | 41 % |
+| 5 Central Asia - Summer | 5000 | 22 | ±7 | 8 | 2.5 | 31 % |
+| 6 Central Asia - Winter | 5000 | -4 | ±5 | -10 | 2.4 | 61 % |
+| 7 Asia - Summer | 3100 | 21 | ±5 | 16 | 1.9 | 63 % |
+| 8 Asia - Winter | 3100 | -2 | ±5 | -7 | 2.5 | 43 % |
+
+A region is the unweighted mean of its countries' averages: Europe - Estonia, Latvia, Lithuania, Belarus, Poland, Ukraine, Belgium, Germany, France, the Czech Republic, Slovakia, Russia; the Middle East - Iran, Iraq, Israel, Jordan, Lebanon, Saudi Arabia, Syria, Yemen, Oman, the UAE, Qatar; Central Asia - Kazakhstan, Uzbekistan, Turkmenistan, Afghanistan, Tajikistan, Kyrgyzstan; Asia - China, Mongolia, North Korea, South Korea, Taiwan, Japan. Elevation is each country's average. The rest are 1991-2020 normals, summer June to August and winter December to February: mean temperature and the swing, half the mean daily maximum less the mean daily minimum (CRU TS 4.08); dew point and wind (ERA5); cloud cover (CRU TS 4.08 country files, which have none for Taiwan).
+
+- **Standard Day** is the standard atmosphere, dry, and nothing below moves it: the test and fitting reference.
+- **Pressure** is the standard atmosphere's at the pressure altitude (U.S. Standard Atmosphere 1976). Temperature does not enter it.
+- **Free air** is the setting's mean FAT at the map's sea level, lapsed 1.98 °C per 1000 ft.
+- **The swing sits on the ground.** The afternoon's surface is the swing above the mean, and the air above the ground falls 3 °C per 1000 ft (the dry adiabatic rate) until it meets the free air; that profile stays aloft overnight. The night cools the surface under it, as the square root of the time since sunset, to the swing below the mean by sunrise, in a layer that thins exponentially with height above ground (Stull, *Practical Meteorology*, eq. 18.3-18.5). The morning burns that layer off from the ground up (eq. 18.2), back to the afternoon's by sunset. Height above ground is the terrain's, or the sea's, eased over `ENV_AGL_TIME`.
+- **Overcast** is read as middle cloud against the region's average: more of it cools the afternoon and keeps the night milder, less does the opposite (eq. 2.35, 2.39).
+- **Wind** against the region's average sets the night: more wind, a deeper and weaker cold layer and a warmer dawn; less, a shallower and colder one - no colder at the surface than the dew point, or than the average dawn where that is the colder. It is solved for no less than `ENV_NIGHT_WIND_MIN`.
+- **Moisture** is the setting's dew point at its base, thinning with pressure aloft and never more than the air holds. In fog the air is saturated below `fog` × 300 ft above the ground.
+- **Rain** cools the air and wets it, toward its wet-bulb temperature - where it is saturated, the heat for the evaporation having come out of the air (eq. 4.17, 4.18). The mission's `rain`, 0 to 1, is a rain rate in three even bands, smooth through their edges: light to 2.5 mm/h at one third, moderate to 7.6 mm/h at two thirds (the AMS Glossary's limits), heavy to 50 mm/h at 1. The rain water that rate holds in the air and what it evaporates into the air are the Kessler scheme's (Klemp and Wilhelmson 1978, as the WRF model's `module_mp_kessler` has them). Against it the rain-cooled air mixes back out, to within 5% in 1.5 hours (`ENV_RAIN_RECOVERY`; cold pools over the Netherlands recover in 1 to 2 hours, Kruse et al. 2022), while it rains as well as after. So light rain settles about a third of the way to saturation, moderate a little over half and heavy about four fifths, in 5 to 20 minutes: on a Middle East summer afternoon 5, 9 and 13 °C cooler. A mission that opens in rain starts settled. It is solved once for the mission, in the setting's mean air at its base altitude, and each aircraft is taken that share of the way to its own wet-bulb, whatever its height - there is no cloud base.
+- **Not solved:** the air inside cloud, and the altimeter setting.
+
+`python python/dev/engine.py env` prints each setting's FAT by hour and height on its average day, and its dawn and afternoon under other skies and winds.
 
 ### Mass and balance
 
@@ -2190,7 +2277,7 @@ Registered in `event/fn_eventPreInit.sqf`. These are missionNamespace globals, n
 
 | Variable | Type / units | Net | Meaning |
 |---|---|---|---|
-| `bmkhs_helisimEnvironment` | Number 0..6 (ISA_STD, EUROPE_SUMMER, EUROPE_WINTER, MIDDLE_EAST, CENTRAL_ASIA_SUMMER, CENTRAL_ASIA_WINTER, ASIA) | CBA setting | Environment preset. |
+| `bmkhs_helisimEnvironment` | Number 0..8 (ISA_STD, EUROPE_SUMMER, EUROPE_WINTER, MIDDLE_EAST_SUMMER, MIDDLE_EAST_WINTER, CENTRAL_ASIA_SUMMER, CENTRAL_ASIA_WINTER, ASIA_SUMMER, ASIA_WINTER) | CBA setting, the server's for every client | Environment setting - see *How the air is solved* under Environment. |
 | `bmkhs_rotorModel` | Number, 0 = Simple, 1 = BET | CBA setting | Rotor model. BET is listed as INOP; Simple is the default and the one the packs are fitted to. |
 | `bmkhs_vrsWarning` | Bool | CBA setting | VRS warning on. |
 | `bmkhs_sysDebug` / `bmkhs_fmDebug` / `bmkhs_engDisplay` / `bmkhs_forcesDebug` | Bool | CBA setting | Debug displays on. |
@@ -2198,7 +2285,7 @@ Registered in `event/fn_eventPreInit.sqf`. These are missionNamespace globals, n
 | `bmkhs_cyclicCenterTrimMode`, `bmkhs_pedalCenterTrimMode`, `bmkhs_springlessCyclic`, `bmkhs_springlessPedals`, `bmkhs_keyboardStickyPitch/Roll/Yaw`, `bmkhs_autoPedal`, `bmkhs_autoTaxi` | Bool | CBA setting | Input options. |
 | `bmkhs_mouseSense` | Number 0.1..1.0 | CBA setting | Mouse sensitivity. Scales only an axis the Mouse binds have. |
 | `bmkhs_testGwtEnabled` / `bmkhs_testGwtLbs` | Bool / String (lb) | CBA setting | Fixed test gross weight. |
-| `bmkhs_windDisabled` | Bool | CBA setting | Flight model ignores wind. |
+| `bmkhs_windDisabled` | Bool | CBA setting | Flight model ignores wind and gusts. |
 | `bmkhs_ctrlVisColor` | Number 0..5 | CBA setting | Colour scheme for the control visualiser. |
 
 ### Events
@@ -2326,6 +2413,13 @@ Working state, solver bookkeeping, filters and debug. These change without notic
 - `bmkhs_pitchScheme` / `bmkhs_rollScheme` / `bmkhs_pedalScheme` (global) - the control scheme last used on each axis. Pitch and roll: `"kb"`, `"hotasGamepad"` or `"mouse"`, set by whichever of the Keyboard / HOTAS/Gamepad / Mouse binds last fired on it, `"kb"` at get-in. The pedal's schemes are its own: `"kbGamepad"`, `"hotas"` or `"mouse"`, from the Keyboard/Gamepad / HOTAS / Mouse pedal binds, `"kbGamepad"` at get-in - a gamepad's pedal is a button, pressed or not, so it binds with the keys, where its stick is an axis and binds with the HOTAS. The axis reads that scheme's raw values only.
 - `bmkhs_aero_beta_g_prev` - low-pass filter state (broadcast anyway).
 - `bmkhs_deltaTime` - Core frame step, capped 0.1 s.
+- `bmkhs_envWeatherT` (global) - when the environment's weather was last solved (`environment/fn_environment.sqf`). It and the two below are one for every aircraft the machine flies, declared in `event/fn_eventPreInit.sqf`.
+- `bmkhs_envBaseAlt` / `bmkhs_envBaseFat` / `bmkhs_envSwing` / `bmkhs_envDewPoint` / `bmkhs_envAvgWind` (global) - the environment setting's own numbers (`environment/fn_environmentWeather.sqf`).
+- `bmkhs_envCycle` / `bmkhs_envIsDay` / `bmkhs_envShare` / `bmkhs_envLayerSec` / `bmkhs_envCloudDay` / `bmkhs_envCloudNight` (global) - where the day is in its cycle, and what the overcast makes of it.
+- `bmkhs_envRain` / `bmkhs_envRainRate` / `bmkhs_envRainT` (global) - the rain: how far it has taken the air to saturation (0..1), its rate (mm/h), and the mission time it was last stepped (-1 until the first solve)
+- `bmkhs_envAgl` - height above the ground, eased, for the air near it.
+- `bmkhs_windSteady` - the mission's wind, eased; `bmkhs_windSpeed` and `bmkhs_velWindWorldSpace` are read from it.
+- `bmkhs_gustState` - the gust filters' state: m/s along the wind, across it and vertical.
 - `bmkhs_velWorldSpaceNoWind_prev` - previous-frame value for differencing.
 - `bmkhs_velX_prev` - previous-frame value for differencing.
 - `bmkhs_velY_prev` - previous-frame value for differencing.

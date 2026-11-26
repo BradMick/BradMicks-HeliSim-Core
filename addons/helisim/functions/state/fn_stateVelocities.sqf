@@ -38,13 +38,21 @@ private _hdg                 = direction _heli;
 private _velWindModelSpaceX  = (_velWindWorldSpaceX * cos _hdg) - (_velWindWorldSpaceY * sin _hdg);
 private _velWindModelSpaceY  = (_velWindWorldSpaceX * sin _hdg) + (_velWindWorldSpaceY * cos _hdg);
 private _velWindModelSpace   = [_velWindModelSpaceX, _velWindModelSpaceY, 0.0];
+//The gust on that wind, turned the same way. Only the airframe's own velocity carries it: the world
+//velocity, the climb rate and the display copies stay on the steady wind.
+(_heli getVariable "bmkhs_velGustWorldSpace") params ["_velGustWorldSpaceX", "_velGustWorldSpaceY", "_velGustWorldSpaceZ"];
+private _velGustModelSpace   = [
+    (_velGustWorldSpaceX * cos _hdg) - (_velGustWorldSpaceY * sin _hdg),
+    (_velGustWorldSpaceX * sin _hdg) + (_velGustWorldSpaceY * cos _hdg),
+    _velGustWorldSpaceZ
+];
 
 //Held on its wheels the aircraft is not moving - the engine reports the fall the hold takes back out each frame
 private _held                = (_heli getVariable "bmkhs_suspHeldPose") isNotEqualTo [];
 private _still               = [0.0, 0.0, 0.0];
 //Velocity model space
 ([velocityModelSpace _heli, _still] select _held) params ["_velModelSpaceX", "_velModelSpaceY", "_velModelSpaceZ"];
-private _velModelSpace       = [_velModelSpaceX, _velModelSpaceY, _velModelSpaceZ] vectorDiff _velWindModelSpace;
+private _velModelSpace       = ([_velModelSpaceX, _velModelSpaceY, _velModelSpaceZ] vectorDiff _velWindModelSpace) vectorDiff _velGustModelSpace;
 private _velModelSpaceNoWind = [_velModelSpaceX, _velModelSpaceY, _velModelSpaceZ];
 //Ground speed
 private _gndSpeed            = vectorMagnitude [_velModelSpaceNoWind select 0, _velModelSpaceNoWind select 1, 0.0];

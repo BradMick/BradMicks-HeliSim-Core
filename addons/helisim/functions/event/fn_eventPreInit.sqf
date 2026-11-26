@@ -95,10 +95,22 @@
 [
     "bmkhs_helisimEnvironment",
     "LIST",
-    ["Aircraft Environmental Settings", "Standard day is Sea Level and 15 deg C.\nEurope is a base altitude of 800ft, with a Summer temperature of 20 deg C and a Winter temperature of 0 deg C.\nThe Middle East is a base altitude of 1,800ft and a temperature of 30 deg C.\nCentral Asia is a base altitude of 5000ft, with a Summer temperature of 30 deg C and a winter temperature of -5 deg C.\nAsia is a base altitude of 3100ft and a temperature of 25 deg C."],
+    ["Aircraft Environmental Settings", "Standard day is Sea Level and 15 deg C.\nEurope is a base altitude of 800ft, with a Summer temperature of 18 deg C and a Winter temperature of -3 deg C.\nThe Middle East is a base altitude of 1,800ft, with a Summer temperature of 31 deg C and a Winter temperature of 14 deg C.\nCentral Asia is a base altitude of 5000ft, with a Summer temperature of 22 deg C and a winter temperature of -4 deg C.\nAsia is a base altitude of 3100ft, with a Summer temperature of 21 deg C and a Winter temperature of -2 deg C."],
     [BMKHS_SETTINGS_CATEGORY, "Flight model"],
-    [[ISA_STD, EUROPE_SUMMER, EUROPE_WINTER, MIDDLE_EAST, CENTRAL_ASIA_SUMMER, CENTRAL_ASIA_WINTER, ASIA],["Standard Day", "Europe - Summer", "Europe - Winter", "Middle East", "Central Asia - Summer", "Central Asia - Winter", "Asia"],1],
-    0
+    //Each selection carries its own tooltip - without one the list shows the selection's number
+    [[ISA_STD, EUROPE_SUMMER, EUROPE_WINTER, MIDDLE_EAST_SUMMER, MIDDLE_EAST_WINTER, CENTRAL_ASIA_SUMMER, CENTRAL_ASIA_WINTER, ASIA_SUMMER, ASIA_WINTER], [
+        ["Standard Day",          "Sea Level and 15 deg C."],
+        ["Europe - Summer",       "A base altitude of 800ft and a temperature of 18 deg C."],
+        ["Europe - Winter",       "A base altitude of 800ft and a temperature of -3 deg C."],
+        ["Middle East - Summer",  "A base altitude of 1,800ft and a temperature of 31 deg C."],
+        ["Middle East - Winter",  "A base altitude of 1,800ft and a temperature of 14 deg C."],
+        ["Central Asia - Summer", "A base altitude of 5000ft and a temperature of 22 deg C."],
+        ["Central Asia - Winter", "A base altitude of 5000ft and a temperature of -4 deg C."],
+        ["Asia - Summer",         "A base altitude of 3100ft and a temperature of 21 deg C."],
+        ["Asia - Winter",         "A base altitude of 3100ft and a temperature of -2 deg C."]
+    ], 1],
+    //The server's, for every client: every aircraft in the mission is in the same environment
+    1
 ] call CBA_fnc_addSetting;
 
 [
@@ -242,6 +254,26 @@ bmkhs_pitchScheme                = "kb";
 bmkhs_rollScheme                 = "kb";
 bmkhs_pedalScheme                = "kbGamepad";
 bmkhs_lastFrameGetIn            = false;
+//The environment's weather, one for every aircraft this machine flies: when it was last solved, the
+//setting's base altitude (ft), base FAT, swing and dew point (deg C) and average wind (m/s), where the
+//day is in its cycle, what the overcast makes of it, and the rain - how far it has taken the air to
+//saturation (0..1), its rate (mm/h) and when it was last stepped (never, until the first solve).
+//fn_environmentWeather solves it.
+bmkhs_envWeatherT                = -ENV_WEATHER_PERIOD;
+bmkhs_envBaseAlt                 = 0.0;
+bmkhs_envBaseFat                 = 0.0;
+bmkhs_envSwing                   = 0.0;
+bmkhs_envDewPoint                = 0.0;
+bmkhs_envAvgWind                 = 0.0;
+bmkhs_envCycle                   = false;
+bmkhs_envIsDay                   = true;
+bmkhs_envShare                   = 0.0;
+bmkhs_envLayerSec                = 0.0;
+bmkhs_envCloudDay                = 1.0;
+bmkhs_envCloudNight              = 1.0;
+bmkhs_envRain                    = 0.0;
+bmkhs_envRainRate                = 0.0;
+bmkhs_envRainT                   = -1.0;
 
 //The aircraft this player crews but does not own. A pack ticks only what its machine owns, so
 //Core hands this one to coreUpdate itself - there is nothing for a pack to add.

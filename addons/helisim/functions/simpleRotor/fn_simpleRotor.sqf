@@ -82,7 +82,7 @@ private _heliCom 		= getCenterOfMass _heli;
 //Environment
 private _altitude       = _heli getVariable "bmkhs_barAlt";
 private _temperature    = _heli getVariable "bmkhs_fat";
-private _dryAirDensity  = _heli getVariable "bmkhs_rho";
+private _airDensity     = _heli getVariable "bmkhs_rho";
 
 //Velocity in hub axes
 private _velModel    = _heli getVariable "bmkhs_velModelSpace";
@@ -122,9 +122,11 @@ private _tableKey       = if (_controlMap isEqualTo []) then { _collOutput } els
     ([_controlMap, _collOutput] call bmkhs_fnc_mathLinearInterp) select 1
 };
 
-//Gross weight over the weight the tables were fitted at - 1.0 where the pack names none
+//Gross weight over the weight the tables were fitted at, and the air they were fitted in - sea level,
+//15 C - over the air it is flown in: a rotor is loaded by its weight over the density it carries it
+//in, so thin air counts as weight. 1.0 where the pack names no fitted weight.
 private _fitGrossMass   = _heli getVariable "bmkhs_fitGrossMass";
-private _weightRatio    = if (_fitGrossMass > 0.0) then { (_heli getVariable "bmkhs_gwt") / _fitGrossMass } else { 1.0 };
+private _weightRatio    = if (_fitGrossMass > 0.0) then { ((_heli getVariable "bmkhs_gwt") / _fitGrossMass) * (ISA_STD_DAY_AIR_DENSITY / _airDensity) } else { 1.0 };
 
 //Blade lift coefficient - the same at all four positions. Air down through a lifting rotor's disc
 //costs angle of attack, taken off the collective at the blade pitch range - more of it the more weight is carried.
@@ -193,7 +195,7 @@ private _pcLiftCoef = if (_pcShares isEqualTo [0.0, 0.0, 0.0, 0.0]) then { 0.0 }
     [_liftCoefTable, 0.0 - (_tableKey - _liftKey), _velXY] call bmkhs_fnc_mathLinearInterp2D
 };
 //Dynamic pressure on a blade, at 75% radius, times its area
-private _bladeDynPressure = 0.5 * _dryAirDensity * _bladeArea * (_bladeVel_75 * _bladeVel_75);
+private _bladeDynPressure = 0.5 * _airDensity * _bladeArea * (_bladeVel_75 * _bladeVel_75);
 
 //Flap back - the disc tilts aft with speed and sideways with coning, main rotors only
 private _lonTilt        = _flapLon;
@@ -205,7 +207,7 @@ if (_type == MAIN && {_tipVel > 1.0}) then {
     private _thrust      = abs (4.0 * _liftCoef * _bladeDynPressure * _bladeScalar * _viScalar);
     private _vi          = 0.0;
     if (_thrust > 0.0) then {
-        private _vh2     = _thrust / (2.0 * _dryAirDensity * _rotorArea);
+        private _vh2     = _thrust / (2.0 * _airDensity * _rotorArea);
         _vi              = sqrt _vh2;
         for "_n" from 1 to 30 do {
             private _vt  = sqrt ((_velXY * _velXY) + ((_velZ + _vi) * (_velZ + _vi)));

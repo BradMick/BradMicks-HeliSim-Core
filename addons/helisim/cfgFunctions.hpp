@@ -103,7 +103,10 @@ class CfgFunctions
         class environment {
             file = "\bmkhs_helisim\functions\environment";
             class environment {R;};
+            class environmentGusts {R;};
             class environmentVariables {R;};
+            class environmentWeather {R;};
+            class environmentWetBulb {R;};
         };
         class fmc  {
             file = "\bmkhs_helisim\functions\fmc";

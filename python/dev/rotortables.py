@@ -22,8 +22,9 @@ Run it:  set BMKHS_CONFIG=<pack>\\config\\bmkhs_config
          differential collective.
 --hover-coll  the collective the mid gross weight should hover at: the peak is solved to land
          it, and --peak is only the first guess.
---cruise-pitch  deg, nose up positive: the front fuselage drag is solved so level flight at
-         --cruise-kt trims at this attitude.
+--cruise-pitch  deg, nose up positive: the 0 ft row of the front fuselage drag is solved so level
+         flight at --cruise-kt trims at this attitude. The rows above 0 ft are the pack's altitude
+         fit (guide step 7) and are left as the pack has them.
 --cruise-kt   the speed --cruise-pitch is flown at (default max range).
 --extra-cols  kt, columns past the curve's last point, extrapolated along the last two columns'
          lift rather than fitted (default 180).
@@ -268,7 +269,7 @@ def main():
                     help='solve the peak so the mid gross weight hovers at this collective')
     ap.add_argument('--etl-drop', type=float, default=0.05)
     ap.add_argument('--cruise-pitch', type=float, default=None,
-                    help='deg, nose up positive: solve the front fuselage drag so --cruise-kt trims here')
+                    help='deg, nose up positive: solve the front fuselage drag\'s 0 ft row so --cruise-kt trims here')
     ap.add_argument('--cruise-kt', type=float, default=None, help='kt, the --cruise-pitch speed (default max range)')
     ap.add_argument('--extra-cols', nargs='+', type=float, default=[180.0],
                     help='kt, columns past the curve, extrapolated rather than fitted (default 180)')
@@ -436,15 +437,18 @@ def main():
             problem('%.0f kt column, target %.0f%%: %s' % (curve[i][0], curve[i][1] * 100, why))
         return x
 
-    #Guide step 3: with --cruise-pitch, the front fuselage drag (flat across altitude) is solved
-    #with the columns so --cruise-kt (max range by default) trims at that attitude. Each drag
-    #value gets its own column solve; a secant on the drag closes the attitude.
+    #Guide step 3: with --cruise-pitch, the front fuselage drag's 0 ft row is solved with the
+    #columns so --cruise-kt (max range by default) trims at that attitude. Each drag value gets
+    #its own column solve; a secant on the drag closes the attitude.
     front = fit.af.fus['fuselageFront']
     ckt = a.mr if a.cruise_kt is None else a.cruise_kt
     ic = min(range(n), key=lambda i: abs(curve[i][0] - ckt))
 
     def set_front(cd):
-        front['dragCoefTable'] = [[alt, cd] for alt in (0, 2000, 4000, 6000, 8000)]
+        #The 0 ft row only: the fit is flown at sea level. The rows above it are the pack's
+        #altitude fit (guide step 7) and stay as the pack has them.
+        rows = front['dragCoefTable']
+        front['dragCoefTable'] = [[rows[0][0], cd]] + [list(r) for r in rows[1:]]
 
     def cruise_pitch(cd, x):
         set_front(cd)
@@ -486,7 +490,8 @@ def main():
             print('                        ,{%.3f, ' % row[0] + ', '.join('%.4f' % v for v in row[1:]) + '}')
         print('                        };')
     if cd is not None:
-        print('\nFront fuselage drag (helisim_fuselage.hpp, fuselageFront dragCoefTable): %.3f, flat' % cd)
+        print('\nFront fuselage drag (helisim_fuselage.hpp, fuselageFront dragCoefTable), the 0 ft row: %.3f' % cd)
+        print('The rows above 0 ft are not changed. They were solved on the old sea level fit: solve them again (guide step 7).')
 
     print('\nWritten tables, %.0f kg (%.0f lb), sea level, 15 C, cyclic solved:' % (wmid, wmid / LB_TO_KG))
     print('    kt   target   rig   coll   pitch')

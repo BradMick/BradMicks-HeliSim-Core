@@ -33,12 +33,35 @@ VEL_ETL = 12.347
 METERS_TO_FEET = 3.28084
 FEET_TO_METERS = 0.3048
 GRAVITY = 9.806
-MOLAR_MASS_OF_AIR = 0.0289644
-UNIVERSAL_GAS_CONSTANT = 8.31432
 DEG_C_TO_KELVIN = 273.15
-SEA_LEVEL_PRESSURE = 29.92
-STANDARD_TEMP = 15
-IN_MG_TO_HPA = 33.8639
+ISA_PRESSURE_HPA = 1013.25
+ISA_TEMP_K = 288.15
+ISA_LAPSE = 0.0065
+ISA_EXPONENT = 5.25588
+DRY_ADIABATIC_LAPSE = 0.0098
+GAS_CONSTANT_DRY_AIR = 287.05
+VAPOUR_DENSITY_DEFICIT = 0.378
+VAPOUR_MASS_RATIO = 0.622
+LATENT_HEAT_VAPOUR = 2.5e6
+SPECIFIC_HEAT_AIR = 1004.0
+ENV_WEATHER_PERIOD = 1.0
+ENV_CLOUD_DAY = 0.7
+ENV_CLOUD_NIGHT = 0.3
+ENV_NIGHT_LAYER_A = 0.15
+ENV_NIGHT_WIND_MIN = 1.0
+ENV_FOG_TOP = 91.44
+ENV_RAIN_LIGHT = 2.5
+ENV_RAIN_MODERATE = 7.6
+ENV_RAIN_TOP = 50.0
+ENV_RAIN_RECOVERY = 1800.0
+ENV_AGL_TIME = 3.0
+ENV_WIND_TIME = 5.0
+GUST_HEIGHT_MIN = 3.048
+GUST_LOW_TOP = 304.8
+GUST_HIGH_BASE = 609.6
+GUST_HIGH_SIZE = 533.4
+GUST_WIND_STEP = 7.717
+GUST_AIRSPEED_MIN = 1.0
 #engine.hpp
 GT_OIL_PSI_SCALE = 0.90
 GT_SINGLE_ENG_TQ_RATIO = 0.51
@@ -161,6 +184,14 @@ def linear_conversion(lo, hi, v, a, b, clip):
 
 def sqf_round(x):
     return math.floor(x + 0.5)
+
+
+def util_smooth(previous, new, deltaTime, time):
+    """fn_utilSmooth."""
+    share = 1 - math.exp(-deltaTime / time)
+    if isinstance(new, (list, tuple)):
+        return [p + (n - p) * share for p, n in zip(previous, new)]
+    return previous + (new - previous) * share
 
 
 def math_linear_interp(arr, key):
@@ -457,36 +488,399 @@ def rotor_variables(H, cfg):
 
 
 # ---------------------------------------------------------------------------------------------
-# fn_environment
+# fn_environmentWeather, fn_environment, fn_environmentGusts
 # ---------------------------------------------------------------------------------------------
 
-#The CBA environment setting - {name: (base altitude ft, base FAT C)}, as fn_environment's switch.
+#The CBA environment setting, in its own order - as fn_environmentWeather's table:
+#{name: (base altitude ft, mean FAT C, swing C, dew point C, average wind m/s, average cloud 0..1)}
 ENVIRONMENTS = {
-    'ISA_STD': (0, 15.0),
-    'EUROPE_SUMMER': (800, 20.0),
-    'EUROPE_WINTER': (800, 0.0),
-    'MIDDLE_EAST': (1800, 30.0),
-    'CENTRAL_ASIA_SUMMER': (5000, 30.0),
-    'CENTRAL_ASIA_WINTER': (5000, -5.0),
-    'ASIA': (3100, 25.0),
+    'ISA_STD':             (0,    15.0, 0.0,   0.0, 0.0, 0.00),
+    'EUROPE_SUMMER':       (800,  18.0, 5.0,  12.0, 2.7, 0.55),
+    'EUROPE_WINTER':       (800,  -3.0, 3.0,  -4.0, 3.6, 0.79),
+    'MIDDLE_EAST_SUMMER':  (1800, 31.0, 7.0,  14.0, 3.2, 0.25),
+    'MIDDLE_EAST_WINTER':  (1800, 14.0, 5.0,   6.0, 2.7, 0.41),
+    'CENTRAL_ASIA_SUMMER': (5000, 22.0, 7.0,   8.0, 2.5, 0.31),
+    'CENTRAL_ASIA_WINTER': (5000, -4.0, 5.0, -10.0, 2.4, 0.61),
+    'ASIA_SUMMER':         (3100, 21.0, 5.0,  16.0, 1.9, 0.63),
+    'ASIA_WINTER':         (3100, -2.0, 5.0,  -7.0, 2.5, 0.43),
 }
-#The base in use; ISA_STD unless a scenario sets another.
-BASE_ALT, BASE_FAT = ENVIRONMENTS['ISA_STD']
+#The setting in use; Standard Day unless a scenario sets another with set_environment().
+ENVIRONMENT = 'ISA_STD'
+#Its base altitude and mean FAT, which a scenario may move - pulled() puts a FAT at a pressure altitude.
+BASE_ALT, BASE_FAT = ENVIRONMENTS[ENVIRONMENT][:2]
+#What the environment reads from Arma - the rig's own, there being no Arma here: dayTime, the sunrise
+#and sunset of BIS_fnc_sunriseSunsetTime, overcast, wind (m/s, the way it blows), gusts, fog, and the
+#settings bmkhs_windDisabled.
+WEATHER = {'dayTime': 12.0, 'sunrise': 6.0, 'sunset': 18.0, 'overcast': 0.0, 'wind': [0.0, 0.0, 0.0],
+           'gusts': 0.0, 'fog': 0.0, 'windDisabled': False,
+           #rain, 0..1, and CBA_missionTime, s - the rain is stepped by it
+           'rain': 0.0, 'time': 0.0}
+#fn_eventPreInit's globals - the environment's weather, one for every aircraft: the setting's base
+#altitude (ft), base FAT, swing and dew point (deg C) and average wind (m/s), where the day is in its
+#cycle, what the overcast makes of it, and the rain - how far it has taken the air to saturation
+#(0..1), its rate (mm/h) and when it was last stepped (never, until the first solve).
+#environment_weather() solves it.
+bmkhs_envRain = 0.0
+bmkhs_envRainRate = 0.0
+bmkhs_envRainT = -1.0
+bmkhs_envBaseAlt = 0.0
+bmkhs_envBaseFat = 0.0
+bmkhs_envSwing = 0.0
+bmkhs_envDewPoint = 0.0
+bmkhs_envAvgWind = 0.0
+bmkhs_envCycle = False
+bmkhs_envIsDay = True
+bmkhs_envShare = 0.0
+bmkhs_envLayerSec = 0.0
+bmkhs_envCloudDay = 1.0
+bmkhs_envCloudNight = 1.0
+#The gusts' own random numbers, seeded so a run repeats.
+GUST_RNG = random.Random(1)
+
+
+def set_environment(name):
+    """Selects the setting and puts the base on its own altitude and mean FAT."""
+    global ENVIRONMENT, BASE_ALT, BASE_FAT
+    ENVIRONMENT = name
+    BASE_ALT, BASE_FAT = ENVIRONMENTS[name][:2]
+
+
+def environment_weather():
+    """fn_environmentWeather: the setting's numbers, and what the clock and sky make of the day."""
+    global bmkhs_envBaseAlt, bmkhs_envBaseFat, bmkhs_envSwing, bmkhs_envDewPoint, bmkhs_envAvgWind
+    global bmkhs_envCycle, bmkhs_envIsDay, bmkhs_envShare, bmkhs_envLayerSec
+    global bmkhs_envCloudDay, bmkhs_envCloudNight
+    global bmkhs_envRain, bmkhs_envRainRate, bmkhs_envRainT
+    #The setting: fn_environmentWeather's switch, with the base a scenario may have moved
+    swing, dewPoint, avgWind, avgCloud = ENVIRONMENTS[ENVIRONMENT][2:]
+    baseAlt, baseFAT = BASE_ALT, BASE_FAT
+
+    #The day. No sunrise or no sunset, as inside a polar circle, is no daily cycle.
+    dayTime, sunrise, sunset = WEATHER['dayTime'], WEATHER['sunrise'], WEATHER['sunset']
+    cycle = sunrise >= 0.0 and sunset > sunrise
+    isDay = True
+    share = 0.0
+    layerSec = 0.0
+    if cycle:
+        dayLength = sunset - sunrise
+        nightLength = 24.0 - dayLength
+        isDay = dayTime >= sunrise and dayTime < sunset
+        if isDay:
+            #The sun's heating so far, as a share of the day's (Stull 18.2), burns the night's cold
+            #layer off from the ground up: 1 - u + u ln u of its heat is gone when u of the dawn
+            #drop is left at the surface.
+            heat = (1.0 - math.cos(math.radians(180.0 * (dayTime - sunrise) / dayLength))) / 2.0
+            lo, hi = 0.0, 1.0
+            for _ in range(20):
+                mid = (lo + hi) / 2.0
+                if (1.0 - mid) + (mid * math.log(mid)) > heat:
+                    lo = mid
+                else:
+                    hi = mid
+            share = (lo + hi) / 2.0
+            layerSec = nightLength * 3600.0
+        else:
+            #The surface cools as the square root of the time since sunset (Stull 18.1, 18.4, 18.5)
+            since = dayTime - sunset
+            if since < 0.0:
+                since = since + 24.0
+            share = math.sqrt(since / nightLength)
+            layerSec = since * 3600.0
+
+    #Cloud against the region's average: the day's warming by the sunlight it lets through, the
+    #night's cooling by the heat it lets out (Stull 2.35, 2.39, overcast taken as middle cloud)
+    overcast = WEATHER['overcast']
+    cloudDay = (1.0 - (ENV_CLOUD_DAY * overcast)) / (1.0 - (ENV_CLOUD_DAY * avgCloud))
+    cloudNight = (1.0 - (ENV_CLOUD_NIGHT * overcast)) / (1.0 - (ENV_CLOUD_NIGHT * avgCloud))
+
+    #Rain. The mission's rain, 0..1, is a rain rate through three even bands - light, moderate and
+    #heavy. The rain water that rate holds in the air, and what it evaporates into the air, are the
+    #Kessler scheme's (Klemp and Wilhelmson 1978, as the WRF model's module_mp_kessler has them).
+    #Evaporating, it takes the air cooler and wetter toward its wet-bulb temperature, while the air
+    #mixes back out at ENV_RAIN_RECOVERY: bmkhs_envRain is how far it is there, 0..1. Solved in the
+    #setting's own air - its mean FAT and dew point at its base altitude. Standard Day has none.
+    rainRate = 0.0
+    if ENVIRONMENT == 'ISA_STD':
+        bmkhs_envRain = 0.0
+        bmkhs_envRainT = -1.0
+    else:
+        rainRate = math_linear_interp([[0.0, 0.0], [1.0 / 3.0, ENV_RAIN_LIGHT], [2.0 / 3.0, ENV_RAIN_MODERATE],
+                                       [1.0, ENV_RAIN_TOP]], WEATHER['rain'])[1]
+        #The setting's air, and its wet-bulb: pressure hPa, mixing ratios kg/kg
+        pressure = environment_pressure(baseAlt * FEET_TO_METERS)
+        vapour = min(environment_saturation(dewPoint), environment_saturation(baseFAT))
+        mixing = (VAPOUR_MASS_RATIO * vapour) / (pressure - vapour)
+        wetBulb = environment_wet_bulb(baseFAT, vapour, pressure)
+        wetBulbVapour = environment_saturation(wetBulb)
+        toSaturate = max(((VAPOUR_MASS_RATIO * wetBulbVapour) / (pressure - wetBulbVapour)) - mixing, 1.0e-9)
+
+        def closing(this):
+            """The rate, 1/s, at which the rain closes what is left to saturation, with the air
+            `this` of the way there."""
+            far = min(this, 0.999)
+            temp = baseFAT - (far * (baseFAT - wetBulb))
+            mix = mixing + (far * toSaturate)
+            saturated = environment_saturation(temp)
+            mixSat = (VAPOUR_MASS_RATIO * saturated) / (pressure - saturated)
+            rho = (pressure * 100.0) / (GAS_CONSTANT_DRY_AIR * (temp + DEG_C_TO_KELVIN))
+            #Rain water, g/cm3, for the rate: the rate is the water times its fall speed,
+            #36.34 (water)^0.1364 sqrt(sea level density / density) m/s, turned round
+            water = 0.001 * ((rainRate / (3600.0 * 36.34 * (0.001 ** 0.1364) * math.sqrt(ISA_STD_DAY_AIR_DENSITY / rho))) ** (1.0 / 1.1364))
+            #What it evaporates, kg/kg s - pressure in Pa and density in g/cm3, as the scheme has them
+            evaporated = (((1.6 + (124.9 * (water ** 0.2046))) * (water ** 0.525)) / ((2.55e8 / ((pressure * 100.0) * mixSat)) + 5.4e5)) * (max(mixSat - mix, 0.0) / ((0.001 * rho) * mixSat))
+            return evaporated / (toSaturate * (1.0 - far))
+
+        if bmkhs_envRainT < 0.0:
+            #The first solve: a mission that opens in rain has been in it a while, so the air starts
+            #settled, where the rain's closing and the mixing balance
+            lo, hi = 0.0, 1.0
+            for _ in range(20):
+                mid = (lo + hi) / 2.0
+                if (closing(mid) * (1.0 - mid)) > (mid / ENV_RAIN_RECOVERY):
+                    lo = mid
+                else:
+                    hi = mid
+            bmkhs_envRain = (lo + hi) / 2.0
+        else:
+            #Toward where the two balance, at the rate of the two together
+            rate = closing(bmkhs_envRain) + (1.0 / ENV_RAIN_RECOVERY)
+            bmkhs_envRain = util_smooth(bmkhs_envRain, 1.0 - (1.0 / (ENV_RAIN_RECOVERY * rate)),
+                                        WEATHER['time'] - bmkhs_envRainT, 1.0 / rate)
+        bmkhs_envRainT = WEATHER['time']
+
+    bmkhs_envRainRate = rainRate
+    bmkhs_envBaseAlt = baseAlt
+    bmkhs_envBaseFat = baseFAT
+    bmkhs_envSwing = swing
+    bmkhs_envDewPoint = dewPoint
+    bmkhs_envAvgWind = avgWind
+    bmkhs_envCycle = cycle
+    bmkhs_envIsDay = isDay
+    bmkhs_envShare = share
+    bmkhs_envLayerSec = layerSec
+    bmkhs_envCloudDay = cloudDay
+    bmkhs_envCloudNight = cloudNight
+
+
+def environment_saturation(t):
+    """fn_environment's _saturation: saturation vapour pressure, hPa, at t deg C (WMO-No. 8)."""
+    return 6.112 * math.exp((17.62 * t) / (243.12 + t))
+
+
+def environment_pressure(altitudeM):
+    """fn_environment's _isaPressure: the standard atmosphere's pressure, hPa, at a pressure altitude in m."""
+    return ISA_PRESSURE_HPA * ((1.0 - ((ISA_LAPSE * altitudeM) / ISA_TEMP_K)) ** ISA_EXPONENT)
+
+
+def environment_wet_bulb(temperature, vapour, pressure):
+    """fn_environmentWetBulb: the wet-bulb temperature, deg C, of air at a temperature (deg C), vapour
+    pressure and pressure (hPa) - where it ends up once rain has saturated it (Stull 4.17, 4.18)."""
+    mixing = (VAPOUR_MASS_RATIO * vapour) / (pressure - vapour)
+    lo, hi = temperature - 40.0, temperature
+    for _ in range(14):
+        mid = (lo + hi) / 2.0
+        saturated = 6.112 * math.exp((17.62 * mid) / (243.12 + mid))
+        if (SPECIFIC_HEAT_AIR * (temperature - mid)) > (LATENT_HEAT_VAPOUR * (((VAPOUR_MASS_RATIO * saturated) / (pressure - saturated)) - mixing)):
+            lo = mid
+        else:
+            hi = mid
+    return (lo + hi) / 2.0
+
+
+def environment_dew_point(vapour):
+    """fn_environment's _dewPointOf: the dew point, deg C, of a vapour pressure in hPa - absolute zero in dry air."""
+    if vapour <= 0.0:
+        return -DEG_C_TO_KELVIN
+    g = math.log(vapour / 6.112)
+    return (243.12 * g) / (17.62 - g)
 
 
 def environment(H):
-    baroAlt = H['baroAltM'] * METERS_TO_FEET
-    baseAlt, baseFAT = BASE_ALT, BASE_FAT
-    altitude = baseAlt + baroAlt                     # exact, as fn_environment
-    altimeter = 29.92
-    temperature = baseFAT - ((baroAlt / 1000) * 2)
-    refPressure = altimeter * IN_MG_TO_HPA
-    exp_ = (-GRAVITY * MOLAR_MASS_OF_AIR * ((altitude - 0) * FEET_TO_METERS)
-            / (UNIVERSAL_GAS_CONSTANT * (temperature + DEG_C_TO_KELVIN)))
-    pressure = ((refPressure / 0.01) * math.exp(exp_)) * 0.01
+    #Core solves the weather once every ENV_WEATHER_PERIOD, by bmkhs_envWeatherT, for every aircraft.
+    #The rig has no mission clock, so it solves it on every call.
+    environment_weather()
+    baseAlt = bmkhs_envBaseAlt
+    baseFAT = bmkhs_envBaseFat
+    swing = bmkhs_envSwing
+    dewPoint = bmkhs_envDewPoint
+    avgWind = bmkhs_envAvgWind
+    cycle = bmkhs_envCycle
+    isDay = bmkhs_envIsDay
+    share = bmkhs_envShare
+    layerSec = bmkhs_envLayerSec
+    cloudDay = bmkhs_envCloudDay
+    cloudNight = bmkhs_envCloudNight
+    rain = bmkhs_envRain
+    standardDay = ENVIRONMENT == 'ISA_STD'
+    deltaTime = H.get('bmkhs_deltaTime', 0.0)
+
+    #Height above the map's sea level, and above the ground - the sea where there is no ground. The
+    #height above ground is eased, so a cliff edge is a drift in temperature and not a step.
+    asl = H['baroAltM']
+    aglNow = max(asl - max(H.get('terrainAslM', 0.0), 0.0), 0.0)
+    agl = util_smooth(H.get('bmkhs_envAgl', aglNow), aglNow, deltaTime, ENV_AGL_TIME)
+    H['bmkhs_envAgl'] = agl
+    groundAsl = asl - agl
+
+    #The steady wind: the mission's, its jumps eased
+    windNow = [WEATHER['wind'][0], WEATHER['wind'][1], 0.0]
+    windSteady = util_smooth(H.get('bmkhs_windSteady', windNow), windNow, deltaTime, ENV_WIND_TIME)
+    H['bmkhs_windSteady'] = windSteady
+    windSteadySpeed = math.sqrt(sum(c * c for c in windSteady))
+
+    #Pressure altitude and the standard atmosphere's pressure there
+    altitude = baseAlt + (asl * METERS_TO_FEET)
+    pressure = environment_pressure(altitude * FEET_TO_METERS)
+
+    #Free air: the preset's mean, lapsed
+    temperature = baseFAT - (ISA_LAPSE * asl)
+
+    #The preset's vapour at its base thins with pressure
+    pressureBase = environment_pressure(baseAlt * FEET_TO_METERS)
+    vapourBase = environment_saturation(dewPoint)
+
+    if (not standardDay) and cycle:
+        #The afternoon's surface above the mean and the dawn's below it are the measured swing at
+        #the region's average cloud, each narrowed or widened by the cloud there is. The night's
+        #whole drop from the afternoon is deeper in less wind than the region's average and
+        #shallower in more (Stull 18.4, 18.5).
+        windNight = max(windSteadySpeed, ENV_NIGHT_WIND_MIN)
+        rise = swing * cloudDay
+        drop = (rise + (swing * cloudNight)) * ((avgWind / windNight) ** 0.75)
+        #A calm night cools the surface no further than its dew point - or the average dawn, where
+        #that is the colder
+        groundFree = baseFAT - (ISA_LAPSE * groundAsl)
+        dewGround = environment_dew_point(
+            vapourBase * environment_pressure((baseAlt * FEET_TO_METERS) + groundAsl) / pressureBase)
+        dropLimit = max((groundFree + rise) - min(dewGround, groundFree - swing), 0.0)
+        #The night layer's e-folding height (Stull 18.4)
+        layerHeight = max(ENV_NIGHT_LAYER_A * (windNight ** 0.75) * math.sqrt(layerSec), 0.1)
+        if isDay:
+            dawn = min(drop, dropLimit)
+            deficit = min(share * dawn, dawn * math.exp(-agl / layerHeight))
+        else:
+            deficit = min(drop * share, dropLimit) * math.exp(-agl / layerHeight)
+        #The afternoon's air falls at the dry adiabatic rate above the ground until it meets the free air
+        temperature = temperature + max(rise - ((DRY_ADIABATIC_LAPSE - ISA_LAPSE) * agl), 0.0) - deficit
+
+    #Vapour: none on a standard day; saturated in fog; never more than the air can hold
+    vapour = 0.0
+    #What the rain has taken off the temperature, deg C
+    rainCooling = 0.0
+    if not standardDay:
+        vapour = min(vapourBase * pressure / pressureBase, environment_saturation(temperature))
+        #Rain: the air here is `rain` of the way to its wet-bulb temperature - cooler, and wetter by
+        #the vapour whose evaporation cooled it. Before the fog, so the air is as cool under the
+        #fog's top as over it.
+        if rain > 0.0:
+            wetBulb = environment_wet_bulb(temperature, vapour, pressure)
+            wetBulbVapour = environment_saturation(wetBulb)
+            mixing = (VAPOUR_MASS_RATIO * vapour) / (pressure - vapour)
+            mixing = mixing + (rain * (((VAPOUR_MASS_RATIO * wetBulbVapour) / (pressure - wetBulbVapour)) - mixing))
+            rainCooling = rain * (temperature - wetBulb)
+            temperature = temperature - rainCooling
+            vapour = min((mixing * pressure) / (VAPOUR_MASS_RATIO + mixing), environment_saturation(temperature))
+        #Fog: saturated below its top
+        if agl < WEATHER['fog'] * ENV_FOG_TOP:
+            vapour = environment_saturation(temperature)
+
+    H['bmkhs_rainCooling'] = rainCooling
     H['bmkhs_barAlt'] = altitude
     H['bmkhs_fat'] = temperature
-    H['bmkhs_rho'] = (pressure / 0.01) / (287.05 * (temperature + DEG_C_TO_KELVIN))
+    H['bmkhs_pressure'] = pressure
+    H['bmkhs_dewPoint'] = environment_dew_point(vapour)
+    H['bmkhs_rho'] = ((pressure - (VAPOUR_DENSITY_DEFICIT * vapour)) * 100.0) / (GAS_CONSTANT_DRY_AIR * (temperature + DEG_C_TO_KELVIN))
+
+    #What the cockpit reads and the airframe feels: the steady wind, none with wind disabled
+    windFelt = [0.0, 0.0, 0.0] if WEATHER['windDisabled'] else windSteady
+    windSpeed = math.sqrt(sum(c * c for c in windFelt))
+    H['bmkhs_windSpeed'] = windSpeed
+    H['bmkhs_windDirFrom'] = (sqf_round((math.degrees(math.atan2(windFelt[0], windFelt[1])) + 540.0) % 360.0) % 360
+                              if windSpeed > 0.0 else 0)
+    velWindWorldSpace = [0.0, 0.0, 0.0]
+    velGustWorldSpace = [0.0, 0.0, 0.0]
+    if bmkhs_rotorModel == 0:
+        velWindWorldSpace = windFelt
+        velGustWorldSpace = environment_gusts(H, windFelt, agl, deltaTime)
+    H['bmkhs_velWindWorldSpace'] = velWindWorldSpace
+    H['bmkhs_velGustWorldSpace'] = velGustWorldSpace
+
+
+#fn_environmentGusts' table - MIL-F-8785C figure 7, gust strength above 2,000 ft:
+#[height ft, light, moderate, severe], ft/s
+GUST_INTENSITY = [
+    [500.0,    6.6,  8.6, 15.6],
+    [1750.0,   6.9,  9.6, 17.6],
+    [3750.0,   7.4, 10.6, 23.0],
+    [7500.0,   6.7, 10.1, 23.6],
+    [15000.0,  4.6,  8.0, 22.1],
+    [25000.0,  2.7,  6.6, 20.0],
+    [35000.0,  0.4,  5.0, 16.0],
+    [45000.0,  0.0,  4.2, 15.1],
+    [55000.0,  0.0,  2.7, 12.1],
+    [65000.0,  0.0,  0.0,  7.9],
+    [75000.0,  0.0,  0.0,  6.2],
+    [80000.0,  0.0,  0.0,  5.1],
+]
+
+
+def environment_gusts(H, wind, agl, deltaTime):
+    """fn_environmentGusts: the gust on the steady wind, world space m/s."""
+    state = H.get('bmkhs_gustState', [0.0, 0.0, 0.0])
+    windSpeed = math.sqrt(sum(c * c for c in wind))
+    severity = WEATHER['gusts']
+    if severity <= 0.0 or windSpeed <= 0.0:
+        H['bmkhs_gustState'] = [0.0, 0.0, 0.0]
+        return [0.0, 0.0, 0.0]
+
+    #Height above ground, and the speed through the air mass
+    h = max(agl, GUST_HEIGHT_MIN)
+    vel = H.get('velWorld', [0.0, 0.0, 0.0])
+    v = max(math.sqrt(sum((a - b) ** 2 for a, b in zip(vel, wind))), GUST_AIRSPEED_MIN)
+
+    #Below 1,000 ft: strength from the wind, size from the height. The specification's shape is per foot.
+    low = min(h, GUST_LOW_TOP)
+    shape = 0.177 + (0.000823 * METERS_TO_FEET * low)
+    lu = low / (shape ** 1.2)
+    lw = low
+    sw = 0.1 * windSpeed
+    su = sw / (shape ** 0.4)
+    if h > GUST_LOW_TOP:
+        #Above 2,000 ft: the specification's table, in ft and ft/s, read at this height and between
+        #its rows by the wind; from 1,000 to 2,000 ft, between the two
+        row = math_linear_interp(GUST_INTENSITY, h * METERS_TO_FEET)
+        steps = [0.0, row[1] * FEET_TO_METERS, row[2] * FEET_TO_METERS, row[3] * FEET_TO_METERS]
+        at = clamp(windSpeed / GUST_WIND_STEP, 0.0, 3.0)
+        lowStep = min(math.floor(at), 2)
+        high = steps[lowStep] + ((steps[lowStep + 1] - steps[lowStep]) * (at - lowStep))
+        blend = clamp((h - GUST_LOW_TOP) / (GUST_HIGH_BASE - GUST_LOW_TOP), 0.0, 1.0)
+        lu = GUST_LOW_TOP + (blend * (GUST_HIGH_SIZE - GUST_LOW_TOP))
+        lw = lu
+        su = sw + (blend * (high - sw))
+        sw = su
+    su = su * severity
+    sw = sw * severity
+
+    #Each component eases toward zero and is pushed by its own noise, at a rate set by how fast the
+    #aircraft crosses a gust: the specification's filters (Yeager, NASA CR-1998-206937, eq. 30-32),
+    #stepped exactly so the gusts are the same at any frame rate
+    keepU = math.exp(-deltaTime * v / lu)
+    keepV = math.exp(-2.0 * deltaTime * v / lu)
+    keepW = math.exp(-2.0 * deltaTime * v / lw)
+    state = [
+        (keepU * state[0]) + (su * math.sqrt(1.0 - (keepU * keepU)) * GUST_RNG.gauss(0.0, 1.0)),
+        (keepV * state[1]) + (su * math.sqrt(1.0 - (keepV * keepV)) * GUST_RNG.gauss(0.0, 1.0)),
+        (keepW * state[2]) + (sw * math.sqrt(1.0 - (keepW * keepW)) * GUST_RNG.gauss(0.0, 1.0)),
+    ]
+    H['bmkhs_gustState'] = state
+
+    #Along the wind, across it, and vertical
+    along = [wind[0] / windSpeed, wind[1] / windSpeed]
+    return [
+        (along[0] * state[0]) + (along[1] * state[1]),
+        (along[1] * state[0]) - (along[0] * state[1]),
+        state[2],
+    ]
 
 
 # ---------------------------------------------------------------------------------------------
@@ -658,7 +1052,7 @@ def turbo_shaft_power_turbine(eng, t45, p45, p2, mDot, running, np_, nrFrac, dt)
 def turbo_shaft_engine(H, i, eng):
     dt = H['bmkhs_deltaTime']
     fat = H['bmkhs_fat']
-    p2 = H['bmkhs_rho'] * GT_R_AIR * (fat + DEG_C_TO_KELVIN)
+    p2 = H['bmkhs_pressure'] * 0.1
     velY = H['bmkhs_velModelSpace'][1]
 
     ng = H['bmkhs_engPctNg'][i]
@@ -1942,8 +2336,8 @@ def pulled(pa, fat, single=False, coll=1.0, secs=100.0):
     Single engine: engine 2 lever OFF before the pull, on an aircraft that has one."""
     global BASE_FAT
     saved = BASE_FAT
-    #The environment lapses 2 C per 1,000 ft from its base, so the base that lands on fat.
-    BASE_FAT = fat + sqf_round(pa / 1000.0 * 2)
+    #The environment lapses at the standard rate from its base, so the base that lands on fat.
+    BASE_FAT = fat + (ISA_LAPSE * pa * FEET_TO_METERS)
     try:
         alt = pa * FEET_TO_METERS
         a = Heli(baroAltM=alt)
@@ -2039,12 +2433,97 @@ def perf_report(jsonPath=None):
             json.dump(results, f, indent=1)
 
 
+def environment_report():
+    """python engine.py env - what each environment setting gives: FAT by hour and height above
+    ground on its average day, and its dawn and afternoon under other skies and winds."""
+    global ENVIRONMENT
+    saved = (ENVIRONMENT, BASE_ALT, BASE_FAT, dict(WEATHER))
+    heights = [0, 100, 500, 1000, 2000, 4000, 8000]
+
+    def at(hour, aglFt, terrainFt=0.0):
+        WEATHER['dayTime'] = hour
+        H = {'baroAltM': (terrainFt + aglFt) * FEET_TO_METERS, 'terrainAslM': terrainFt * FEET_TO_METERS}
+        environment(H)
+        return H
+
+    try:
+        set_environment('ISA_STD')
+        H = at(12.0, 0)
+        print('ENVIRONMENT')
+        print('   Standard Day, sea level: FAT %.2f C, %.2f hPa, rho %.4f, dew point %.1f'
+              % (H['bmkhs_fat'], H['bmkhs_pressure'], H['bmkhs_rho'], H['bmkhs_dewPoint']))
+        H = at(3.0, 5000)
+        print('   Standard Day, 5,000 ft at 03:00: FAT %.2f C, %.2f hPa, rho %.4f' % (H['bmkhs_fat'], H['bmkhs_pressure'], H['bmkhs_rho']))
+        for name, row in ENVIRONMENTS.items():
+            if name == 'ISA_STD':
+                continue
+            set_environment(name)
+            baseAlt, baseFAT, swing, dewPoint, avgWind, avgCloud = row
+            WEATHER.update(sunrise=5.0, sunset=19.0) if name.endswith('SUMMER') else WEATHER.update(sunrise=7.0, sunset=17.0)
+            WEATHER.update(overcast=avgCloud, wind=[avgWind, 0.0, 0.0], fog=0.0)
+            hours = [0.0, 3.0, WEATHER['sunrise'], 9.0, 12.0, 15.0, WEATHER['sunset'], 21.0]
+            print()
+            print('   %s - base %d ft, mean %g C, swing %g, dew point %g C, average wind %g m/s and cloud %d%%'
+                  % (name, baseAlt, baseFAT, swing, dewPoint, avgWind, round(avgCloud * 100)))
+            print('   FAT, C, on the average day, sunrise %02d:00 sunset %02d:00' % (WEATHER['sunrise'], WEATHER['sunset']))
+            print('      ft AGL ' + ''.join('  %02d:00' % h for h in hours))
+            for ft in heights:
+                print('      %6d ' % ft + ''.join('%7.1f' % at(h, ft)['bmkhs_fat'] for h in hours))
+            dawn, noon = at(WEATHER['sunrise'], 0), at(15.0, 0)
+            print('      surface at dawn: dew point %.1f C, rho %.4f;  at 15:00: dew point %.1f C, rho %.4f'
+                  % (dawn['bmkhs_dewPoint'], dawn['bmkhs_rho'], noon['bmkhs_dewPoint'], noon['bmkhs_rho']))
+            print('      surface FAT under other skies and winds     dawn   15:00')
+            for label, oc, w in (('clear, average wind', 0.0, avgWind), ('overcast, average wind', 1.0, avgWind),
+                                 ('average cloud, calm', avgCloud, 0.0), ('average cloud, 5 m/s', avgCloud, 5.0),
+                                 ('average cloud, 10 m/s', avgCloud, 10.0)):
+                WEATHER.update(overcast=oc, wind=[w, 0.0, 0.0])
+                print('         %-38s %6.1f  %6.1f' % (label, at(WEATHER['sunrise'], 0)['bmkhs_fat'], at(15.0, 0)['bmkhs_fat']))
+            #Rain on the average afternoon: a mission that opens in it starts settled
+            WEATHER.update(overcast=avgCloud, wind=[avgWind, 0.0, 0.0])
+            dry = at(15.0, 0)
+            print('      rain at 15:00, surface (dry: FAT %.1f, dew point %.1f, rho %.4f)' % (dry['bmkhs_fat'], dry['bmkhs_dewPoint'], dry['bmkhs_rho']))
+            print('         settled in rain          mm/h     FAT  dew point     rho   to saturation')
+            for label, slider in (('light, 17%', 1.0 / 6.0), ('moderate, 50%', 0.5), ('heavy, 83%', 5.0 / 6.0), ('full, 100%', 1.0)):
+                WEATHER.update(rain=slider, time=0.0)
+                globals().update(bmkhs_envRainT=-1.0)
+                H = at(15.0, 0)
+                print('         %-22s %6.1f  %6.1f     %6.1f  %.4f   %3d%%' % (
+                    label, bmkhs_envRainRate, H['bmkhs_fat'], H['bmkhs_dewPoint'], H['bmkhs_rho'], round(bmkhs_envRain * 100)))
+            #Moderate rain starting on dry air, stepped once a second, then stopping after an hour
+            WEATHER.update(rain=0.0, time=0.0)
+            globals().update(bmkhs_envRainT=-1.0)
+            at(15.0, 0)
+            line = '         moderate rain from dry, FAT after'
+            for t in range(1, 10801):
+                WEATHER.update(rain=0.5 if t <= 3600 else 0.0, time=float(t))
+                environment_weather()
+                if t in (300, 600, 1200, 1800, 3600):
+                    line += '  %d min %.1f' % (t // 60, at(15.0, 0)['bmkhs_fat'])
+                if t == 3600:
+                    print(line)
+                    line = '         and after it stops, FAT after   '
+                if t in (4500, 5400, 7200, 9000, 10800):
+                    line += '  %d min %.1f' % ((t - 3600) // 60, at(15.0, 0)['bmkhs_fat'])
+            print(line)
+            WEATHER.update(rain=0.0, time=0.0)
+            globals().update(bmkhs_envRainT=-1.0)
+    finally:
+        ENVIRONMENT = saved[0]
+        globals().update(BASE_ALT=saved[1], BASE_FAT=saved[2], bmkhs_envRain=0.0, bmkhs_envRainT=-1.0)
+        WEATHER.clear()
+        WEATHER.update(saved[3])
+
+
 if __name__ == '__main__':
     import sys
     if 'bet' in sys.argv:
         #python engine.py bet [...] - the blade element rotors in place of the simple ones
         bmkhs_rotorModel = 1
         print('ROTOR MODEL: BET (bmkhs_rotorModel = 1)')
+    if 'env' in sys.argv:
+        #python engine.py env
+        environment_report()
+        sys.exit()
     if 'perf' in sys.argv:
         #python engine.py perf [results.json]
         i = sys.argv.index('perf')
