@@ -152,3 +152,4 @@ _heli setVariable ["bmkhs_suspLoadSteady",      -1.0];
 _heli setVariable ["bmkhs_suspLoadUntil",       0.0];
 _heli setVariable ["bmkhs_suspSleepMass",       0.0];
 _heli setVariable ["bmkhs_suspHeldLogged",      -10.0];
+_heli setVariable ["bmkhs_suspParkGround",      []];

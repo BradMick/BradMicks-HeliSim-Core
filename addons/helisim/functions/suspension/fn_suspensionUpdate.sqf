@@ -4,9 +4,9 @@ Function: bmkhs_fnc_suspensionUpdate
 Description:
     Runs the wheels each frame. Forces only; the pose is held only while the
     aircraft is not free to move - loading in, under time acceleration, idle with
-    nobody aboard, or asleep on all wheels with the brake on and the collective
-    down. Never reads and writes angular velocity while it is free: that throws
-    away the moments from every addForce.
+    nobody aboard, or asleep on all wheels with the collective down and either the
+    brake on or the rotor stopped on near-level ground. Never reads and writes
+    angular velocity while it is free: that throws away the moments from every addForce.
 
 Parameters:
     _heli - The helicopter [Object]
@@ -51,6 +51,16 @@ private _mass       = getMass _heli;
 private _brakeCtl   = _settings get "brakeControl";
 private _brake      = _brakeCtl isNotEqualTo "" && {_heli getVariable format ["bmkhs_%1On", _brakeCtl]};
 private _collDown   = (_heli getVariable "bmkhs_collectiveOutput") <= SUSP_SLEEP_COLLECTIVE;
+//Rotor stopped with Arma's engine off: parked, held at rest brake or no brake, on ground that holds it
+private _parked     = _collDown && {!isEngineOn _heli} && {(_heli getVariable "bmkhs_rtrRpm") < SUSP_PARK_RTR_RPM}
+    && {isNull attachedTo _heli} && {
+        private _ground = _heli getVariable "bmkhs_suspParkGround";
+        if (_ground isEqualTo [] || {((_ground select 0) distance (getPosASL _heli)) > SUSP_PARK_RECHECK}) then {
+            _ground = [getPosASL _heli, [_heli] call bmkhs_fnc_suspensionParkable];
+            _heli setVariable ["bmkhs_suspParkGround", _ground];
+        };
+        _ground select 1
+    };
 //Read before the hold zeroes it, less the frame of free fall a held aircraft gets
 private _vel        = velocity _heli;
 private _moved      = vectorMagnitude [_vel select 0, _vel select 1, (_vel select 2) + (GRAVITY * _deltaTime)] > SUSP_WAKE_SPEED
@@ -66,16 +76,16 @@ if (_steady >= 0.0) then {
     _heli setVariable ["bmkhs_suspLoadSteady", _steady];
 };
 
-if (_isHeld && {_timeAccel || _idle || _steady >= 0.0 || {_brake && _collDown && !_moved}}) exitWith {
+if (_isHeld && {_timeAccel || _idle || _steady >= 0.0 || {(_brake || _parked) && _collDown && !_moved}}) exitWith {
     //The velocities PhysX gave it since the last hold - what is pushing on a held aircraft
     if (bmkhs_flightLog && {time - (_heli getVariable "bmkhs_suspHeldLogged") >= 1.0}) then {
         _heli setVariable ["bmkhs_suspHeldLogged", time];
-        diag_log format ["SUSP,HELD,%1,coll=%2,brake=%3,idle=%4,steady=%5,accel=%6,moved=%7,vel=%8,angVel=%9,dt=%10,armaEng=%11,rtrDmg=%12",
+        diag_log format ["SUSP,HELD,%1,coll=%2,brake=%3,idle=%4,steady=%5,accel=%6,moved=%7,vel=%8,angVel=%9,dt=%10,armaEng=%11,rtrDmg=%12,parked=%13",
             time toFixed 2, (_heli getVariable "bmkhs_collectiveOutput") toFixed 3,
             _brake, _idle, _steady toFixed 2, _timeAccel, _moved,
             (_vel apply {_x toFixed 3}) joinString "|",
             ((_heli vectorWorldToModel (angularVelocity _heli)) apply {(deg _x) toFixed 2}) joinString "|",
-            _deltaTime toFixed 3, isEngineOn _heli, ([_heli, "mainRotor"] call bmkhs_fnc_damageGet) toFixed 2];
+            _deltaTime toFixed 3, isEngineOn _heli, ([_heli, "mainRotor"] call bmkhs_fnc_damageGet) toFixed 2, _parked];
     };
     _held params ["_posHeld", "_dirHeld", "_upHeld"];
     _heli setPosASL _posHeld;
@@ -92,7 +102,7 @@ if (_isHeld) then {
 };
 
 private _allDown  = (_compressed findIf {_x < 0.0}) < 0;
-private _settled  = _allDown && {_idle || {_brake && _collDown}};
+private _settled  = _allDown && {_idle || {_brake && _collDown} || _parked};
 private _atRest   = _settled
     && {vectorMagnitude (velocity _heli) < SUSP_REST_SPEED}
     && {vectorMagnitude (angularVelocity _heli) < SUSP_REST_RATE};
@@ -100,10 +110,14 @@ private _restTime = [0.0, (_heli getVariable "bmkhs_suspRestTime") + _deltaTime]
 _heli setVariable ["bmkhs_suspRestTime", _restTime];
 
 if (_restTime >= SUSP_REST_TIME || {_timeAccel && {(_compressed findIf {_x >= 0.0}) >= 0}}) exitWith {
-    _heli setVelocity [0.0, 0.0, 0.0];
-    _heli setAngularVelocity [0.0, 0.0, 0.0];
-    _heli setVariable ["bmkhs_suspHeldPose", [getPosASL _heli, vectorDir _heli, vectorUp _heli]];
-    _heli setVariable ["bmkhs_suspSleepMass", _mass];
+    //Held level on its wheels at static compression, as at load-in, not in whatever lean it came to rest in
+    if (!_timeAccel) then { [_heli] call bmkhs_fnc_suspensionPlace; };
+    if ((_heli getVariable "bmkhs_suspHeldPose") isEqualTo []) then {
+        _heli setVelocity [0.0, 0.0, 0.0];
+        _heli setAngularVelocity [0.0, 0.0, 0.0];
+        _heli setVariable ["bmkhs_suspHeldPose", [getPosASL _heli, vectorDir _heli, vectorUp _heli]];
+        _heli setVariable ["bmkhs_suspSleepMass", _mass];
+    };
 };
 
 //Static load on each wheel: carries the mass with no moment about the centre of mass, about the
