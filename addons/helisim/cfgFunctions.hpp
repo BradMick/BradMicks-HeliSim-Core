@@ -281,6 +281,7 @@ class CfgFunctions
             file = "\bmkhs_helisim\functions\suspension";
             class suspensionCastor {R;};
             class suspensionDebug {R;};
+            class suspensionParkable {R;};
             class suspensionPlace {R;};
             class suspensionPlane {R;};
             class suspensionUpdate {R;};

@@ -35,7 +35,8 @@ if (_pinned) then {
 } else {
     if (_onGround) then {
         //Velocity at the wheel, as in bmkhs_fnc_suspensionWheel
-        private _velModel = _heli vectorWorldToModel (velocity _heli);
+        private _velWorld = velocity _heli;
+        private _velModel = _heli vectorWorldToModel [_velWorld select 0, _velWorld select 1, 0.0];
         private _yawRate  = (_heli vectorWorldToModel (angularVelocity _heli)) select 2;
         private _velX     = (_velModel select 0) + (_yawRate * (_pos select 1));
         private _velY     = (_velModel select 1) - (_yawRate * (_pos select 0));

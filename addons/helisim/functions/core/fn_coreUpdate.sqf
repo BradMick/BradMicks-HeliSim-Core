@@ -20,7 +20,7 @@ params ["_heli"];
 #include "\bmkhs_helisim\functions\core\core.hpp"
 
 if (isGamePaused || CBA_missionTime < 0.1) exitWith {
-    _heli setVariable ["bmkhs_previousTime",  diag_tickTime];
+    _heli setVariable ["bmkhs_previousTime",  time];
 };
 
 //Not this machine's - its owner solves it. This copy is kept current from what the owner

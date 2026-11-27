@@ -93,8 +93,10 @@ _normal          = (_normal max 0.0) min (_load * GRAVITY * SUSP_MAX_LOAD);
 
 _heli addForce [[0.0, 0.0, _normal * _deltaTime], _pos];
 
-//Velocity of the contact point; positive yaw is clockwise from above
-private _velModel = _heli vectorWorldToModel (velocity _heli);
+//Velocity of the contact point; positive yaw is clockwise from above. Ground-plane velocity only:
+//on a leaning aircraft the vertical bounce would read as the tyre sliding sideways.
+private _velWorld = velocity _heli;
+private _velModel = _heli vectorWorldToModel [_velWorld select 0, _velWorld select 1, 0.0];
 private _yawRate  = (_heli vectorWorldToModel (angularVelocity _heli)) select 2;
 private _velX     = (_velModel select 0) + (_yawRate * (_pos select 1));
 private _velY     = (_velModel select 1) - (_yawRate * (_pos select 0));

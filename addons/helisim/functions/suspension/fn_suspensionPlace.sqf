@@ -3,8 +3,9 @@ Function: bmkhs_fnc_suspensionPlace
 
 Description:
     Sits the aircraft on its wheels at static compression, on the first frame the
-    suspension runs: the plane through the wheel bottoms onto the plane of the
-    ground under them, keeping the heading. Leaves an airborne or rolling aircraft alone.
+    suspension runs and whenever it comes to rest to be held: the plane through the
+    wheel bottoms onto the plane of the ground under them, keeping the heading.
+    Leaves an airborne or rolling aircraft alone.
 
 Parameters:
     _heli - The helicopter [Object]

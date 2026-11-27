@@ -45,5 +45,9 @@
 #define SUSP_SLEEP_COLLECTIVE   0.1
 #define SUSP_WAKE_MASS_FRAC     0.01
 #define SUSP_WAKE_SPEED         0.5     //m/s
+//Parked with the rotor stopped, brake on or off: Arma's engine is off then, and its standard flight
+//model rolls an engine-off helicopter left and noses it down
+#define SUSP_PARK_RTR_RPM       0.1
+#define SUSP_PARK_RECHECK       0.5     //m moved before the ground under the wheels is checked again
 
 #endif

@@ -18,15 +18,10 @@ Author:
 ---------------------------------------------------------------------------- */
 params ["_heli"];
 
-private _deltaTime     = _heli getVariable "bmkhs_deltaTime";
-private _previousTime  = _heli getVariable "bmkhs_previousTime";
+//Game time, not the real clock: Arma steps at most 0.1 s a frame and spreads a longer frame over
+//the frames after it, so only game time matches the step the forces are applied over
+private _now       = time;
+private _deltaTime = ((_now - (_heli getVariable "bmkhs_previousTime")) max 0.0) min 0.1;
 
-private _currentTime = diag_tickTime;
-_deltaTime           = _currentTime - _previousTime;
-_previousTime        = _currentTime;
-
-_deltaTime           = _deltaTime * accTime;
-_deltaTime           = _deltaTime min 0.1;
-
-_heli setVariable ["bmkhs_previousTime", _previousTime];
+_heli setVariable ["bmkhs_previousTime", _now];
 _heli setVariable ["bmkhs_deltaTime",    _deltaTime];

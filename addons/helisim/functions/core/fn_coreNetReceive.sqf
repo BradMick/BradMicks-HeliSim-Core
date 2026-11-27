@@ -19,7 +19,7 @@ Author:
 params ["_heli"];
 
 //The frame clock stays current, so the first frame as owner is one frame long.
-_heli setVariable ["bmkhs_previousTime", diag_tickTime];
+_heli setVariable ["bmkhs_previousTime", time];
 
 (_heli getVariable ["bmkhs_netState", []]) params [["_sent", -1], ["_values", []], ["_pids", []]];
 if (_sent < 0 || {_sent == (_heli getVariable ["bmkhs_netStateApplied", -1])}) exitWith {};
