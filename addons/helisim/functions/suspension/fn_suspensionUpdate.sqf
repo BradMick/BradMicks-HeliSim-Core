@@ -78,7 +78,7 @@ if (_isHeld && {_timeAccel || _idle || _steady >= 0.0 || {_brake && _collDown &&
             _deltaTime toFixed 3, isEngineOn _heli, ([_heli, "mainRotor"] call bmkhs_fnc_damageGet) toFixed 2];
     };
     _held params ["_posHeld", "_dirHeld", "_upHeld"];
-    _heli setPosASL _posHeld;
+    _heli setPosWorld _posHeld;
     _heli setVectorDirAndUp [_dirHeld, _upHeld];
     _heli setVelocity [0.0, 0.0, 0.0];
     _heli setAngularVelocity [0.0, 0.0, 0.0];
@@ -102,7 +102,9 @@ _heli setVariable ["bmkhs_suspRestTime", _restTime];
 if (_restTime >= SUSP_REST_TIME || {_timeAccel && {(_compressed findIf {_x >= 0.0}) >= 0}}) exitWith {
     _heli setVelocity [0.0, 0.0, 0.0];
     _heli setAngularVelocity [0.0, 0.0, 0.0];
-    _heli setVariable ["bmkhs_suspHeldPose", [getPosASL _heli, vectorDir _heli, vectorUp _heli]];
+    //The model center, not getPosASL: that one reads a point that moves with the tilt, so writing it
+    //back shifts a leaning aircraft sideways
+    _heli setVariable ["bmkhs_suspHeldPose", [getPosWorld _heli, vectorDir _heli, vectorUp _heli]];
     _heli setVariable ["bmkhs_suspSleepMass", _mass];
 };
 
@@ -122,6 +124,11 @@ private _sum = 0.0;
 { _sum = _sum + _x } forEach _loads;
 _loads = _loads apply { _x * _mass / _sum };
 
+//How much of the roll each wheel holds, from its distance to the side of the center of mass:
+//0 on the centerline, 1 at the widest wheel
+private _rollShare = _wheels apply { abs (((_x get "position") select 0) - (_cg select 0)) };
+_rollShare = _rollShare apply { (_x / ((selectMax _rollShare) max 0.001)) ^ 2 };
+
 private _muLon   = [_settings get "muRoll", _settings get "muBrake"] select _brake;
 private _results = [];
 {
@@ -135,7 +142,7 @@ private _results = [];
         _angle  = _castor;
         _muSide = [_settings get "muCastorFree", _settings get "muCastorLocked"] select _pinned;
     };
-    _results pushBack ([_heli, _i, _loads select _i, _muSide, _muRoll, _angle, _deltaTime] call bmkhs_fnc_suspensionWheel);
+    _results pushBack ([_heli, _i, _loads select _i, _rollShare select _i, _muSide, _muRoll, _angle, _deltaTime] call bmkhs_fnc_suspensionWheel);
 } forEach _wheels;
 
 //One RPT line a frame while a wheel is on the ground, with Core's flight log, on its clock

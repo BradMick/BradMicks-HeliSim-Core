@@ -8,9 +8,12 @@
 #define SUSP_ZETA_COMPRESS      0.5
 #define SUSP_ZETA_REBOUND       0.7
 
-//Stability limits per unit of the wheel's static load: stiffness * dt^2 and damping * dt
+//Stability limits on the strut, per unit of the wheel's static load: stiffness * dt^2 and damping * dt.
+//A wheel that holds roll takes no spring limit and the roll damping limit; one on the centerline
+//takes both of the others; a wheel in between blends by its share of the roll.
 #define SUSP_SPRING_DT_LIMIT    0.05
 #define SUSP_DAMP_DT_LIMIT      0.2
+#define SUSP_ROLL_DAMP_DT_LIMIT 0.6
 #define SUSP_MAX_RATE           5.0     //m/s, compression rate
 #define SUSP_MAX_LOAD           5.0     //multiples of the wheel's static load
 //Least share of the mass a wheel carries in the static split
@@ -22,6 +25,9 @@
 //The tyre's grip before it slips, per unit of the wheel's load: rad/s and damping
 #define SUSP_GRIP_OMEGA         10.0
 #define SUSP_GRIP_ZETA          1.0
+//Stability limits on the grip, per unit of the wheel's load: stiffness * dt^2 and damping * dt
+#define SUSP_WHEEL_GRIP_STIFFNESS_DT_LIMIT  0.05
+#define SUSP_WHEEL_GRIP_DAMPING_DT_LIMIT    0.2
 
 #define SUSP_CASTOR_ANIM_STEP   0.5     //deg, change needed to update the animation
 #define SUSP_STROKE_ANIM_STEP   0.01    //of sag, change needed to update the animation

@@ -9,6 +9,7 @@ Parameters:
     _heli      - The helicopter [Object]
     _index     - Wheel index into bmkhs_wheels [Number]
     _load      - Static load on this wheel, kg [Number]
+    _rollShare - How much of the roll this wheel holds, 0 on the centerline to 1 at the widest [Number]
     _muSide    - Friction coefficient across the wheel [Number]
     _muRoll    - Friction coefficient along the wheel [Number]
     _angle     - Wheel heading from the aircraft's long axis, deg clockwise [Number]
@@ -23,7 +24,7 @@ Author:
 #include "\bmkhs_helisim\functions\core\core.hpp"
 #include "\bmkhs_helisim\functions\suspension\suspension.hpp"
 
-params ["_heli", "_index", "_load", "_muSide", "_muRoll", "_angle", "_deltaTime"];
+params ["_heli", "_index", "_load", "_rollShare", "_muSide", "_muRoll", "_angle", "_deltaTime"];
 
 private _wheel  = (_heli getVariable "bmkhs_wheels") select _index;
 private _pos    = _wheel get "position";
@@ -77,17 +78,19 @@ _rate = (_rate max -SUSP_MAX_RATE) min SUSP_MAX_RATE;
 //A gas strut, per unit of the wheel's load: soft near full extension, stiffening as it compresses.
 //A low frame rate eases it about the static load from both sides, so its slope there falls with
 //the frame time; the shortfall below static fades out toward full extension, so a touching wheel
-//does not kick.
+//does not kick. A wheel that holds roll is not eased: the aircraft then tips over on its gear.
 private _omegaSq = SUSP_SPRING_EXP * GRAVITY / _sag;
 private _spring  = GRAVITY * ((_compression / _sag) ^ SUSP_SPRING_EXP);
 private _ease    = (SUSP_SPRING_DT_LIMIT / (_omegaSq * _deltaTime * _deltaTime)) min 1.0;
+_ease            = _ease + ((1.0 - _ease) * _rollShare);
 if (_spring > GRAVITY) then {
     _spring = GRAVITY + ((_spring - GRAVITY) * _ease);
 } else {
     _spring = _spring + ((GRAVITY - _spring) * (1.0 - _ease) * (_compression / _sag));
 };
 private _zeta    = [SUSP_ZETA_REBOUND, SUSP_ZETA_COMPRESS] select (_rate > 0.0);
-private _damping = (2.0 * _zeta * (sqrt _omegaSq)) min (SUSP_DAMP_DT_LIMIT / _deltaTime);
+private _damping = (2.0 * _zeta * (sqrt _omegaSq))
+    min ((SUSP_DAMP_DT_LIMIT + ((SUSP_ROLL_DAMP_DT_LIMIT - SUSP_DAMP_DT_LIMIT) * _rollShare)) / _deltaTime);
 private _normal  = _load * (_spring + (_damping * _rate));
 _normal          = (_normal max 0.0) min (_load * GRAVITY * SUSP_MAX_LOAD);
 
@@ -106,8 +109,8 @@ private _velRoll  = (_velX * _sin) + (_velY * _cos);
 private _velSide  = (_velX * _cos) - (_velY * _sin);
 
 //Grip: the tyre bends like a stiff spring until it reaches the friction limit, then slips
-private _gripStiff = (SUSP_GRIP_OMEGA * SUSP_GRIP_OMEGA) min (SUSP_SPRING_DT_LIMIT / (_deltaTime * _deltaTime));
-private _gripDamp  = (2.0 * SUSP_GRIP_ZETA * SUSP_GRIP_OMEGA) min (SUSP_DAMP_DT_LIMIT / _deltaTime);
+private _gripStiff = (SUSP_GRIP_OMEGA * SUSP_GRIP_OMEGA) min (SUSP_WHEEL_GRIP_STIFFNESS_DT_LIMIT / (_deltaTime * _deltaTime));
+private _gripDamp  = (2.0 * SUSP_GRIP_ZETA * SUSP_GRIP_OMEGA) min (SUSP_WHEEL_GRIP_DAMPING_DT_LIMIT / _deltaTime);
 private _fnc_grip  = {
     params ["_bend", "_vel", "_mu"];
     private _limit = _mu * _normal;

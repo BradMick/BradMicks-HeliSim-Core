@@ -74,7 +74,7 @@ for "_pass" from 1 to 2 do {
 private _bottoms = call _fnc_bottoms;
 private _rise    = 0.0;
 { _rise = _rise + ((_x select 2) - ((_bottoms select _forEachIndex) select 2)) } forEach _grounds;
-_heli setPosASL ((getPosASL _heli) vectorAdd [0.0, 0.0, _rise / (count _grounds)]);
+_heli setPosWorld ((getPosWorld _heli) vectorAdd [0.0, 0.0, _rise / (count _grounds)]);
 
 _heli setVelocity [0.0, 0.0, 0.0];
 _heli setAngularVelocity [0.0, 0.0, 0.0];
@@ -84,7 +84,7 @@ _heli setVariable ["bmkhs_wheelCompression", _wheels apply {_x get "sag"}];
 
 //Held here until the mission's long frames have passed, then straight into the rest hold with
 //the brake on: bmkhs_fnc_suspensionUpdate
-_heli setVariable ["bmkhs_suspHeldPose", [getPosASL _heli, vectorDir _heli, vectorUp _heli]];
+_heli setVariable ["bmkhs_suspHeldPose", [getPosWorld _heli, vectorDir _heli, vectorUp _heli]];
 _heli setVariable ["bmkhs_suspSleepMass", getMass _heli];
 _heli setVariable ["bmkhs_suspLoadSteady", 0.0];
 _heli setVariable ["bmkhs_suspLoadUntil", CBA_missionTime + SUSP_LOAD_MAX_TIME];
