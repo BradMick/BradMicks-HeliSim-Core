@@ -21,6 +21,19 @@
   the taxi pedal regime and the roll hold run as on Core's wheels, with weight on the gear taken
   from the `isTouchingGround` / radar altitude test. The taxi rows and `cyclicFade[]` are required
   as with any `class Wheels`.
+- **Struts hold roll at any frame rate.** At a low frame rate the strut's spring was eased for
+  stability on every wheel alike, which took the main gear's roll stiffness below the weight's own
+  tipping moment: at about 19 fps the AH-64D fell 7-8 degrees onto one main, and lower still it
+  went over. Each wheel now has a roll share, from its distance to the side of the center of mass -
+  0 on the centerline, 1 at the widest wheel. A wheel that holds roll is not eased and takes the
+  damper limit `SUSP_ROLL_DAMP_DT_LIMIT`; a wheel on the centerline keeps the ease and
+  `SUSP_DAMP_DT_LIMIT`; one in between blends. The wheel grip's frame-time limits are its own
+  constants, `SUSP_WHEEL_GRIP_STIFFNESS_DT_LIMIT` and `SUSP_WHEEL_GRIP_DAMPING_DT_LIMIT`, unchanged
+  in value.
+- **A held aircraft stays where it is.** The hold read and wrote its position at a point that moves
+  with the aircraft's tilt, so a leaning aircraft stepped sideways each time the parking brake was
+  set. The held pose is the model center now (`getPosWorld` / `setPosWorld`), in the hold and in
+  the placing at load-in.
 
 ### Flight controls
 - **Auto pedal taxis.** A fourth regime, `taxi`, in and out on the squat switch. Under 10 kt it
